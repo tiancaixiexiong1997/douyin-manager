@@ -198,7 +198,13 @@ class AIAnalysisService:
         except Exception as exc:
             logger.warning("记录提示词运行失败(scene=%s): %s", scene_key, exc)
 
-    async def _download_video_with_retry(self, video_url: str, temp_file_path: str, max_retries: int = 3, video_id: str = None) -> bool:
+    async def _download_video_with_retry(
+        self,
+        video_url: str,
+        temp_file_path: str,
+        max_retries: int = 3,
+        video_id: str = None,
+    ) -> tuple[bool, str]:
         """带重试的视频下载，优先使用 httpx 流式下载并验证大小"""
         import asyncio
         import os
@@ -227,6 +233,7 @@ class AIAnalysisService:
         
         # 尝试 1：优先使用 httpx 流式下载 (针对大文件和抖音 CDN 更健壮)
         current_url = video_url
+        last_error = ""
         for attempt in range(max_retries):
             try:
                 logger.info(f"httpx 流式下载尝试 {attempt + 1}")
@@ -278,13 +285,14 @@ class AIAnalysisService:
                             # 此处先不直接中断，由 AI 后续处理
                             
                         logger.info(f"httpx 下载成功，大小: {downloaded_size / 1024 / 1024:.2f} MB")
-                        return True
+                        return True, ""
                     finally:
                         try:
                             await response.aclose()
                         except Exception:
                             pass
             except Exception as e:
+                last_error = str(e)
                 logger.warning(f"httpx 下载尝试 {attempt + 1} 失败: {e}")
                 if os.path.exists(temp_file_path):
                     try: os.unlink(temp_file_path)
@@ -311,10 +319,10 @@ class AIAnalysisService:
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, download_sync)
             logger.info("urllib 成功完成下载兜底")
-            return True
+            return True, ""
         except Exception as e:
             logger.error(f"所有下载方式均失败: {e}")
-            return False
+            return False, str(e) or last_error or "未知下载错误"
 
     async def analyze_video_style(
         self,
@@ -384,9 +392,10 @@ class AIAnalysisService:
             temp_original = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
             temp_original.close()  # Close it since _download_video_with_retry will handle writing
             try:
-                download_ok = await self._download_video_with_retry(video_url, temp_original.name, video_id=video_id)
+                download_ok, download_error = await self._download_video_with_retry(video_url, temp_original.name, video_id=video_id)
                 if not download_ok or not os.path.exists(temp_original.name):
-                    return {"error": "视频下载失败：源文件未成功保存到本地，请稍后重试"}
+                    detail = f"（{download_error}）" if download_error else ""
+                    return {"error": f"视频下载失败：源文件未成功保存到本地，请稍后重试{detail}"}
                 size_mb = os.path.getsize(temp_original.name) / 1024 / 1024
                 if size_mb <= 0:
                     return {"error": "视频下载失败：下载结果为空文件，请稍后重试"}
@@ -506,9 +515,10 @@ class AIAnalysisService:
             temp_original = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
             temp_original.close()
             try:
-                download_ok = await self._download_video_with_retry(video_url, temp_original.name, video_id=video_id)
+                download_ok, download_error = await self._download_video_with_retry(video_url, temp_original.name, video_id=video_id)
                 if not download_ok or not os.path.exists(temp_original.name):
-                    return {"error": "视频下载失败：源文件未成功保存到本地，请稍后重试"}
+                    detail = f"（{download_error}）" if download_error else ""
+                    return {"error": f"视频下载失败：源文件未成功保存到本地，请稍后重试{detail}"}
                 if os.path.getsize(temp_original.name) <= 0:
                     return {"error": "视频下载失败：下载结果为空文件，请稍后重试"}
             except Exception as e:

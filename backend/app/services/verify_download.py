@@ -22,7 +22,7 @@ async def test_download():
     
     try:
         print(f"Starting download to {tmp_path}...")
-        success = await ai_analysis_service._download_video_with_retry(url, tmp_path)
+        success, detail = await ai_analysis_service._download_video_with_retry(url, tmp_path)
         
         if success:
             file_size = os.path.getsize(tmp_path)
@@ -30,7 +30,7 @@ async def test_download():
             if file_size < 1024 * 1024:
                 print("WARNING: File is still suspiciously small (< 1MB)")
         else:
-            print("Download Failed (as expected for expired/invalid URL, but we checked the flow)")
+            print(f"Download Failed: {detail or 'unknown error'}")
             
     finally:
         if os.path.exists(tmp_path):
