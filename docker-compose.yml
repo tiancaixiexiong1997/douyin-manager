@@ -1,0 +1,247 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: douyincehua-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - ./data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - app-network
+
+  # ============ 后端服务 ============
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: douyincehua-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT_BIND:-127.0.0.1:8000:8000}"
+    volumes:
+      # NOTE: 挂载后端源码，便于排查与按需开发（生产默认不开启 --reload）
+      - ./backend/app:/app/app
+      # 持久化数据库和日志
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - APP_TIMEZONE=${APP_TIMEZONE:-Asia/Shanghai}
+      - DEBUG=${DEBUG:-false}
+      - SECURITY_STRICT_MODE=${SECURITY_STRICT_MODE:-false}
+      - TASK_STATE_RETENTION_DAYS=${TASK_STATE_RETENTION_DAYS:-14}
+      - TASK_STATE_CLEANUP_INTERVAL_MINUTES=${TASK_STATE_CLEANUP_INTERVAL_MINUTES:-60}
+      - TASK_STATE_CLEANUP_ON_STARTUP=${TASK_STATE_CLEANUP_ON_STARTUP:-true}
+      - RUN_ALEMBIC_ON_STARTUP=${RUN_ALEMBIC_ON_STARTUP:-true}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - JOB_QUEUE_NAME=${JOB_QUEUE_NAME:-default}
+      - REQUIRE_ACTIVE_WORKER_ON_ENQUEUE=${REQUIRE_ACTIVE_WORKER_ON_ENQUEUE:-true}
+      - WORKER_HEARTBEAT_TIMEOUT_SECONDS=${WORKER_HEARTBEAT_TIMEOUT_SECONDS:-120}
+      - WORKER_PURGE_PENDING_ON_STARTUP=${WORKER_PURGE_PENDING_ON_STARTUP:-false}
+      - AUTO_REFRESH_REPORT_ON_REP_DELETE=${AUTO_REFRESH_REPORT_ON_REP_DELETE:-false}
+      - JOB_QUEUE_RETRY_MAX=${JOB_QUEUE_RETRY_MAX:-1}
+      - JOB_QUEUE_RETRY_INTERVAL_SECONDS=${JOB_QUEUE_RETRY_INTERVAL_SECONDS:-30}
+      - JOB_QUEUE_STUCK_JOB_TIMEOUT_SECONDS=${JOB_QUEUE_STUCK_JOB_TIMEOUT_SECONDS:-1800}
+      - AI_API_KEY=${AI_API_KEY}
+      - AI_BASE_URL=${AI_BASE_URL:-https://api.openai-hub.com/v1}
+      - AI_MODEL=${AI_MODEL:-gemini-2.0-flash}
+      - AI_FAILOVER_ENABLED=${AI_FAILOVER_ENABLED:-false}
+      - AI_API_KEY_BACKUP=${AI_API_KEY_BACKUP:-}
+      - AI_BASE_URL_BACKUP=${AI_BASE_URL_BACKUP:-}
+      - AI_MODEL_BACKUP=${AI_MODEL_BACKUP:-}
+      - AI_MULTIMODAL_CALL_OVERALL_TIMEOUT_SECONDS=${AI_MULTIMODAL_CALL_OVERALL_TIMEOUT_SECONDS:-180}
+      - AI_TEXT_CALL_OVERALL_TIMEOUT_SECONDS=${AI_TEXT_CALL_OVERALL_TIMEOUT_SECONDS:-120}
+      - DEFAULT_ADMIN_USERNAME=${DEFAULT_ADMIN_USERNAME:-admin}
+      - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-admin123456}
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-change-me-in-production}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_JSON=${LOG_JSON:-false}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-720}
+      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS:-30}
+      - ENABLE_SECURITY_HEADERS=${ENABLE_SECURITY_HEADERS:-true}
+      - SECURITY_HSTS_SECONDS=${SECURITY_HSTS_SECONDS:-31536000}
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
+      - COOKIE_SAMESITE=${COOKIE_SAMESITE:-lax}
+      - COOKIE_DOMAIN=${COOKIE_DOMAIN:-}
+      - ACCESS_COOKIE_NAME=${ACCESS_COOKIE_NAME:-access_token}
+      - REFRESH_COOKIE_NAME=${REFRESH_COOKIE_NAME:-refresh_token}
+      - AUTH_LOCK_MAX_ATTEMPTS=${AUTH_LOCK_MAX_ATTEMPTS:-5}
+      - AUTH_LOCK_MINUTES=${AUTH_LOCK_MINUTES:-15}
+      - AUTH_RATE_LIMIT_WINDOW_SECONDS=${AUTH_RATE_LIMIT_WINDOW_SECONDS:-300}
+      - AUTH_RATE_LIMIT_MAX_ATTEMPTS=${AUTH_RATE_LIMIT_MAX_ATTEMPTS:-20}
+      - DOWNLOAD_PROXY_CONNECT_TIMEOUT_SECONDS=${DOWNLOAD_PROXY_CONNECT_TIMEOUT_SECONDS:-15}
+      - DOWNLOAD_PROXY_READ_TIMEOUT_SECONDS=${DOWNLOAD_PROXY_READ_TIMEOUT_SECONDS:-120}
+      - DOWNLOAD_PROXY_FETCHER_TIMEOUT_SECONDS=${DOWNLOAD_PROXY_FETCHER_TIMEOUT_SECONDS:-10}
+      - DOWNLOAD_PROXY_CHUNK_SIZE_BYTES=${DOWNLOAD_PROXY_CHUNK_SIZE_BYTES:-524288}
+      - DOWNLOAD_PROXY_MAX_NETWORK_RETRIES=${DOWNLOAD_PROXY_MAX_NETWORK_RETRIES:-1}
+      - ENABLE_GZIP=${ENABLE_GZIP:-true}
+      - GZIP_MINIMUM_SIZE=${GZIP_MINIMUM_SIZE:-1024}
+      - GZIP_COMPRESS_LEVEL=${GZIP_COMPRESS_LEVEL:-6}
+      - INTERNAL_CRAWLER_URL=http://douyin-fetcher:8080
+      - DATABASE_URL=sqlite+aiosqlite:///./data/douyincehua.db
+    depends_on:
+      redis:
+        condition: service_healthy
+      douyin-fetcher:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3).status == 200 else 1)"
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - app-network
+
+  # ============ 爬虫微服务 ============
+  douyin-fetcher:
+    build:
+      context: ./douyin-fetcher
+      dockerfile: Dockerfile
+    container_name: douyin-fetcher
+    restart: unless-stopped
+    volumes:
+      - ./backend/douyin_api:/app/douyin_api
+    environment:
+      - DOUYIN_API_PATH=/app/douyin_api
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3).status == 200 else 1)"
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - app-network
+
+  backend-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: douyincehua-backend-worker
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker"]
+    volumes:
+      - ./backend/app:/app/app
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - APP_TIMEZONE=${APP_TIMEZONE:-Asia/Shanghai}
+      - DEBUG=${DEBUG:-false}
+      - SECURITY_STRICT_MODE=${SECURITY_STRICT_MODE:-false}
+      - TASK_STATE_RETENTION_DAYS=${TASK_STATE_RETENTION_DAYS:-14}
+      - TASK_STATE_CLEANUP_INTERVAL_MINUTES=${TASK_STATE_CLEANUP_INTERVAL_MINUTES:-60}
+      - TASK_STATE_CLEANUP_ON_STARTUP=${TASK_STATE_CLEANUP_ON_STARTUP:-true}
+      - RUN_ALEMBIC_ON_STARTUP=${RUN_ALEMBIC_ON_STARTUP:-true}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - JOB_QUEUE_NAME=${JOB_QUEUE_NAME:-default}
+      - REQUIRE_ACTIVE_WORKER_ON_ENQUEUE=${REQUIRE_ACTIVE_WORKER_ON_ENQUEUE:-true}
+      - WORKER_HEARTBEAT_TIMEOUT_SECONDS=${WORKER_HEARTBEAT_TIMEOUT_SECONDS:-120}
+      - WORKER_PURGE_PENDING_ON_STARTUP=${WORKER_PURGE_PENDING_ON_STARTUP:-false}
+      - AUTO_REFRESH_REPORT_ON_REP_DELETE=${AUTO_REFRESH_REPORT_ON_REP_DELETE:-false}
+      - JOB_QUEUE_RETRY_MAX=${JOB_QUEUE_RETRY_MAX:-1}
+      - JOB_QUEUE_RETRY_INTERVAL_SECONDS=${JOB_QUEUE_RETRY_INTERVAL_SECONDS:-30}
+      - JOB_QUEUE_STUCK_JOB_TIMEOUT_SECONDS=${JOB_QUEUE_STUCK_JOB_TIMEOUT_SECONDS:-1800}
+      - AI_API_KEY=${AI_API_KEY}
+      - AI_BASE_URL=${AI_BASE_URL:-https://api.openai-hub.com/v1}
+      - AI_MODEL=${AI_MODEL:-gemini-2.0-flash}
+      - AI_FAILOVER_ENABLED=${AI_FAILOVER_ENABLED:-false}
+      - AI_API_KEY_BACKUP=${AI_API_KEY_BACKUP:-}
+      - AI_BASE_URL_BACKUP=${AI_BASE_URL_BACKUP:-}
+      - AI_MODEL_BACKUP=${AI_MODEL_BACKUP:-}
+      - AI_MULTIMODAL_CALL_OVERALL_TIMEOUT_SECONDS=${AI_MULTIMODAL_CALL_OVERALL_TIMEOUT_SECONDS:-180}
+      - AI_TEXT_CALL_OVERALL_TIMEOUT_SECONDS=${AI_TEXT_CALL_OVERALL_TIMEOUT_SECONDS:-120}
+      - DEFAULT_ADMIN_USERNAME=${DEFAULT_ADMIN_USERNAME:-admin}
+      - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-admin123456}
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-change-me-in-production}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_JSON=${LOG_JSON:-false}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-720}
+      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS:-30}
+      - ENABLE_SECURITY_HEADERS=${ENABLE_SECURITY_HEADERS:-true}
+      - SECURITY_HSTS_SECONDS=${SECURITY_HSTS_SECONDS:-31536000}
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
+      - COOKIE_SAMESITE=${COOKIE_SAMESITE:-lax}
+      - COOKIE_DOMAIN=${COOKIE_DOMAIN:-}
+      - ACCESS_COOKIE_NAME=${ACCESS_COOKIE_NAME:-access_token}
+      - REFRESH_COOKIE_NAME=${REFRESH_COOKIE_NAME:-refresh_token}
+      - AUTH_LOCK_MAX_ATTEMPTS=${AUTH_LOCK_MAX_ATTEMPTS:-5}
+      - AUTH_LOCK_MINUTES=${AUTH_LOCK_MINUTES:-15}
+      - AUTH_RATE_LIMIT_WINDOW_SECONDS=${AUTH_RATE_LIMIT_WINDOW_SECONDS:-300}
+      - AUTH_RATE_LIMIT_MAX_ATTEMPTS=${AUTH_RATE_LIMIT_MAX_ATTEMPTS:-20}
+      - DOWNLOAD_PROXY_CONNECT_TIMEOUT_SECONDS=${DOWNLOAD_PROXY_CONNECT_TIMEOUT_SECONDS:-15}
+      - DOWNLOAD_PROXY_READ_TIMEOUT_SECONDS=${DOWNLOAD_PROXY_READ_TIMEOUT_SECONDS:-120}
+      - DOWNLOAD_PROXY_FETCHER_TIMEOUT_SECONDS=${DOWNLOAD_PROXY_FETCHER_TIMEOUT_SECONDS:-10}
+      - DOWNLOAD_PROXY_CHUNK_SIZE_BYTES=${DOWNLOAD_PROXY_CHUNK_SIZE_BYTES:-524288}
+      - DOWNLOAD_PROXY_MAX_NETWORK_RETRIES=${DOWNLOAD_PROXY_MAX_NETWORK_RETRIES:-1}
+      - INTERNAL_CRAWLER_URL=http://douyin-fetcher:8080
+      - DATABASE_URL=sqlite+aiosqlite:///./data/douyincehua.db
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+      douyin-fetcher:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "from app.services.job_queue import get_queue_runtime_summary; import sys; s=get_queue_runtime_summary(); sys.exit(0 if int(s.get('active_workers', 0)) > 0 else 1)"
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - app-network
+
+
+  # ============ 前端服务 ============
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: douyincehua-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:80"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: douyincehua-caddy
+    restart: unless-stopped
+    profiles:
+      - prod
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - APP_DOMAIN=${APP_DOMAIN:-localhost}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/caddy:/data
+      - ./config/caddy:/config
+    depends_on:
+      - frontend
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

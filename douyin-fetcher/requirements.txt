@@ -1,0 +1,24 @@
+fastapi==0.110.2
+uvicorn==0.29.0
+httpx==0.27.0
+python-multipart==0.0.9
+PyYAML==6.0.1
+aiofiles==23.2.1
+tenacity~=9.0.0
+
+# douyin_api dependencies
+rich==13.7.1
+browser-cookie3==0.19.1
+pycryptodomex==3.20.0
+gmssl==3.2.2
+lz4==4.3.3
+numpy
+pyfiglet==1.0.0
+Pygments==2.17.2
+pypng==0.20220715.0
+qrcode==7.4.2
+ua-parser==0.18.0
+user-agents==2.2.0
+websockets==12.0
+markdown-it-py==3.0.0
+importlib_resources==6.4.0

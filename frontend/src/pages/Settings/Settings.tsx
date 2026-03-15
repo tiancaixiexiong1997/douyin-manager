@@ -1,0 +1,718 @@
+import React, { useMemo, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { aiPromptApi, settingApi, type PromptVersion, type SettingsData } from '../../api/client';
+import { Save, Settings as SettingsIcon, Link2, Key, Cpu, User, FileText, LayoutTemplate, PenTool, Bot, FlaskConical, GitCompare, Star, RefreshCw, Copy, QrCode, RotateCcw } from 'lucide-react';
+import { notifyError, notifySuccess } from '../../utils/notify';
+import './Settings.css';
+
+export default function Settings() {
+  const queryClient = useQueryClient();
+  const [draft, setDraft] = useState<SettingsData>({});
+  const [activeTab, setActiveTab] = useState('basic');
+  const [selectedScene, setSelectedScene] = useState('blogger_report');
+  const [versionLabel, setVersionLabel] = useState('');
+  const [versionTemplate, setVersionTemplate] = useState('');
+  const [abName, setAbName] = useState('');
+  const [abVersionA, setAbVersionA] = useState('');
+  const [abVersionB, setAbVersionB] = useState('');
+  const [abTrafficA, setAbTrafficA] = useState(50);
+  const [compareA, setCompareA] = useState('');
+  const [compareB, setCompareB] = useState('');
+  const isAiUpgradeTab = activeTab === 'ai_upgrade';
+  const isCrawlerTab = activeTab === 'crawler';
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['settings'],
+    queryFn: () => settingApi.getSettings(),
+  });
+
+  const { data: scenes = [] } = useQuery({
+    queryKey: ['prompt-scenes'],
+    queryFn: () => aiPromptApi.scenes(),
+  });
+
+  const { data: versions = [] } = useQuery({
+    queryKey: ['prompt-versions', selectedScene],
+    queryFn: () => aiPromptApi.listVersions(selectedScene),
+    enabled: isAiUpgradeTab && Boolean(selectedScene),
+  });
+
+  const { data: experiments = [] } = useQuery({
+    queryKey: ['prompt-experiments', selectedScene],
+    queryFn: () => aiPromptApi.listExperiments(selectedScene),
+    enabled: isAiUpgradeTab && Boolean(selectedScene),
+  });
+
+  const { data: runs = [] } = useQuery({
+    queryKey: ['prompt-runs', selectedScene],
+    queryFn: () => aiPromptApi.listRuns({ scene_key: selectedScene, limit: 30 }),
+    enabled: isAiUpgradeTab && Boolean(selectedScene),
+  });
+
+  const { data: compareResult } = useQuery({
+    queryKey: ['prompt-compare', compareA, compareB],
+    queryFn: () => aiPromptApi.compare(compareA, compareB),
+    enabled: isAiUpgradeTab && Boolean(compareA && compareB),
+  });
+
+  const {
+    data: extractorStatus,
+    refetch: refetchExtractorStatus,
+    isFetching: isExtractorStatusFetching,
+  } = useQuery({
+    queryKey: ['cookie-extractor-status'],
+    queryFn: () => settingApi.getCookieExtractorStatus(),
+    enabled: isCrawlerTab,
+  });
+
+  const formData = useMemo(
+    () => ({ ...(data || {}), ...draft }),
+    [data, draft]
+  );
+
+  const webhookUrl = extractorStatus?.token
+    ? `${window.location.origin}/api/settings/cookie-extractor/webhook?token=${extractorStatus.token}`
+    : '';
+
+  const mutation = useMutation({
+    mutationFn: (newSettings: SettingsData) => settingApi.saveSettings(newSettings),
+    onSuccess: () => {
+      notifySuccess('设置保存成功');
+      setDraft({});
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : '未知错误';
+      notifyError(`保存失败：${message}`);
+    }
+  });
+
+  const createVersionMutation = useMutation({
+    mutationFn: () => aiPromptApi.createVersion({
+      scene_key: selectedScene,
+      version_label: versionLabel.trim(),
+      template_text: versionTemplate,
+      is_active: false,
+    }),
+    onSuccess: () => {
+      setVersionLabel('');
+      setVersionTemplate('');
+      queryClient.invalidateQueries({ queryKey: ['prompt-versions', selectedScene] });
+    },
+    onError: (err: unknown) => notifyError(err instanceof Error ? err.message : '创建版本失败'),
+  });
+
+  const activateVersionMutation = useMutation({
+    mutationFn: (versionId: string) => aiPromptApi.activateVersion(versionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['prompt-versions', selectedScene] });
+    },
+    onError: (err: unknown) => notifyError(err instanceof Error ? err.message : '激活版本失败'),
+  });
+
+  const createExperimentMutation = useMutation({
+    mutationFn: () => aiPromptApi.createExperiment({
+      scene_key: selectedScene,
+      name: abName.trim(),
+      version_a_id: abVersionA,
+      version_b_id: abVersionB,
+      traffic_ratio_a: abTrafficA,
+      is_active: true,
+    }),
+    onSuccess: () => {
+      setAbName('');
+      queryClient.invalidateQueries({ queryKey: ['prompt-experiments', selectedScene] });
+    },
+    onError: (err: unknown) => notifyError(err instanceof Error ? err.message : '创建实验失败'),
+  });
+
+  const toggleExperimentMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      aiPromptApi.updateExperiment(id, { is_active: isActive }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['prompt-experiments', selectedScene] });
+    },
+  });
+
+  const scoreRunMutation = useMutation({
+    mutationFn: ({ runId, score, feedback }: { runId: string; score: number; feedback?: string }) =>
+      aiPromptApi.scoreRun(runId, { score, feedback }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['prompt-runs', selectedScene] });
+    },
+  });
+
+  const rotateExtractorTokenMutation = useMutation({
+    mutationFn: () => settingApi.rotateCookieExtractorToken(),
+    onSuccess: (result) => {
+      notifySuccess(result.message);
+      queryClient.invalidateQueries({ queryKey: ['cookie-extractor-status'] });
+    },
+    onError: (err: unknown) => {
+      notifyError(err instanceof Error ? err.message : '重置 Cookie 提取 token 失败');
+    },
+  });
+
+  if (isLoading || !data) {
+    return <div className="settings-page"><div className="loading">加载设置中...</div></div>;
+  }
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setDraft((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (Object.keys(draft).length > 0) {
+      mutation.mutate(draft);
+    }
+  };
+
+  const handleCopyWebhookUrl = async () => {
+    if (!webhookUrl) {
+      notifyError('Webhook 地址尚未生成');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(webhookUrl);
+      notifySuccess('Webhook 地址已复制');
+    } catch {
+      notifyError('复制失败，请手动复制');
+    }
+  };
+
+  const handleOpenDouyinLogin = () => {
+    const loginUrl = extractorStatus?.login_url || 'https://www.douyin.com/';
+    window.open(loginUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const formatExtractorTime = (value?: string | null) => {
+    if (!value) return '尚未同步';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return parsed.toLocaleString('zh-CN');
+  };
+
+  const tabs = [
+    { id: 'basic', label: '基础配置', icon: SettingsIcon, group: '通用' },
+    { id: 'crawler', label: '爬虫与认证', icon: Key, group: '通用' },
+    { id: 'ai_upgrade', label: 'AI能力升级', icon: FlaskConical, group: 'AI实验' },
+    { id: 'prompt_blogger', label: '博主 IP 分析', icon: User, group: '系统提示词' },
+    { id: 'prompt_plan', label: '账号策划方案', icon: LayoutTemplate, group: '系统提示词' },
+    { id: 'prompt_script', label: '单条视频脚本', icon: FileText, group: '系统提示词' },
+    { id: 'prompt_remake', label: '视频拆解复刻', icon: PenTool, group: '系统提示词' },
+  ];
+
+  const getActiveTabInfo = () => tabs.find(t => t.id === activeTab);
+  const ActiveTabIcon = getActiveTabInfo()?.icon || SettingsIcon;
+
+  return (
+    <div className="settings-page">
+      <section className="settings-hero">
+        <div className="settings-hero-pill"><SettingsIcon size={13} /> System Config</div>
+        <h1>系统设置中心</h1>
+        <p>统一管理模型参数、抓取认证和全链路提示词，保存后立即作用于整个系统。</p>
+      </section>
+
+      <div className="settings-container">
+        <div className="settings-sidebar card">
+          <div className="settings-menu">
+            <div className="settings-menu-group">通用</div>
+            <button 
+              className={`settings-menu-item ${activeTab === 'basic' ? 'active' : ''}`}
+              onClick={() => setActiveTab('basic')}
+            >
+              <Cpu size={16} /> 基础大模型配置
+            </button>
+            <button 
+              className={`settings-menu-item ${activeTab === 'crawler' ? 'active' : ''}`}
+              onClick={() => setActiveTab('crawler')}
+            >
+              <Key size={16} /> 爬虫与认证设置
+            </button>
+
+            <div className="settings-menu-group" style={{ marginTop: '16px' }}>AI 能力实验</div>
+            {tabs.filter(t => t.group === 'AI实验').map(tab => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  className={`settings-menu-item ${activeTab === tab.id ? 'active' : ''}`}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  <Icon size={16} /> {tab.label}
+                </button>
+              );
+            })}
+            
+            <div className="settings-menu-group" style={{ marginTop: '16px' }}>系统提示词 (Prompts)</div>
+            {tabs.filter(t => t.group === '系统提示词').map(tab => {
+              const Icon = tab.icon;
+              return (
+                <button 
+                  key={tab.id}
+                  className={`settings-menu-item ${activeTab === tab.id ? 'active' : ''}`}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  <Icon size={16} /> {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="settings-content card">
+          <form onSubmit={handleSubmit}>
+            <div className="settings-content-header">
+              <h2 className="flex items-center gap-2">
+                <div className="tab-icon-wrap"><ActiveTabIcon size={18} className="text-primary-500" /></div>
+                {getActiveTabInfo()?.label}
+              </h2>
+              {activeTab !== 'ai_upgrade' && (
+                <button type="submit" className="btn btn-primary btn-sm" disabled={mutation.isPending}>
+                  <Save size={14} /> {mutation.isPending ? '保存中...' : '保存当前设置'}
+                </button>
+              )}
+            </div>
+
+            <div className="settings-scroll-area">
+              {activeTab === 'basic' && (
+                <div className="animate-fade-in settings-form-grid">
+                  <div className="form-group">
+                    <label><Key size={16} className="text-primary-500"/> AI API Key</label>
+                    <input 
+                      type="password" 
+                      name="AI_API_KEY"
+                      value={formData.AI_API_KEY ?? ''}
+                      onChange={handleChange}
+                      placeholder="sk-..."
+                    />
+                    <span className="help-text">填入你的大模型 API 密钥</span>
+                  </div>
+
+                  <div className="form-group">
+                    <label><Link2 size={16} className="text-primary-500"/> AI Base URL</label>
+                    <input 
+                      type="text" 
+                      name="AI_BASE_URL"
+                      value={formData.AI_BASE_URL ?? ''}
+                      onChange={handleChange}
+                    />
+                    <span className="help-text">代理接口地址或官方接口地址，需带上 /v1 后缀</span>
+                  </div>
+
+                  <div className="form-group">
+                    <label><Bot size={16} className="text-primary-500"/> 模型名称 (Model)</label>
+                    <input 
+                      type="text" 
+                      name="AI_MODEL"
+                      value={formData.AI_MODEL ?? ''}
+                      onChange={handleChange}
+                    />
+                    <span className="help-text">推荐使用性能较强的模型，例如 gemini-2.0-flash 或 gpt-4o</span>
+                  </div>
+
+                  <div className="form-group">
+                    <label><RefreshCw size={16} className="text-primary-500"/> 自动故障切换</label>
+                    <div className="failover-toggle">
+                      <button
+                        type="button"
+                        className={`failover-toggle-btn ${(formData.AI_FAILOVER_ENABLED ?? 'false') === 'false' ? 'active' : ''}`}
+                        onClick={() => setDraft((prev) => ({ ...prev, AI_FAILOVER_ENABLED: 'false' }))}
+                      >
+                        关闭
+                      </button>
+                      <button
+                        type="button"
+                        className={`failover-toggle-btn ${(formData.AI_FAILOVER_ENABLED ?? 'false') === 'true' ? 'active' : ''}`}
+                        onClick={() => setDraft((prev) => ({ ...prev, AI_FAILOVER_ENABLED: 'true' }))}
+                      >
+                        开启（主线路失败自动切换）
+                      </button>
+                    </div>
+                    <span className="help-text">开启后，主运营商超时/失败会自动调用备用运营商。</span>
+                  </div>
+
+                  <div className="form-group">
+                    <label><Key size={16} className="text-primary-500"/> 备用 AI API Key</label>
+                    <input
+                      type="password"
+                      name="AI_API_KEY_BACKUP"
+                      value={formData.AI_API_KEY_BACKUP ?? ''}
+                      onChange={handleChange}
+                      placeholder="备用线路 key"
+                    />
+                    <span className="help-text">仅在自动故障切换开启时生效。</span>
+                  </div>
+
+                  <div className="form-group">
+                    <label><Link2 size={16} className="text-primary-500"/> 备用 AI Base URL</label>
+                    <input
+                      type="text"
+                      name="AI_BASE_URL_BACKUP"
+                      value={formData.AI_BASE_URL_BACKUP ?? ''}
+                      onChange={handleChange}
+                      placeholder="https://xxx/v1"
+                    />
+                    <span className="help-text">备用运营商接口地址，需带 /v1。</span>
+                  </div>
+
+                  <div className="form-group">
+                    <label><Bot size={16} className="text-primary-500"/> 备用模型名称</label>
+                    <input
+                      type="text"
+                      name="AI_MODEL_BACKUP"
+                      value={formData.AI_MODEL_BACKUP ?? ''}
+                      onChange={handleChange}
+                      placeholder="如 gemini-2.5-flash"
+                    />
+                    <span className="help-text">建议填同能力层级模型，确保切换后质量接近。</span>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'crawler' && (
+                <div className="animate-fade-in settings-form-grid">
+                  <div className="form-group">
+                    <label><Key size={16} className="text-primary-500"/> Douyin Cookie</label>
+                    <textarea 
+                      name="DOUYIN_COOKIE"
+                      value={formData.DOUYIN_COOKIE || ''} 
+                      onChange={handleChange}
+                      className="settings-cookie-textarea"
+                      placeholder="复制并在上方粘贴您的抖音 Web 网页端 Cookie... (如: sessionid=xxx; msToken=...)"
+                    />
+                    <span className="help-text">
+                      此 Cookie 用于底层抓取及代理下载无水印视频。如果失效将导致解析/下载时直接返回 403 或空数据。
+                    </span>
+                  </div>
+
+                  <div className="cookie-extractor-card">
+                    <div className="cookie-extractor-header">
+                      <div>
+                        <h3><QrCode size={18} /> Cookie 提取助手</h3>
+                        <p>通过浏览器扩展接收抖音登录后的 Cookie，并自动回写到当前系统。</p>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => refetchExtractorStatus()}
+                        disabled={isExtractorStatusFetching}
+                      >
+                        <RefreshCw size={14} /> {isExtractorStatusFetching ? '刷新中...' : '刷新状态'}
+                      </button>
+                    </div>
+
+                    <div className="cookie-extractor-stats">
+                      <div className="cookie-extractor-stat">
+                        <span>当前 Cookie 长度</span>
+                        <strong>{extractorStatus?.cookie_length ?? 0}</strong>
+                      </div>
+                      <div className="cookie-extractor-stat">
+                        <span>最近同步时间</span>
+                        <strong>{formatExtractorTime(extractorStatus?.last_synced_at)}</strong>
+                      </div>
+                      <div className="cookie-extractor-stat">
+                        <span>最近同步来源</span>
+                        <strong>{extractorStatus?.last_service || '未连接'}</strong>
+                      </div>
+                    </div>
+
+                    <div className="cookie-extractor-field">
+                      <label>Webhook 地址</label>
+                      <div className="cookie-extractor-input-row">
+                        <input
+                          type="text"
+                          value={webhookUrl}
+                          readOnly
+                          placeholder="进入本页后自动生成"
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={handleCopyWebhookUrl}
+                          disabled={!webhookUrl}
+                        >
+                          <Copy size={14} /> 复制
+                        </button>
+                      </div>
+                      <span className="help-text">
+                        将这个地址填到浏览器扩展里，扩展会把扫码登录后的 Douyin Cookie 自动回传到系统。
+                      </span>
+                    </div>
+
+                    <div className="cookie-extractor-actions">
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        onClick={handleOpenDouyinLogin}
+                      >
+                        <QrCode size={14} /> 打开抖音扫码登录
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => rotateExtractorTokenMutation.mutate()}
+                        disabled={rotateExtractorTokenMutation.isPending}
+                      >
+                        <RotateCcw size={14} /> {rotateExtractorTokenMutation.isPending ? '重置中...' : '重置 Token'}
+                      </button>
+                    </div>
+
+                    <div className="cookie-extractor-guide">
+                      <div className="cookie-extractor-guide-title">使用步骤</div>
+                      <ol>
+                        <li>在 Chrome 加载扩展目录：<code>{extractorStatus?.extension_path || 'backend/douyin_api/chrome-cookie-sniffer'}</code></li>
+                        <li>打开扩展弹窗，将上方 Webhook 地址粘贴进去并保存。</li>
+                        <li>点击“打开抖音扫码登录”，在新标签页完成抖音扫码登录。</li>
+                        <li>登录后刷新一次抖音页面或浏览任意页面，扩展会自动抓取并回写 Cookie。</li>
+                      </ol>
+                    </div>
+
+                    {extractorStatus?.last_message && (
+                      <div className="cookie-extractor-message">
+                        最近反馈：{extractorStatus.last_message}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'ai_upgrade' && (
+                <div className="animate-fade-in ai-upgrade-panel">
+                  <div className="ai-card">
+                    <div className="ai-card-title"><FlaskConical size={16} /> 场景与版本管理</div>
+                    <div className="ai-row">
+                      <label>选择场景</label>
+                      <select className="form-input" value={selectedScene} onChange={(e) => setSelectedScene(e.target.value)}>
+                        {scenes.map((scene) => (
+                          <option key={scene.scene_key} value={scene.scene_key}>
+                            {scene.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="ai-grid-2">
+                      <input
+                        className="form-input"
+                        placeholder="版本号，如 v2.1"
+                        value={versionLabel}
+                        onChange={(e) => setVersionLabel(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        disabled={!versionLabel.trim() || !versionTemplate.trim() || createVersionMutation.isPending}
+                        onClick={() => createVersionMutation.mutate()}
+                      >
+                        <Save size={13} /> 创建版本
+                      </button>
+                    </div>
+                    <textarea
+                      className="prompt-textarea ai-template-box"
+                      placeholder="输入该版本提示词模板"
+                      value={versionTemplate}
+                      onChange={(e) => setVersionTemplate(e.target.value)}
+                    />
+                    <div className="ai-version-list">
+                      {versions.map((v: PromptVersion) => (
+                        <div key={v.id} className={`ai-version-item ${v.is_active ? 'active' : ''}`}>
+                          <div>
+                            <div className="ai-version-name">{v.version_label}</div>
+                            <div className="ai-version-meta">{new Date(v.created_at).toLocaleString('zh-CN')} · {v.created_by || 'system'}</div>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            disabled={v.is_active || activateVersionMutation.isPending}
+                            onClick={() => activateVersionMutation.mutate(v.id)}
+                          >
+                            {v.is_active ? '当前激活' : '设为激活'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="ai-card">
+                    <div className="ai-card-title"><GitCompare size={16} /> A/B 对比与评分</div>
+                    <div className="ai-grid-3">
+                      <input className="form-input" placeholder="实验名" value={abName} onChange={(e) => setAbName(e.target.value)} />
+                      <select className="form-input" value={abVersionA} onChange={(e) => setAbVersionA(e.target.value)}>
+                        <option value="">版本 A</option>
+                        {versions.map((v) => <option key={v.id} value={v.id}>{v.version_label}</option>)}
+                      </select>
+                      <select className="form-input" value={abVersionB} onChange={(e) => setAbVersionB(e.target.value)}>
+                        <option value="">版本 B</option>
+                        {versions.map((v) => <option key={v.id} value={v.id}>{v.version_label}</option>)}
+                      </select>
+                    </div>
+                    <div className="ai-grid-2">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        className="form-input"
+                        value={abTrafficA}
+                        onChange={(e) => setAbTrafficA(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                        placeholder="A流量占比(%)"
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        disabled={!abName.trim() || !abVersionA || !abVersionB || createExperimentMutation.isPending}
+                        onClick={() => createExperimentMutation.mutate()}
+                      >
+                        创建并激活实验
+                      </button>
+                    </div>
+                    <div className="ai-exp-list">
+                      {experiments.map((exp) => (
+                        <div className="ai-exp-item" key={exp.id}>
+                          <div>
+                            <div className="ai-version-name">{exp.name}</div>
+                            <div className="ai-version-meta">A流量: {exp.traffic_ratio_a}% · B流量: {100 - exp.traffic_ratio_a}%</div>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => toggleExperimentMutation.mutate({ id: exp.id, isActive: !exp.is_active })}
+                          >
+                            {exp.is_active ? '停用' : '启用'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="ai-grid-2 ai-compare-box">
+                      <select className="form-input" value={compareA} onChange={(e) => setCompareA(e.target.value)}>
+                        <option value="">选择对比版本 A</option>
+                        {versions.map((v) => <option key={v.id} value={v.id}>{v.version_label}</option>)}
+                      </select>
+                      <select className="form-input" value={compareB} onChange={(e) => setCompareB(e.target.value)}>
+                        <option value="">选择对比版本 B</option>
+                        {versions.map((v) => <option key={v.id} value={v.id}>{v.version_label}</option>)}
+                      </select>
+                    </div>
+                    {compareResult && (
+                      <div className="ai-compare-result">
+                        <div>版本A：运行 {compareResult.version_a.runs} 次，均分 {compareResult.version_a.avg_score?.toFixed(2) || '-'}</div>
+                        <div>版本B：运行 {compareResult.version_b.runs} 次，均分 {compareResult.version_b.avg_score?.toFixed(2) || '-'}</div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="ai-card">
+                    <div className="ai-card-title"><Star size={16} /> 生成结果评分</div>
+                    <div className="ai-run-list">
+                      {runs.map((run) => (
+                        <div className="ai-run-item" key={run.id}>
+                          <div>
+                            <div className="ai-version-name">{new Date(run.created_at).toLocaleString('zh-CN')}</div>
+                            <div className="ai-version-meta">
+                              状态: {run.status} · 分支: {run.ab_branch || 'BASE'} · 当前分: {run.score ?? '-'}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => {
+                              const score = window.prompt('请输入评分（0-10）', run.score != null ? String(run.score) : '8');
+                              if (!score) return;
+                              const num = Number(score);
+                              if (Number.isNaN(num) || num < 0 || num > 10) {
+                                notifyError('评分需在 0-10 之间');
+                                return;
+                              }
+                              const feedback = window.prompt('可选：补充反馈', run.feedback || '') || undefined;
+                              scoreRunMutation.mutate({ runId: run.id, score: num, feedback });
+                            }}
+                          >
+                            打分
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'prompt_blogger' && (
+                <div className="animate-fade-in prompt-full-height">
+                  <div className="form-group">
+                    <label className="prompt-label"><User size={16} className="text-primary-500"/> 博主 IP 分析提示词 <span className="label-badge">Prompt</span></label>
+                    <textarea 
+                      name="BLOGGER_REPORT_PROMPT"
+                      value={formData.BLOGGER_REPORT_PROMPT ?? ''}
+                      onChange={handleChange}
+                      className="prompt-textarea"
+                    />
+                    <div className="prompt-variables">
+                      <strong>可用变量：</strong>
+                      <code>{'{nickname}'}</code> <code>{'{platform}'}</code> <code>{'{follower_count}'}</code> <code>{'{signature}'}</code> <code>{'{video_count}'}</code> <code>{'{text_data_json}'}</code> <code>{'{analyses_json}'}</code>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'prompt_plan' && (
+                <div className="animate-fade-in prompt-full-height">
+                  <div className="form-group">
+                    <label className="prompt-label"><LayoutTemplate size={16} className="text-primary-500"/> 账号策划方案提示词 <span className="label-badge">Prompt</span></label>
+                    <textarea 
+                      name="ACCOUNT_PLAN_PROMPT"
+                      value={formData.ACCOUNT_PLAN_PROMPT ?? ''}
+                      onChange={handleChange}
+                      className="prompt-textarea"
+                    />
+                    <div className="prompt-variables">
+                      <strong>可用变量：</strong>
+                      <code>{'{client_name}'}</code> <code>{'{industry}'}</code> <code>{'{target_audience}'}</code> <code>{'{unique_advantage}'}</code> <code>{'{ip_requirements}'}</code> <code>{'{style_preference}'}</code> <code>{'{business_goal}'}</code> <code>{'{blogger_count}'}</code> <code>{'{bloggers_text}'}</code>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'prompt_script' && (
+                <div className="animate-fade-in prompt-full-height">
+                  <div className="form-group">
+                    <label className="prompt-label"><FileText size={16} className="text-primary-500"/> 单条视频脚本生成提示词 <span className="label-badge">Prompt</span></label>
+                    <textarea 
+                      name="VIDEO_SCRIPT_PROMPT"
+                      value={formData.VIDEO_SCRIPT_PROMPT ?? ''}
+                      onChange={handleChange}
+                      className="prompt-textarea"
+                    />
+                    <div className="prompt-variables">
+                      <strong>可用变量：</strong>
+                      <code>{'{title_direction}'}</code> <code>{'{content_type}'}</code> <code>{'{key_message}'}</code> <code>{'{core_identity}'}</code> <code>{'{content_tone}'}</code> <code>{'{target_audience_detail}'}</code>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'prompt_remake' && (
+                <div className="animate-fade-in prompt-full-height">
+                  <div className="form-group">
+                    <label className="prompt-label"><PenTool size={16} className="text-primary-500"/> 视频脚本拆解复刻提示词 <span className="label-badge">Prompt</span></label>
+                    <textarea 
+                      name="SCRIPT_REMAKE_PROMPT"
+                      value={formData.SCRIPT_REMAKE_PROMPT ?? ''}
+                      onChange={handleChange}
+                      className="prompt-textarea"
+                    />
+                    <div className="prompt-variables">
+                      <strong>可用变量：</strong>
+                      <code>{'{title}'}</code> <code>{'{description}'}</code> <code>{'{user_prompt}'}</code>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}

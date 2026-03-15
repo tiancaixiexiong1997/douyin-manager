@@ -1,0 +1,8 @@
+{
+    auto_https disable_redirects
+}
+
+{$APP_DOMAIN} {
+    encode gzip
+    reverse_proxy frontend:80
+}
