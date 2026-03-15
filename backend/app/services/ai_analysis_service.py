@@ -8,6 +8,7 @@ import logging
 import tempfile
 import subprocess
 import random
+import math
 from typing import Any, Optional
 
 import httpx
@@ -80,7 +81,12 @@ class AIAnalysisService:
     def _run_ffmpeg_with_fallback(self, commands: list[tuple[str, list[str]]], *, timeout: int = 120) -> tuple[bool, str]:
         last_error = "未知 FFmpeg 错误"
         for label, cmd in commands:
-            result = subprocess.run(cmd, capture_output=True, timeout=timeout)
+            try:
+                result = subprocess.run(cmd, capture_output=True, timeout=timeout)
+            except subprocess.TimeoutExpired:
+                last_error = f"FFmpeg 处理超时（>{timeout} 秒）"
+                logger.warning("FFmpeg 压缩方案超时(label=%s timeout=%s)", label, timeout)
+                continue
             if result.returncode == 0:
                 if label != "primary":
                     logger.warning("FFmpeg 主压缩方案失败，已使用回退方案成功完成压缩")
@@ -88,6 +94,42 @@ class AIAnalysisService:
             last_error = self._format_ffmpeg_error(result.stderr, result.stdout)
             logger.warning("FFmpeg 压缩方案失败(label=%s): %s", label, last_error)
         return False, last_error
+
+    def _probe_video_duration(self, file_path: str) -> Optional[float]:
+        """读取视频时长（秒）；失败时返回 None。"""
+        try:
+            result = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "format=duration",
+                    "-of",
+                    "default=noprint_wrappers=1:nokey=1",
+                    file_path,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+            if result.returncode != 0:
+                return None
+            raw = (result.stdout or "").strip()
+            if not raw:
+                return None
+            duration = float(raw)
+            return duration if duration > 0 else None
+        except Exception:
+            return None
+
+    def _resolve_ffmpeg_timeout(self, duration_seconds: Optional[float], *, minimum: int = 120) -> int:
+        """按视频时长为 FFmpeg 分配更合理的超时时间。"""
+        if not duration_seconds or duration_seconds <= 0:
+            return minimum
+        # 给低配 VPS 更宽松一点，避免 5-10 分钟素材在压缩阶段误判失败。
+        estimated = int(math.ceil(duration_seconds * 0.75)) + 120
+        return max(minimum, min(estimated, 900))
         
     async def reload_settings(self, db=None):
         """重新加载设置缓存"""
@@ -408,6 +450,15 @@ class AIAnalysisService:
                 logger.error(f"视频下载失败: {e}")
                 raise e
 
+            duration_seconds = self._probe_video_duration(temp_original.name)
+            ffmpeg_timeout = self._resolve_ffmpeg_timeout(duration_seconds)
+            if duration_seconds:
+                logger.info(
+                    "代表作视频时长约 %.1f 秒，FFmpeg 超时设置为 %s 秒",
+                    duration_seconds,
+                    ffmpeg_timeout,
+                )
+
             # 3. 压缩视频：480p / 15fps / CRF28 / 64kbps 单声道
             _set_progress("compressing", "压缩代表作视频中...")
             compressed_path = temp_original.name.replace(".mp4", "_c.mp4")
@@ -419,7 +470,7 @@ class AIAnalysisService:
                         "-i", temp_original.name,
                         "-vf", "scale=480:-2",
                         "-r", "15",
-                        "-c:v", "libx264", "-crf", "28", "-preset", "fast",
+                        "-c:v", "libx264", "-crf", "30", "-preset", "veryfast",
                         "-c:a", "aac", "-b:a", "64k", "-ac", "1",
                         "-movflags", "+faststart",
                         "-y", compressed_path,
@@ -431,15 +482,15 @@ class AIAnalysisService:
                         "ffmpeg", "-hide_banner", "-loglevel", "error",
                         "-i", temp_original.name,
                         "-vf", "scale=480:-2",
-                        "-r", "15",
-                        "-c:v", "mpeg4", "-q:v", "6",
+                        "-r", "12",
+                        "-c:v", "mpeg4", "-q:v", "8",
                         "-c:a", "aac", "-b:a", "64k", "-ac", "1",
                         "-movflags", "+faststart",
                         "-y", compressed_path,
                     ],
                 ),
             ]
-            success, ffmpeg_error = self._run_ffmpeg_with_fallback(ffmpeg_commands, timeout=120)
+            success, ffmpeg_error = self._run_ffmpeg_with_fallback(ffmpeg_commands, timeout=ffmpeg_timeout)
             if not success:
                 error_message = f"视频压缩失败: {ffmpeg_error}"
                 _set_progress("failed", error_message)
@@ -533,6 +584,9 @@ class AIAnalysisService:
                 logger.error(f"视频下载失败: {e}")
                 raise e
 
+            duration_seconds = self._probe_video_duration(temp_original.name)
+            ffmpeg_timeout = self._resolve_ffmpeg_timeout(duration_seconds)
+
             compressed_path = temp_original.name.replace(".mp4", "_c.mp4")
             ffmpeg_commands = [
                 (
@@ -541,7 +595,7 @@ class AIAnalysisService:
                         "ffmpeg", "-hide_banner", "-loglevel", "error",
                         "-i", temp_original.name,
                         "-vf", "scale=360:-2", "-r", "10",
-                        "-c:v", "libx264", "-crf", "32", "-preset", "fast",
+                        "-c:v", "libx264", "-crf", "33", "-preset", "veryfast",
                         "-c:a", "aac", "-b:a", "48k", "-ac", "1",
                         "-movflags", "+faststart", "-y", compressed_path,
                     ],
@@ -551,14 +605,14 @@ class AIAnalysisService:
                     [
                         "ffmpeg", "-hide_banner", "-loglevel", "error",
                         "-i", temp_original.name,
-                        "-vf", "scale=360:-2", "-r", "10",
-                        "-c:v", "mpeg4", "-q:v", "8",
+                        "-vf", "scale=360:-2", "-r", "8",
+                        "-c:v", "mpeg4", "-q:v", "9",
                         "-c:a", "aac", "-b:a", "48k", "-ac", "1",
                         "-movflags", "+faststart", "-y", compressed_path,
                     ],
                 ),
             ]
-            success, ffmpeg_error = self._run_ffmpeg_with_fallback(ffmpeg_commands, timeout=120)
+            success, ffmpeg_error = self._run_ffmpeg_with_fallback(ffmpeg_commands, timeout=ffmpeg_timeout)
             if not success:
                 return {"error": f"视频压缩失败: {ffmpeg_error}"}
 
