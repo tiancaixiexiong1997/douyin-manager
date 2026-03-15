@@ -3,6 +3,8 @@
 set -euo pipefail
 
 REPO_URL="${REPO_URL:-}"
+GITHUB_REPO="${GITHUB_REPO:-}"
+GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 APP_DIR="${APP_DIR:-/opt/douyin-manager}"
 GIT_BRANCH="${GIT_BRANCH:-main}"
 APP_DOMAIN="${APP_DOMAIN:-}"
@@ -87,16 +89,27 @@ ensure_docker_started() {
 }
 
 clone_or_update_repo() {
-  [[ -n "${REPO_URL}" ]] || die "请先提供 REPO_URL，例如 REPO_URL=git@github.com:you/douyin-manager.git"
+  local resolved_repo_url="${REPO_URL}"
+
+  if [[ -z "${resolved_repo_url}" && -n "${GITHUB_REPO}" ]]; then
+    if [[ -n "${GITHUB_TOKEN}" ]]; then
+      resolved_repo_url="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPO}.git"
+    else
+      resolved_repo_url="https://github.com/${GITHUB_REPO}.git"
+    fi
+  fi
+
+  [[ -n "${resolved_repo_url}" ]] || die "请先提供 REPO_URL，或提供 GITHUB_REPO（例如 tiancaixiexiong1997/douyin-manager）"
 
   mkdir -p "$(dirname "${APP_DIR}")"
   if [[ ! -d "${APP_DIR}/.git" ]]; then
     log "克隆项目到 ${APP_DIR}"
-    git clone --branch "${GIT_BRANCH}" "${REPO_URL}" "${APP_DIR}"
+    git clone --branch "${GIT_BRANCH}" "${resolved_repo_url}" "${APP_DIR}"
     return
   fi
 
   log "检测到已有仓库，更新到最新 ${GIT_BRANCH}"
+  git -C "${APP_DIR}" remote set-url origin "${resolved_repo_url}" || true
   git -C "${APP_DIR}" fetch origin
   git -C "${APP_DIR}" checkout "${GIT_BRANCH}"
   git -C "${APP_DIR}" pull --ff-only origin "${GIT_BRANCH}"

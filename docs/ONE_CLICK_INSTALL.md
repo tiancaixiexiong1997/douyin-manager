@@ -15,13 +15,13 @@
 
 ## 适用前提
 
-推荐你先把代码上传到 GitHub 私有仓库，然后再在新 VPS 上执行脚本。
+推荐你先把代码上传到 GitHub 仓库，然后再在新 VPS 上执行脚本。
 
 原因是脚本默认通过 `git clone` 获取代码，这样最稳定，也最适合以后更新版本。
 
 ## 第一次使用前要做什么
 
-1. 把当前项目上传到 GitHub 私有仓库
+1. 把当前项目上传到 GitHub 仓库
 2. 确保 VPS 能访问 GitHub
 3. 在 VPS 上准备好 root 或 sudo 权限
 
@@ -41,20 +41,42 @@ APP_DOMAIN=your-domain.com \
 bash scripts/install_vps.sh
 ```
 
-### 方式二：未来做成远程一键安装
+### 方式二：公网仓库一条命令安装
 
-当这个脚本已经在 GitHub 仓库里后，新 VPS 可以这样执行：
+如果你的仓库是公开的，新 VPS 可以直接执行：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yourname/douyin-manager/main/scripts/install_vps.sh -o /tmp/install_vps.sh
-chmod +x /tmp/install_vps.sh
-sudo REPO_URL=git@github.com:yourname/douyin-manager.git APP_DOMAIN=your-domain.com /tmp/install_vps.sh
+curl -fsSL https://raw.githubusercontent.com/yourname/douyin-manager/main/scripts/install_vps.sh | \
+sudo GITHUB_REPO=yourname/douyin-manager APP_DOMAIN=your-domain.com bash
 ```
+
+### 方式三：私有仓库一条命令安装
+
+如果你的仓库是私有的，需要准备一个 GitHub Personal Access Token。
+
+然后在新 VPS 上执行：
+
+```bash
+curl -fsSL -H "Authorization: Bearer YOUR_GITHUB_TOKEN" \
+https://raw.githubusercontent.com/yourname/douyin-manager/main/scripts/install_vps.sh | \
+sudo GITHUB_REPO=yourname/douyin-manager GITHUB_TOKEN=YOUR_GITHUB_TOKEN APP_DOMAIN=your-domain.com bash
+```
+
+这条命令会：
+
+- 先从 GitHub 拉取安装脚本
+- 再用 `GITHUB_TOKEN` 克隆私有仓库
+- 自动生成 `.env`
+- 启动容器
 
 ## 重要环境变量
 
 - `REPO_URL`
-  - 必填，Git 仓库地址
+  - 可选，直接指定完整 Git 仓库地址
+- `GITHUB_REPO`
+  - 可选，格式如 `tiancaixiexiong1997/douyin-manager`
+- `GITHUB_TOKEN`
+  - 可选，私有仓库克隆时使用；公网仓库可不填
 - `APP_DIR`
   - 可选，默认 `/opt/douyin-manager`
 - `GIT_BRANCH`
@@ -78,6 +100,16 @@ sudo REPO_URL=git@github.com:yourname/douyin-manager.git APP_DOMAIN=your-domain.
 - `DOUYIN_COOKIE`
 
 这些需要你在系统启动后，到后台设置页手动填写。
+
+## 当前项目可直接套用
+
+如果你继续保持当前仓库为私有仓库，未来新 VPS 可直接使用这条命令：
+
+```bash
+curl -fsSL -H "Authorization: Bearer 你的GitHubToken" \
+https://raw.githubusercontent.com/tiancaixiexiong1997/douyin-manager/main/scripts/install_vps.sh | \
+sudo GITHUB_REPO=tiancaixiexiong1997/douyin-manager GITHUB_TOKEN=你的GitHubToken APP_DOMAIN=你的域名 bash
+```
 
 ## 启动后检查
 
