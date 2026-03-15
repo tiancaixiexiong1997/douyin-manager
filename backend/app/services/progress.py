@@ -28,23 +28,33 @@ class ProgressRegistry:
     }
 
     def __init__(self) -> None:
-        self._progress: Dict[str, str] = {}
+        self._progress: Dict[str, dict] = {}
         self._store = task_store
 
-    def set(self, task_id: str, step: str) -> None:
-        self._progress[task_id] = step
-        self._store.set_progress(task_id, step)
+    def set(self, task_id: str, step: str, message: Optional[str] = None) -> None:
+        record = {
+            "step": step,
+            "message": message or self.STEPS.get(step, step),
+        }
+        self._progress[task_id] = record
+        self._store.set_progress(task_id, step, record["message"])
         self._store.maybe_cleanup_expired()
 
     def get(self, task_id: str) -> Optional[dict]:
-        step = self._progress.get(task_id)
-        if not step:
-            step = self._store.get_progress(task_id)
-            if step:
-                self._progress[task_id] = step
+        record = self._progress.get(task_id)
+        if not record:
+            record = self._store.get_progress(task_id)
+            if record:
+                self._progress[task_id] = record
+        if not record:
+            return None
+        step = str(record.get("step") or "")
         if not step:
             return None
-        return {"step": step, "message": self.STEPS.get(step, step)}
+        return {
+            "step": step,
+            "message": str(record.get("message") or self.STEPS.get(step, step)),
+        }
 
     def clear(self, task_id: str) -> None:
         self._progress.pop(task_id, None)

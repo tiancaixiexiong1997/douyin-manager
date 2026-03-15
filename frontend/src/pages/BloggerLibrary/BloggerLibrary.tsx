@@ -978,6 +978,15 @@ function BloggerCard({ blogger, onDelete, onReanalyze, selected, onSelect }: {
     failed: '#ef4444',
   };
   const progressColor = progress ? (progressColorMap[progress.step] || 'var(--text-muted)') : undefined;
+  const isProgressFailed = progress?.step === 'failed';
+  const isProgressDone = progress?.step === 'done';
+  const progressIcon = isProgressFailed ? (
+    <X size={10} style={{ marginRight: 3 }} />
+  ) : isProgressDone ? (
+    <CheckCircle size={10} style={{ marginRight: 3 }} />
+  ) : (
+    <Clock size={10} style={{ marginRight: 3, animation: 'spin 1.5s linear infinite' }} />
+  );
 
   return (
     <div className={`blogger-card card card-glow animate-fade-in${selected ? ' blogger-card-selected' : ''}`}>
@@ -1009,8 +1018,12 @@ function BloggerCard({ blogger, onDelete, onReanalyze, selected, onSelect }: {
                 <CheckCircle size={10} style={{ marginRight: 3 }} />已分析
               </span>
             ) : progress && progress.step !== 'idle' ? (
-              <span className="badge badge-progress" style={{ fontSize: 11, color: progressColor, background: `${progressColor}18`, borderColor: `${progressColor}40` }}>
-                <Clock size={10} style={{ marginRight: 3, animation: 'spin 1.5s linear infinite' }} />
+              <span
+                className="badge badge-progress"
+                style={{ fontSize: 11, color: progressColor, background: `${progressColor}18`, borderColor: `${progressColor}40` }}
+                title={progress.message}
+              >
+                {progressIcon}
                 {progress.message}
               </span>
             ) : (

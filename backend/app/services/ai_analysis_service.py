@@ -365,13 +365,13 @@ class AIAnalysisService:
         temp_original = None
         compressed_path = None
 
-        def _set_progress(step: str) -> None:
+        def _set_progress(step: str, message: str | None = None) -> None:
             if not progress_task_id:
                 return
             try:
                 from app.services.progress import progress_registry
 
-                progress_registry.set(progress_task_id, step)
+                progress_registry.set(progress_task_id, step, message)
             except Exception as progress_exc:
                 logger.warning(
                     "更新任务进度失败(task_id=%s step=%s): %s",
@@ -387,7 +387,7 @@ class AIAnalysisService:
                 return {"error": "ffmpeg 未安装，无法处理视频"}
 
             # 2. 下载视频
-            _set_progress("downloading")
+            _set_progress("downloading", "下载代表作视频中...")
             logger.info(f"开始下载视频: {video_url[:60]}...")
             temp_original = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
             temp_original.close()  # Close it since _download_video_with_retry will handle writing
@@ -395,17 +395,21 @@ class AIAnalysisService:
                 download_ok, download_error = await self._download_video_with_retry(video_url, temp_original.name, video_id=video_id)
                 if not download_ok or not os.path.exists(temp_original.name):
                     detail = f"（{download_error}）" if download_error else ""
-                    return {"error": f"视频下载失败：源文件未成功保存到本地，请稍后重试{detail}"}
+                    error_message = f"视频下载失败：源文件未成功保存到本地，请稍后重试{detail}"
+                    _set_progress("failed", error_message)
+                    return {"error": error_message}
                 size_mb = os.path.getsize(temp_original.name) / 1024 / 1024
                 if size_mb <= 0:
-                    return {"error": "视频下载失败：下载结果为空文件，请稍后重试"}
+                    error_message = "视频下载失败：下载结果为空文件，请稍后重试"
+                    _set_progress("failed", error_message)
+                    return {"error": error_message}
                 logger.info(f"下载完成，本地文件大小: {size_mb:.1f}MB")
             except Exception as e:
                 logger.error(f"视频下载失败: {e}")
                 raise e
 
             # 3. 压缩视频：480p / 15fps / CRF28 / 64kbps 单声道
-            _set_progress("compressing")
+            _set_progress("compressing", "压缩代表作视频中...")
             compressed_path = temp_original.name.replace(".mp4", "_c.mp4")
             ffmpeg_commands = [
                 (
@@ -437,7 +441,9 @@ class AIAnalysisService:
             ]
             success, ffmpeg_error = self._run_ffmpeg_with_fallback(ffmpeg_commands, timeout=120)
             if not success:
-                return {"error": f"视频压缩失败: {ffmpeg_error}"}
+                error_message = f"视频压缩失败: {ffmpeg_error}"
+                _set_progress("failed", error_message)
+                return {"error": error_message}
 
             compressed_size = os.path.getsize(compressed_path)
             logger.info(f"压缩完成，大小: {compressed_size / 1024 / 1024:.1f}MB")
@@ -447,12 +453,14 @@ class AIAnalysisService:
                 video_b64 = base64.b64encode(f.read()).decode("utf-8")
 
             # 5. 调用 AI
-            _set_progress("ai_video")
+            _set_progress("ai_video", "AI 视频深度分析中...")
             return await self._call_ai_with_video(video_b64, title, description)
 
         except Exception as e:
             logger.error(f"视频分析失败: {e}")
-            return {"error": f"分析异常: {str(e)}"}
+            error_message = f"分析异常: {str(e)}"
+            _set_progress("failed", error_message)
+            return {"error": error_message}
         finally:
             for path in [
                 temp_original.name if temp_original else None,

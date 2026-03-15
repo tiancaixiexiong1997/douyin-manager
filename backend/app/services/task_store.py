@@ -95,10 +95,17 @@ class PersistentTaskStore:
                     CREATE TABLE IF NOT EXISTS task_progress (
                         task_id TEXT PRIMARY KEY,
                         step TEXT NOT NULL,
+                        message TEXT,
                         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
                     )
                     """
                 )
+                columns = {
+                    str(row[1]).lower()
+                    for row in conn.execute("PRAGMA table_info(task_progress)").fetchall()
+                }
+                if "message" not in columns:
+                    conn.execute("ALTER TABLE task_progress ADD COLUMN message TEXT")
                 conn.commit()
 
     # -------- cancellation --------
@@ -149,7 +156,7 @@ class PersistentTaskStore:
 
     # -------- progress --------
 
-    def set_progress(self, task_id: str, step: str) -> None:
+    def set_progress(self, task_id: str, step: str, message: Optional[str] = None) -> None:
         if not self._enabled:
             return
         try:
@@ -157,29 +164,35 @@ class PersistentTaskStore:
                 with self._connect() as conn:
                     conn.execute(
                         """
-                        INSERT INTO task_progress(task_id, step, updated_at)
-                        VALUES (?, ?, CURRENT_TIMESTAMP)
+                        INSERT INTO task_progress(task_id, step, message, updated_at)
+                        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
                         ON CONFLICT(task_id) DO UPDATE SET
                             step=excluded.step,
+                            message=excluded.message,
                             updated_at=CURRENT_TIMESTAMP
                         """,
-                        (task_id, step),
+                        (task_id, step, message),
                     )
                     conn.commit()
         except Exception as exc:
             logger.warning("持久化任务进度失败(task_id=%s): %s", task_id, exc)
 
-    def get_progress(self, task_id: str) -> Optional[str]:
+    def get_progress(self, task_id: str) -> Optional[dict[str, Optional[str]]]:
         if not self._enabled:
             return None
         try:
             with self._lock:
                 with self._connect() as conn:
                     row = conn.execute(
-                        "SELECT step FROM task_progress WHERE task_id = ? LIMIT 1",
+                        "SELECT step, message FROM task_progress WHERE task_id = ? LIMIT 1",
                         (task_id,),
                     ).fetchone()
-                    return str(row[0]) if row else None
+                    if not row:
+                        return None
+                    return {
+                        "step": str(row[0]),
+                        "message": str(row[1]) if row[1] else None,
+                    }
         except Exception as exc:
             logger.warning("读取任务进度失败(task_id=%s): %s", task_id, exc)
             return None

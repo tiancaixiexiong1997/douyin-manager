@@ -25,12 +25,18 @@ def test_task_store_persists_cancellation_state(tmp_path: Path) -> None:
 def test_task_store_persists_progress_state(tmp_path: Path) -> None:
     db_path = tmp_path / "task_store_progress.db"
     store1 = PersistentTaskStore(database_url=_sqlite_url(db_path))
-    store1.set_progress("task-2", "ai_report")
-    assert store1.get_progress("task-2") == "ai_report"
+    store1.set_progress("task-2", "ai_report", "正在生成综合报告")
+    assert store1.get_progress("task-2") == {
+        "step": "ai_report",
+        "message": "正在生成综合报告",
+    }
 
     # 模拟重启：新实例应能读取到进度
     store2 = PersistentTaskStore(database_url=_sqlite_url(db_path))
-    assert store2.get_progress("task-2") == "ai_report"
+    assert store2.get_progress("task-2") == {
+        "step": "ai_report",
+        "message": "正在生成综合报告",
+    }
 
     store2.clear_progress("task-2")
     assert store2.get_progress("task-2") is None
@@ -65,7 +71,7 @@ def test_task_store_cleanup_expired_rows(tmp_path: Path) -> None:
     assert store.is_cancelled("cancel-old") is False
     assert store.get_progress("progress-old") is None
     assert store.is_cancelled("cancel-new") is True
-    assert store.get_progress("progress-new") == "done"
+    assert store.get_progress("progress-new") == {"step": "done", "message": None}
 
 
 def test_task_store_summary_contains_counts_and_cleanup_snapshot(tmp_path: Path) -> None:
@@ -87,3 +93,26 @@ def test_task_store_summary_contains_counts_and_cleanup_snapshot(tmp_path: Path)
     assert summary["tables"]["task_progress"]["count"] >= 1
     assert summary["last_cleanup_at"] is not None
     assert "task_cancellations" in summary["last_cleanup_deleted"]
+
+
+def test_task_store_migrates_old_progress_schema(tmp_path: Path) -> None:
+    db_path = tmp_path / "task_store_old_schema.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE task_progress (
+                task_id TEXT PRIMARY KEY,
+                step TEXT NOT NULL,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        conn.commit()
+
+    store = PersistentTaskStore(database_url=_sqlite_url(db_path))
+    store.set_progress("legacy-task", "failed", "下载失败：HTTP 403")
+
+    assert store.get_progress("legacy-task") == {
+        "step": "failed",
+        "message": "下载失败：HTTP 403",
+    }

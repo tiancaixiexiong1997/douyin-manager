@@ -892,7 +892,11 @@ async def _analyze_single_rep_video(blogger_uuid: str, video_data: dict):
 
             if analysis_failed:
                 # 多模态分析失败时不触发综合报告，避免额外 AI 费用。
-                progress_registry.set(blogger_uuid, "failed")
+                failure_message = (
+                    (analysis.get("error") if isinstance(analysis, dict) else None)
+                    or "代表作深度析帧失败，请稍后重试"
+                )
+                progress_registry.set(blogger_uuid, "failed", failure_message)
                 return
 
             logger.info("代表作深度析帧完成，提交综合报告刷新任务")
@@ -904,14 +908,14 @@ async def _analyze_single_rep_video(blogger_uuid: str, video_data: dict):
                     progress_registry.set(blogger_uuid, "ai_report")
             except RuntimeError as refresh_exc:
                 logger.error("代表作后续报告刷新入队失败(blogger=%s): %s", blogger_uuid, refresh_exc)
-                progress_registry.set(blogger_uuid, "failed")
+                progress_registry.set(blogger_uuid, "failed", f"综合报告刷新入队失败：{refresh_exc}")
                 return
 
             logger.info(f"博主 {blogger_uuid} 代表作析帧完成")
 
         except Exception as e:
             logger.error(f"代表作深度解析失败: {e}", exc_info=True)
-            progress_registry.set(blogger_uuid, "failed")
+            progress_registry.set(blogger_uuid, "failed", f"代表作深度解析失败：{e}")
 
 
 async def _analyze_blogger_background(
@@ -1260,7 +1264,7 @@ async def _analyze_blogger_background(
 
         except Exception as e:
             logger.error(f"博主 {blogger_uuid} 后台分析失败: {e}", exc_info=True)
-            progress_registry.set(blogger_uuid, "failed")
+            progress_registry.set(blogger_uuid, "failed", f"任务执行失败：{e}")
             await task_center_repo.update_status(
                 db,
                 resolved_task_key,
