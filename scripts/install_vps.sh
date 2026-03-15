@@ -14,6 +14,9 @@ DEFAULT_ADMIN_PASSWORD="${DEFAULT_ADMIN_PASSWORD:-admin123456}"
 APP_TIMEZONE="${APP_TIMEZONE:-Asia/Shanghai}"
 INTERACTIVE_MODE="${INTERACTIVE_MODE:-auto}"
 REPO_VISIBILITY="${REPO_VISIBILITY:-}"
+INSTALL_MODE_LABEL=""
+DEPLOY_ACCESS_URL=""
+PROFILE_DESCRIPTION=""
 
 log() {
   printf '\033[1;34m[install]\033[0m %s\n' "$1"
@@ -26,6 +29,62 @@ warn() {
 die() {
   printf '\033[1;31m[error]\033[0m %s\n' "$1" >&2
   exit 1
+}
+
+print_banner() {
+  if ! has_tty; then
+    return
+  fi
+
+  cat > /dev/tty <<'EOF'
+
+============================================================
+  Douyin Manager 一键安装向导
+============================================================
+  这个安装器会帮助你在全新 VPS 上完成：
+  1. Docker 安装
+  2. 项目代码拉取
+  3. .env 自动生成
+  4. 容器启动与初始化
+============================================================
+
+EOF
+}
+
+print_step() {
+  local step="$1"
+  local title="$2"
+  printf '\n\033[1;36m[%s/6]\033[0m %s\n' "${step}" "${title}"
+}
+
+print_success_panel() {
+  cat <<EOF
+
+============================================================
+  安装完成
+============================================================
+  安装模式   : ${INSTALL_MODE_LABEL}
+  项目目录   : ${APP_DIR}
+  访问地址   : ${DEPLOY_ACCESS_URL}
+  启动模式   : ${PROFILE_DESCRIPTION}
+
+  默认管理员账号
+  用户名     : ${DEFAULT_ADMIN_USERNAME}
+  密码       : ${DEFAULT_ADMIN_PASSWORD}
+
+  安装后建议
+  1. 立即登录后台并修改管理员密码
+  2. 到“设置 -> 基础配置”填写 AI_API_KEY
+  3. 到“设置 -> 爬虫与认证”填写 Douyin Cookie
+
+  常用排查命令
+  cd ${APP_DIR}
+  docker compose ps
+  docker compose logs -f backend
+  docker compose logs -f frontend
+============================================================
+
+EOF
 }
 
 require_root() {
@@ -121,6 +180,8 @@ interactive_setup() {
     return
   fi
 
+  print_banner
+  print_step 1 "收集安装信息"
   log "进入交互式安装向导"
 
   if [[ -z "${GITHUB_REPO}" && -z "${REPO_URL}" ]]; then
@@ -132,8 +193,10 @@ interactive_setup() {
     repo_visibility_choice="$(prompt_choice "请选择仓库类型" "私有仓库（需要 GitHub Token）" "公共仓库")"
     if [[ "${repo_visibility_choice}" == "私有仓库（需要 GitHub Token）" ]]; then
       REPO_VISIBILITY="private"
+      INSTALL_MODE_LABEL="私有仓库安装"
     else
       REPO_VISIBILITY="public"
+      INSTALL_MODE_LABEL="公共仓库安装"
     fi
   fi
 
@@ -184,6 +247,7 @@ detect_pm() {
 
 install_base_packages() {
   local pm="$1"
+  print_step 2 "安装基础依赖"
   case "$pm" in
     apt)
       export DEBIAN_FRONTEND=noninteractive
@@ -200,6 +264,7 @@ install_base_packages() {
 }
 
 install_docker() {
+  print_step 3 "安装 Docker 环境"
   if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
     log "Docker 和 Docker Compose 已安装，跳过"
     return
@@ -223,6 +288,7 @@ ensure_docker_started() {
 }
 
 clone_or_update_repo() {
+  print_step 4 "拉取项目代码"
   local resolved_repo_url="${REPO_URL}"
 
   if [[ -z "${resolved_repo_url}" && -n "${GITHUB_REPO}" ]]; then
@@ -270,6 +336,7 @@ get_env_value() {
 }
 
 prepare_env_file() {
+  print_step 5 "生成部署配置"
   local env_file="${APP_DIR}/.env"
   local env_example="${APP_DIR}/.env.example"
 
@@ -320,18 +387,24 @@ ensure_directories() {
 }
 
 compose_up() {
+  print_step 6 "启动项目容器"
   local profile_flag=""
 
   case "${ENABLE_PROD_PROFILE}" in
     true)
       profile_flag="--profile prod"
+      PROFILE_DESCRIPTION="生产模式（域名 + HTTPS）"
       ;;
     false)
       profile_flag=""
+      PROFILE_DESCRIPTION="本地端口模式（IP:3000）"
       ;;
     auto)
       if [[ -n "${APP_DOMAIN}" ]]; then
         profile_flag="--profile prod"
+        PROFILE_DESCRIPTION="生产模式（域名 + HTTPS）"
+      else
+        PROFILE_DESCRIPTION="本地端口模式（IP:3000）"
       fi
       ;;
     *)
@@ -344,32 +417,16 @@ compose_up() {
     cd "${APP_DIR}"
     docker compose ${profile_flag} up -d --build
   )
+
+  if [[ -n "${APP_DOMAIN}" && "${PROFILE_DESCRIPTION}" == "生产模式（域名 + HTTPS）" ]]; then
+    DEPLOY_ACCESS_URL="https://${APP_DOMAIN}"
+  else
+    DEPLOY_ACCESS_URL="http://服务器IP:3000"
+  fi
 }
 
 print_summary() {
-  cat <<EOF
-
-部署完成。
-
-项目目录: ${APP_DIR}
-域名: ${APP_DOMAIN:-未设置（当前为本地端口模式）}
-管理员账号: ${DEFAULT_ADMIN_USERNAME}
-管理员密码: ${DEFAULT_ADMIN_PASSWORD}
-
-接下来建议你做这几步：
-1. 打开站点
-   - 未设置域名时: http://服务器IP:3000
-   - 设置了域名且启用 prod 时: https://${APP_DOMAIN}
-2. 登录后台后，到“设置 -> 基础配置”填写 AI_API_KEY
-3. 到“设置 -> 爬虫与认证”填写 Douyin Cookie，或使用 Cookie 提取助手
-
-常用排查命令：
-cd ${APP_DIR}
-docker compose ps
-docker compose logs -f backend
-docker compose logs -f frontend
-
-EOF
+  print_success_panel
 }
 
 main() {
