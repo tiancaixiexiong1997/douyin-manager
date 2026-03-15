@@ -65,6 +65,29 @@ class AIAnalysisService:
         
         # 缓存设置
         self._cached_settings = {}
+
+    def _format_ffmpeg_error(self, stderr: bytes, stdout: bytes | None = None) -> str:
+        raw = (stderr or b"").decode("utf-8", errors="ignore").strip()
+        if not raw and stdout:
+            raw = (stdout or b"").decode("utf-8", errors="ignore").strip()
+        if not raw:
+            return "未知 FFmpeg 错误"
+        lines = [line.strip() for line in raw.splitlines() if line.strip()]
+        if not lines:
+            return "未知 FFmpeg 错误"
+        return " | ".join(lines[-4:])[:400]
+
+    def _run_ffmpeg_with_fallback(self, commands: list[tuple[str, list[str]]], *, timeout: int = 120) -> tuple[bool, str]:
+        last_error = "未知 FFmpeg 错误"
+        for label, cmd in commands:
+            result = subprocess.run(cmd, capture_output=True, timeout=timeout)
+            if result.returncode == 0:
+                if label != "primary":
+                    logger.warning("FFmpeg 主压缩方案失败，已使用回退方案成功完成压缩")
+                return True, ""
+            last_error = self._format_ffmpeg_error(result.stderr, result.stdout)
+            logger.warning("FFmpeg 压缩方案失败(label=%s): %s", label, last_error)
+        return False, last_error
         
     async def reload_settings(self, db=None):
         """重新加载设置缓存"""
@@ -371,18 +394,37 @@ class AIAnalysisService:
             # 3. 压缩视频：480p / 15fps / CRF28 / 64kbps 单声道
             _set_progress("compressing")
             compressed_path = temp_original.name.replace(".mp4", "_c.mp4")
-            cmd = [
-                "ffmpeg", "-i", temp_original.name,
-                "-vf", "scale=480:-2",
-                "-r", "15",
-                "-c:v", "libx264", "-crf", "28", "-preset", "fast",
-                "-c:a", "aac", "-b:a", "64k", "-ac", "1",
-                "-movflags", "+faststart",
-                "-y", compressed_path
+            ffmpeg_commands = [
+                (
+                    "primary",
+                    [
+                        "ffmpeg", "-hide_banner", "-loglevel", "error",
+                        "-i", temp_original.name,
+                        "-vf", "scale=480:-2",
+                        "-r", "15",
+                        "-c:v", "libx264", "-crf", "28", "-preset", "fast",
+                        "-c:a", "aac", "-b:a", "64k", "-ac", "1",
+                        "-movflags", "+faststart",
+                        "-y", compressed_path,
+                    ],
+                ),
+                (
+                    "fallback",
+                    [
+                        "ffmpeg", "-hide_banner", "-loglevel", "error",
+                        "-i", temp_original.name,
+                        "-vf", "scale=480:-2",
+                        "-r", "15",
+                        "-c:v", "mpeg4", "-q:v", "6",
+                        "-c:a", "aac", "-b:a", "64k", "-ac", "1",
+                        "-movflags", "+faststart",
+                        "-y", compressed_path,
+                    ],
+                ),
             ]
-            result = subprocess.run(cmd, capture_output=True, timeout=120)
-            if result.returncode != 0:
-                return {"error": f"视频压缩失败: {result.stderr.decode()[:200]}"}
+            success, ffmpeg_error = self._run_ffmpeg_with_fallback(ffmpeg_commands, timeout=120)
+            if not success:
+                return {"error": f"视频压缩失败: {ffmpeg_error}"}
 
             compressed_size = os.path.getsize(compressed_path)
             logger.info(f"压缩完成，大小: {compressed_size / 1024 / 1024:.1f}MB")
@@ -466,16 +508,33 @@ class AIAnalysisService:
                 raise e
 
             compressed_path = temp_original.name.replace(".mp4", "_c.mp4")
-            cmd = [
-                "ffmpeg", "-i", temp_original.name,
-                "-vf", "scale=360:-2", "-r", "10",
-                "-c:v", "libx264", "-crf", "32", "-preset", "fast",
-                "-c:a", "aac", "-b:a", "48k", "-ac", "1",
-                "-movflags", "+faststart", "-y", compressed_path
+            ffmpeg_commands = [
+                (
+                    "primary",
+                    [
+                        "ffmpeg", "-hide_banner", "-loglevel", "error",
+                        "-i", temp_original.name,
+                        "-vf", "scale=360:-2", "-r", "10",
+                        "-c:v", "libx264", "-crf", "32", "-preset", "fast",
+                        "-c:a", "aac", "-b:a", "48k", "-ac", "1",
+                        "-movflags", "+faststart", "-y", compressed_path,
+                    ],
+                ),
+                (
+                    "fallback",
+                    [
+                        "ffmpeg", "-hide_banner", "-loglevel", "error",
+                        "-i", temp_original.name,
+                        "-vf", "scale=360:-2", "-r", "10",
+                        "-c:v", "mpeg4", "-q:v", "8",
+                        "-c:a", "aac", "-b:a", "48k", "-ac", "1",
+                        "-movflags", "+faststart", "-y", compressed_path,
+                    ],
+                ),
             ]
-            result = subprocess.run(cmd, capture_output=True, timeout=120)
-            if result.returncode != 0:
-                return {"error": f"视频压缩失败: {result.stderr.decode()[:200]}"}
+            success, ffmpeg_error = self._run_ffmpeg_with_fallback(ffmpeg_commands, timeout=120)
+            if not success:
+                return {"error": f"视频压缩失败: {ffmpeg_error}"}
 
             with open(compressed_path, "rb") as f:
                 video_b64 = base64.b64encode(f.read()).decode("utf-8")

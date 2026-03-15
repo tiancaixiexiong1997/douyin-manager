@@ -174,7 +174,7 @@ api.interceptors.response.use(
     const detail = err.response?.data?.detail;
     const rawMessage = typeof detail === 'string' ? detail : (err.message || '请求失败');
     let msg = rawMessage;
-    if (status === 401) msg = '登录已过期，请重新登录';
+    if (status === 401 && !isAuthPath) msg = '登录已过期，请重新登录';
     else if (status === 403) msg = '你没有权限执行这个操作';
     else if (status === 404) msg = '请求的数据不存在或已被删除';
     else if (status && status >= 500) msg = `服务暂时不可用（${status}），请稍后重试`;
