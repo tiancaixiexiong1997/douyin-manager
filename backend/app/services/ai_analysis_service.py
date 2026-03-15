@@ -384,8 +384,12 @@ class AIAnalysisService:
             temp_original = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
             temp_original.close()  # Close it since _download_video_with_retry will handle writing
             try:
-                await self._download_video_with_retry(video_url, temp_original.name, video_id=video_id)
+                download_ok = await self._download_video_with_retry(video_url, temp_original.name, video_id=video_id)
+                if not download_ok or not os.path.exists(temp_original.name):
+                    return {"error": "视频下载失败：源文件未成功保存到本地，请稍后重试"}
                 size_mb = os.path.getsize(temp_original.name) / 1024 / 1024
+                if size_mb <= 0:
+                    return {"error": "视频下载失败：下载结果为空文件，请稍后重试"}
                 logger.info(f"下载完成，本地文件大小: {size_mb:.1f}MB")
             except Exception as e:
                 logger.error(f"视频下载失败: {e}")
@@ -502,7 +506,11 @@ class AIAnalysisService:
             temp_original = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
             temp_original.close()
             try:
-                await self._download_video_with_retry(video_url, temp_original.name, video_id=video_id)
+                download_ok = await self._download_video_with_retry(video_url, temp_original.name, video_id=video_id)
+                if not download_ok or not os.path.exists(temp_original.name):
+                    return {"error": "视频下载失败：源文件未成功保存到本地，请稍后重试"}
+                if os.path.getsize(temp_original.name) <= 0:
+                    return {"error": "视频下载失败：下载结果为空文件，请稍后重试"}
             except Exception as e:
                 logger.error(f"视频下载失败: {e}")
                 raise e
