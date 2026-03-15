@@ -17,18 +17,46 @@ REPO_VISIBILITY="${REPO_VISIBILITY:-}"
 INSTALL_MODE_LABEL=""
 DEPLOY_ACCESS_URL=""
 PROFILE_DESCRIPTION=""
+COLOR_RESET=$'\033[0m'
+COLOR_BLUE=$'\033[1;34m'
+COLOR_CYAN=$'\033[1;36m'
+COLOR_GREEN=$'\033[1;32m'
+COLOR_YELLOW=$'\033[1;33m'
+COLOR_MAGENTA=$'\033[1;35m'
 
 log() {
-  printf '\033[1;34m[install]\033[0m %s\n' "$1"
+  printf '%s[install]%s %s\n' "${COLOR_BLUE}" "${COLOR_RESET}" "$1"
 }
 
 warn() {
-  printf '\033[1;33m[warn]\033[0m %s\n' "$1"
+  printf '%s[warn]%s %s\n' "${COLOR_YELLOW}" "${COLOR_RESET}" "$1"
 }
 
 die() {
-  printf '\033[1;31m[error]\033[0m %s\n' "$1" >&2
+  printf '\033[1;31m[error]%s %s\n' "${COLOR_RESET}" "$1" >&2
   exit 1
+}
+
+print_box() {
+  local color="$1"
+  local title="$2"
+  shift 2
+  local lines=("$@")
+
+  if ! has_tty; then
+    printf '%s\n' "${title}"
+    printf '%s\n' "${lines[@]}"
+    return
+  fi
+
+  printf '%s============================================================%s\n' "${color}" "${COLOR_RESET}" > /dev/tty
+  printf '%s  %s%s\n' "${color}" "${title}" "${COLOR_RESET}" > /dev/tty
+  printf '%s============================================================%s\n' "${color}" "${COLOR_RESET}" > /dev/tty
+  local line
+  for line in "${lines[@]}"; do
+    printf '  %s\n' "${line}" > /dev/tty
+  done
+  printf '%s============================================================%s\n\n' "${color}" "${COLOR_RESET}" > /dev/tty
 }
 
 print_banner() {
@@ -36,54 +64,53 @@ print_banner() {
     return
   fi
 
-  cat > /dev/tty <<'EOF'
-
-============================================================
-  Douyin Manager 一键安装向导
-============================================================
-  这个安装器会帮助你在全新 VPS 上完成：
-  1. Docker 安装
-  2. 项目代码拉取
-  3. .env 自动生成
-  4. 容器启动与初始化
-============================================================
-
-EOF
+  print_box "${COLOR_MAGENTA}" "Douyin Manager 一键安装向导" \
+    "这个安装器会帮助你在全新 VPS 上完成：" \
+    "1. Docker 安装" \
+    "2. 项目代码拉取" \
+    "3. .env 自动生成" \
+    "4. 容器启动与初始化"
 }
 
 print_step() {
   local step="$1"
   local title="$2"
-  printf '\n\033[1;36m[%s/6]\033[0m %s\n' "${step}" "${title}"
+  printf '\n%s[%s/6]%s %s\n' "${COLOR_CYAN}" "${step}" "${COLOR_RESET}" "${title}"
 }
 
 print_success_panel() {
+  if has_tty; then
+    print_box "${COLOR_GREEN}" "安装完成" \
+      "安装模式   : ${INSTALL_MODE_LABEL}" \
+      "项目目录   : ${APP_DIR}" \
+      "访问地址   : ${DEPLOY_ACCESS_URL}" \
+      "启动模式   : ${PROFILE_DESCRIPTION}" \
+      "" \
+      "默认管理员账号" \
+      "用户名     : ${DEFAULT_ADMIN_USERNAME}" \
+      "密码       : ${DEFAULT_ADMIN_PASSWORD}" \
+      "" \
+      "安装后建议" \
+      "1. 立即登录后台并修改管理员密码" \
+      "2. 到“设置 -> 基础配置”填写 AI_API_KEY" \
+      "3. 到“设置 -> 爬虫与认证”填写 Douyin Cookie" \
+      "" \
+      "常用排查命令" \
+      "cd ${APP_DIR}" \
+      "docker compose ps" \
+      "docker compose logs -f backend" \
+      "docker compose logs -f frontend"
+    return
+  fi
+
   cat <<EOF
-
-============================================================
-  安装完成
-============================================================
-  安装模式   : ${INSTALL_MODE_LABEL}
-  项目目录   : ${APP_DIR}
-  访问地址   : ${DEPLOY_ACCESS_URL}
-  启动模式   : ${PROFILE_DESCRIPTION}
-
-  默认管理员账号
-  用户名     : ${DEFAULT_ADMIN_USERNAME}
-  密码       : ${DEFAULT_ADMIN_PASSWORD}
-
-  安装后建议
-  1. 立即登录后台并修改管理员密码
-  2. 到“设置 -> 基础配置”填写 AI_API_KEY
-  3. 到“设置 -> 爬虫与认证”填写 Douyin Cookie
-
-  常用排查命令
-  cd ${APP_DIR}
-  docker compose ps
-  docker compose logs -f backend
-  docker compose logs -f frontend
-============================================================
-
+安装完成
+安装模式   : ${INSTALL_MODE_LABEL}
+项目目录   : ${APP_DIR}
+访问地址   : ${DEPLOY_ACCESS_URL}
+启动模式   : ${PROFILE_DESCRIPTION}
+用户名     : ${DEFAULT_ADMIN_USERNAME}
+密码       : ${DEFAULT_ADMIN_PASSWORD}
 EOF
 }
 
