@@ -306,7 +306,7 @@ class AIAnalysisService:
             def download_sync():
                 req = urllib.request.Request(current_url, headers=headers)
                 with urllib.request.urlopen(req, timeout=120) as response:
-                    if response.getcode() != 200:
+                    if response.getcode() not in (200, 206):
                         raise Exception(f"HTTP {response.getcode()}")
                     with open(temp_file_path, 'wb') as f:
                         while True:
