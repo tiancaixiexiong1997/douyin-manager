@@ -23,6 +23,9 @@ COLOR_CYAN=$'\033[1;36m'
 COLOR_GREEN=$'\033[1;32m'
 COLOR_YELLOW=$'\033[1;33m'
 COLOR_MAGENTA=$'\033[1;35m'
+export PAGER=cat
+export SYSTEMD_PAGER=cat
+export GIT_PAGER=cat
 
 log() {
   printf '%s[install]%s %s\n' "${COLOR_BLUE}" "${COLOR_RESET}" "$1"

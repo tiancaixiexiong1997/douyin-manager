@@ -56,6 +56,7 @@ chmod +x scripts/install_vps.sh
 - 彩色分隔框与区块标题
 - 更清晰的编号菜单
 - 安装完成后的访问地址和默认账号密码区块
+- 默认关闭 `systemctl/git` 分页，避免卡在 `lines 1-23` 之类的界面
 
 ### 私有仓库推荐用法
 
