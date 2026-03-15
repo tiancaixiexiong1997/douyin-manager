@@ -1,0 +1,7 @@
+# AI二创专家配置
+AI:
+  API_KEY: "sk-nirYVw0B6njVfHWlpHU4RMelA3hP29xhbN8o0FXImrDECjYj"
+  BASE_URL: "https://api.openai-hub.com/v1"
+  MODEL: "gemini-3.1-pro-preview"
+  MAX_TOKENS: 4096
+  TEMPERATURE: 0.7

@@ -1,0 +1,31 @@
+TokenManager:
+  tiktok:
+    headers:
+      User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36
+      Referer: https://www.tiktok.com/
+      # 你唯一需要修改的地方就是这里的Cookie，然后保存后重启程序即可。
+        # The only place you need to modify is the Cookie here, and then save and restart the program.
+      Cookie: PLEASE_REPLACE_WITH_YOUR_OWN_COOKIE
+
+    proxies:
+      http:
+      https:
+
+    msToken:
+        # 不要修改下面的内容。
+        # Do not modify the content below.
+      url: https://mssdk.tiktokw.us/web/report
+      magic: 538969122
+      version: 1
+      dataType: 8
+      strData: PLEASE_REPLACE_WITH_YOUR_OWN_STRDATA
+      User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36
+
+    ttwid:
+        # 不要修改下面的内容。
+        # Do not modify the content below.
+      url: https://www.tiktok.com/ttwid/check/
+      data: '{"aid":1988,"service":"www.tiktok.com","union":false,"unionHost":"","needFid":false,"fid":"","migrate_priority":0}'
+      cookie: PLEASE_REPLACE_WITH_YOUR_OWN_COOKIE
+    odin_tt:
+      url: https://www.tiktok.com/passport/web/account/info/?aid=1459&app_language=zh-Hans&app_name=tiktok_web&browser_language=zh-CN&browser_name=Mozilla&browser_online=true&browser_platform=Win32&browser_version=5.0%20%28Windows%20NT%2010.0%3B%20Win64%3B%20x64%29%20AppleWebKit%2F537.36%20%28KHTML%2C%20like%20Gecko%29%20Chrome%2F119.0.0.0%20Safari%2F537.36&channel=tiktok_web&cookie_enabled=true&device_id=7306060721837852167&root_referer=https%3A%2F%2Fwww.tiktok.com%2Flogin%2F

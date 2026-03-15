@@ -18,3 +18,4 @@ frontend/node_modules/
 frontend/dist/
 
 backend/douyin_api/venv/
+backend/douyin_api/.git.repo-backup/
