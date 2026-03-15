@@ -227,7 +227,8 @@ export interface BloggerAnalysisReport {
   };
   copywriting_dna?: {
     tone_of_voice: string;
-    typical_hook: string;
+    typical_hook?: string;
+    typical_hooks?: string[];
     cta_patterns: string;
     interaction_style?: string;
   };

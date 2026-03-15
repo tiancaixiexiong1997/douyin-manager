@@ -44,7 +44,7 @@ BLOGGER_REPORT_PROMPT_TEMPLATE = (
     '  }},\n'
     '  "copywriting_dna": {{\n'
     '    "tone_of_voice": "语言风格（口语化程度/情绪浓度/用词特点）",\n'
-    '    "typical_hook": "典型开场白（引用1个真实标题或开场白作为案例）",\n'
+    '    "typical_hooks": ["典型开场白1（引用真实标题或开场白）", "典型开场白2", "典型开场白3"],\n'
     '    "cta_patterns": "互动引导方式（具体的结尾话术模板）",\n'
     '    "interaction_style": "评论区互动风格（回复频率/回复语气/是否引发讨论）"\n'
     '  }},\n'

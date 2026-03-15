@@ -27,6 +27,17 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
   return debounced;
 }
 
+function normalizeTypicalHooks(report: BloggerAnalysisReport | undefined): string[] {
+  const copywriting = report?.copywriting_dna;
+  if (!copywriting) return [];
+  const hooks = Array.isArray(copywriting.typical_hooks)
+    ? copywriting.typical_hooks.map((item) => String(item || '').trim()).filter(Boolean)
+    : [];
+  if (hooks.length > 0) return hooks;
+  const fallback = String(copywriting.typical_hook || '').trim();
+  return fallback ? [fallback] : [];
+}
+
 function AddBloggerModal({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState<AddBloggerRequest>({
     url: '',
@@ -735,6 +746,9 @@ function BloggerDetailModal({ blogger, onClose }: { blogger: Blogger; onClose: (
                   {report.copywriting_dna && (
                     <div className="report-section">
                       <div className="report-section-title">文案风格</div>
+                      {(() => {
+                        const typicalHooks = normalizeTypicalHooks(report);
+                        return (
                       <div className="report-grid">
                         <div className="report-item">
                           <div className="report-item-label">语言风格</div>
@@ -742,9 +756,19 @@ function BloggerDetailModal({ blogger, onClose }: { blogger: Blogger; onClose: (
                         </div>
                         <div className="report-item">
                           <div className="report-item-label">常用开头</div>
-                          <div className="report-item-value">{report.copywriting_dna.typical_hook}</div>
+                          {typicalHooks.length > 0 ? (
+                            <div className="report-pillars">
+                              {typicalHooks.map((hook, idx) => (
+                                <span className="badge badge-blue" key={`${hook}-${idx}`}>{hook}</span>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="report-item-value">数据不足</div>
+                          )}
                         </div>
                       </div>
+                        );
+                      })()}
                     </div>
                   )}
                   {report.filming_signature && (
