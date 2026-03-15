@@ -117,6 +117,19 @@ print_success_panel() {
 EOF
 }
 
+print_access_hint() {
+  cat <<EOF
+
+>>> 访问入口
+${DEPLOY_ACCESS_URL}
+
+>>> 默认管理员账号
+用户名: ${DEFAULT_ADMIN_USERNAME}
+密码: ${DEFAULT_ADMIN_PASSWORD}
+
+EOF
+}
+
 require_root() {
   if [[ "${EUID}" -ne 0 ]]; then
     die "请使用 root 或 sudo 运行此脚本"
@@ -457,6 +470,7 @@ compose_up() {
 
 print_summary() {
   print_success_panel
+  print_access_hint
 }
 
 main() {
