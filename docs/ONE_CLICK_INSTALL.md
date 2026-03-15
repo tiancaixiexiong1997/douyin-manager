@@ -132,6 +132,10 @@ sudo GITHUB_REPO=yourname/douyin-manager GITHUB_TOKEN=YOUR_GITHUB_TOKEN APP_DOMA
   - 可选，默认 `main`
 - `APP_DOMAIN`
   - 可选，填了会自动启用 `prod` profile
+- `FRONTEND_PORT_BIND`
+  - 通常不需要手动填
+  - IP 模式会自动设为 `3000:80`
+  - 域名模式会自动设为 `127.0.0.1:3000:80`
 - `ENABLE_PROD_PROFILE`
   - 可选：`true` / `false` / `auto`
   - 默认 `auto`

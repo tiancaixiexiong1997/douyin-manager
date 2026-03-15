@@ -216,7 +216,7 @@ services:
     container_name: douyincehua-frontend
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3000:80"
+      - "${FRONTEND_PORT_BIND:-127.0.0.1:3000:80}"
     depends_on:
       - backend
     networks:

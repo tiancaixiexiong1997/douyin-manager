@@ -17,6 +17,7 @@ REPO_VISIBILITY="${REPO_VISIBILITY:-}"
 INSTALL_MODE_LABEL=""
 DEPLOY_ACCESS_URL=""
 PROFILE_DESCRIPTION=""
+FRONTEND_PORT_BIND="${FRONTEND_PORT_BIND:-}"
 COLOR_RESET=$'\033[0m'
 COLOR_BLUE=$'\033[1;34m'
 COLOR_CYAN=$'\033[1;36m'
@@ -382,6 +383,7 @@ prepare_env_file() {
   print_step 5 "生成部署配置"
   local env_file="${APP_DIR}/.env"
   local env_example="${APP_DIR}/.env.example"
+  local use_prod_profile="false"
 
   [[ -f "${env_example}" ]] || die "未找到 ${env_example}"
 
@@ -406,12 +408,20 @@ prepare_env_file() {
   set_env_value "${env_file}" "APP_DOMAIN" "${APP_DOMAIN}"
   set_env_value "${env_file}" "BACKEND_PORT_BIND" "127.0.0.1:8000:8000"
 
-  if [[ -n "${APP_DOMAIN}" ]]; then
+  if [[ "${ENABLE_PROD_PROFILE}" == "true" || ( "${ENABLE_PROD_PROFILE}" == "auto" && -n "${APP_DOMAIN}" ) ]]; then
+    use_prod_profile="true"
+  fi
+
+  if [[ "${use_prod_profile}" == "true" ]]; then
     set_env_value "${env_file}" "COOKIE_SECURE" "true"
     set_env_value "${env_file}" "COOKIE_SAMESITE" "lax"
+    set_env_value "${env_file}" "FRONTEND_PORT_BIND" "127.0.0.1:3000:80"
+    FRONTEND_PORT_BIND="127.0.0.1:3000:80"
   else
     set_env_value "${env_file}" "COOKIE_SECURE" "false"
     set_env_value "${env_file}" "COOKIE_SAMESITE" "lax"
+    set_env_value "${env_file}" "FRONTEND_PORT_BIND" "3000:80"
+    FRONTEND_PORT_BIND="3000:80"
   fi
 
   if ! grep -q "^AI_API_KEY=" "${env_file}"; then
@@ -437,17 +447,21 @@ compose_up() {
     true)
       profile_flag="--profile prod"
       PROFILE_DESCRIPTION="生产模式（域名 + HTTPS）"
+      INSTALL_MODE_LABEL="${INSTALL_MODE_LABEL:-域名部署}"
       ;;
     false)
       profile_flag=""
       PROFILE_DESCRIPTION="本地端口模式（IP:3000）"
+      INSTALL_MODE_LABEL="${INSTALL_MODE_LABEL:-IP 端口部署}"
       ;;
     auto)
       if [[ -n "${APP_DOMAIN}" ]]; then
         profile_flag="--profile prod"
         PROFILE_DESCRIPTION="生产模式（域名 + HTTPS）"
+        INSTALL_MODE_LABEL="${INSTALL_MODE_LABEL:-域名部署}"
       else
         PROFILE_DESCRIPTION="本地端口模式（IP:3000）"
+        INSTALL_MODE_LABEL="${INSTALL_MODE_LABEL:-IP 端口部署}"
       fi
       ;;
     *)
@@ -464,7 +478,7 @@ compose_up() {
   if [[ -n "${APP_DOMAIN}" && "${PROFILE_DESCRIPTION}" == "生产模式（域名 + HTTPS）" ]]; then
     DEPLOY_ACCESS_URL="https://${APP_DOMAIN}"
   else
-    DEPLOY_ACCESS_URL="http://服务器IP:3000"
+    DEPLOY_ACCESS_URL="http://服务器公网IP:3000"
   fi
 }
 
@@ -476,6 +490,9 @@ print_summary() {
 main() {
   interactive_setup
   require_root
+  if [[ "${ENABLE_PROD_PROFILE}" == "true" && -z "${APP_DOMAIN}" ]]; then
+    die "生产模式必须填写域名，不能留空"
+  fi
   local pm
   pm="$(detect_pm)"
   install_base_packages "${pm}"
