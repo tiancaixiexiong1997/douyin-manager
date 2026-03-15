@@ -33,6 +33,43 @@
 chmod +x scripts/install_vps.sh
 ```
 
+## 像宝塔那样的交互式安装
+
+脚本现在支持交互式向导。
+
+也就是说，你在新 VPS 上执行命令后，它会继续一步步询问：
+
+- 仓库地址
+- 仓库是否私有
+- 域名
+- 是否启用生产模式
+- 管理员账号
+- 管理员密码
+- 安装目录
+
+### 私有仓库推荐用法
+
+这是最接近“宝塔面板安装命令”的方式：
+
+```bash
+read -s -p "GitHub Token: " GITHUB_TOKEN; echo
+curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+https://raw.githubusercontent.com/tiancaixiexiong1997/douyin-manager/main/scripts/install_vps.sh | \
+sudo INTERACTIVE_MODE=true GITHUB_TOKEN="${GITHUB_TOKEN}" bash
+unset GITHUB_TOKEN
+```
+
+执行后，脚本会继续在终端里弹出交互问题。
+
+### 公网仓库推荐用法
+
+如果仓库是公开的，可以直接：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yourname/douyin-manager/main/scripts/install_vps.sh | \
+sudo INTERACTIVE_MODE=true bash
+```
+
 ### 方式一：项目已经在服务器上
 
 ```bash
@@ -106,9 +143,11 @@ sudo GITHUB_REPO=yourname/douyin-manager GITHUB_TOKEN=YOUR_GITHUB_TOKEN APP_DOMA
 如果你继续保持当前仓库为私有仓库，未来新 VPS 可直接使用这条命令：
 
 ```bash
-curl -fsSL -H "Authorization: Bearer 你的GitHubToken" \
+read -s -p "GitHub Token: " GITHUB_TOKEN; echo
+curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" \
 https://raw.githubusercontent.com/tiancaixiexiong1997/douyin-manager/main/scripts/install_vps.sh | \
-sudo GITHUB_REPO=tiancaixiexiong1997/douyin-manager GITHUB_TOKEN=你的GitHubToken APP_DOMAIN=你的域名 bash
+sudo INTERACTIVE_MODE=true GITHUB_TOKEN="${GITHUB_TOKEN}" bash
+unset GITHUB_TOKEN
 ```
 
 ## 启动后检查

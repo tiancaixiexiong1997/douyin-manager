@@ -12,6 +12,8 @@ ENABLE_PROD_PROFILE="${ENABLE_PROD_PROFILE:-auto}"
 DEFAULT_ADMIN_USERNAME="${DEFAULT_ADMIN_USERNAME:-admin}"
 DEFAULT_ADMIN_PASSWORD="${DEFAULT_ADMIN_PASSWORD:-admin123456}"
 APP_TIMEZONE="${APP_TIMEZONE:-Asia/Shanghai}"
+INTERACTIVE_MODE="${INTERACTIVE_MODE:-auto}"
+REPO_VISIBILITY="${REPO_VISIBILITY:-}"
 
 log() {
   printf '\033[1;34m[install]\033[0m %s\n' "$1"
@@ -30,6 +32,138 @@ require_root() {
   if [[ "${EUID}" -ne 0 ]]; then
     die "请使用 root 或 sudo 运行此脚本"
   fi
+}
+
+has_tty() {
+  [[ -r /dev/tty && -w /dev/tty ]]
+}
+
+prompt_input() {
+  local message="$1"
+  local default_value="${2:-}"
+  local answer=""
+
+  if ! has_tty; then
+    printf '%s' "${default_value}"
+    return
+  fi
+
+  if [[ -n "${default_value}" ]]; then
+    printf "%s [%s]: " "${message}" "${default_value}" > /dev/tty
+  else
+    printf "%s: " "${message}" > /dev/tty
+  fi
+  IFS= read -r answer < /dev/tty || true
+  if [[ -z "${answer}" ]]; then
+    answer="${default_value}"
+  fi
+  printf '%s' "${answer}"
+}
+
+prompt_secret() {
+  local message="$1"
+  local answer=""
+
+  if ! has_tty; then
+    printf ''
+    return
+  fi
+
+  printf "%s: " "${message}" > /dev/tty
+  stty -echo < /dev/tty
+  IFS= read -r answer < /dev/tty || true
+  stty echo < /dev/tty
+  printf '\n' > /dev/tty
+  printf '%s' "${answer}"
+}
+
+prompt_choice() {
+  local message="$1"
+  shift
+  local options=("$@")
+  local index=1
+  local choice=""
+
+  if ! has_tty; then
+    printf '%s' "${options[0]}"
+    return
+  fi
+
+  printf "%s\n" "${message}" > /dev/tty
+  for option in "${options[@]}"; do
+    printf "  %s) %s\n" "${index}" "${option}" > /dev/tty
+    index=$((index + 1))
+  done
+
+  while true; do
+    printf "请选择 [1-%s]: " "${#options[@]}" > /dev/tty
+    IFS= read -r choice < /dev/tty || true
+    if [[ "${choice}" =~ ^[1-9][0-9]*$ ]] && (( choice >= 1 && choice <= ${#options[@]} )); then
+      printf '%s' "${options[choice-1]}"
+      return
+    fi
+    printf "输入无效，请重试。\n" > /dev/tty
+  done
+}
+
+interactive_setup() {
+  local use_interactive="${INTERACTIVE_MODE}"
+
+  if [[ "${use_interactive}" == "auto" ]]; then
+    if has_tty; then
+      use_interactive="true"
+    else
+      use_interactive="false"
+    fi
+  fi
+
+  if [[ "${use_interactive}" != "true" ]]; then
+    return
+  fi
+
+  log "进入交互式安装向导"
+
+  if [[ -z "${GITHUB_REPO}" && -z "${REPO_URL}" ]]; then
+    GITHUB_REPO="$(prompt_input "GitHub 仓库（格式：用户名/仓库名）" "tiancaixiexiong1997/douyin-manager")"
+  fi
+
+  if [[ -z "${REPO_VISIBILITY}" ]]; then
+    local repo_visibility_choice
+    repo_visibility_choice="$(prompt_choice "请选择仓库类型" "私有仓库（需要 GitHub Token）" "公共仓库")"
+    if [[ "${repo_visibility_choice}" == "私有仓库（需要 GitHub Token）" ]]; then
+      REPO_VISIBILITY="private"
+    else
+      REPO_VISIBILITY="public"
+    fi
+  fi
+
+  if [[ "${REPO_VISIBILITY}" == "private" && -z "${GITHUB_TOKEN}" && -z "${REPO_URL}" ]]; then
+    GITHUB_TOKEN="$(prompt_secret "请输入 GitHub Token（私有仓库需要）")"
+  fi
+
+  if [[ -z "${APP_DOMAIN}" ]]; then
+    APP_DOMAIN="$(prompt_input "绑定域名（留空则按 IP:3000 启动）")"
+  fi
+
+  if [[ -z "${ENABLE_PROD_PROFILE}" || "${ENABLE_PROD_PROFILE}" == "auto" ]]; then
+    if [[ -n "${APP_DOMAIN}" ]]; then
+      ENABLE_PROD_PROFILE="true"
+    else
+      local deploy_mode_choice
+      deploy_mode_choice="$(prompt_choice "请选择部署模式" "仅本地端口模式（IP:3000）" "生产模式（域名 + HTTPS）")"
+      if [[ "${deploy_mode_choice}" == "生产模式（域名 + HTTPS）" ]]; then
+        ENABLE_PROD_PROFILE="true"
+      else
+        ENABLE_PROD_PROFILE="false"
+      fi
+    fi
+  fi
+
+  DEFAULT_ADMIN_USERNAME="$(prompt_input "管理员账号" "${DEFAULT_ADMIN_USERNAME}")"
+  DEFAULT_ADMIN_PASSWORD="$(prompt_input "管理员密码" "${DEFAULT_ADMIN_PASSWORD}")"
+  APP_DIR="$(prompt_input "安装目录" "${APP_DIR}")"
+  GIT_BRANCH="$(prompt_input "Git 分支" "${GIT_BRANCH}")"
+  APP_TIMEZONE="$(prompt_input "时区" "${APP_TIMEZONE}")"
 }
 
 detect_pm() {
@@ -239,6 +373,7 @@ EOF
 }
 
 main() {
+  interactive_setup
   require_root
   local pm
   pm="$(detect_pm)"
