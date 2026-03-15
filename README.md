@@ -470,6 +470,7 @@ bash scripts/restore_db.sh 备份文件路径
 
 - 一键安装说明：[`docs/ONE_CLICK_INSTALL.md`](./docs/ONE_CLICK_INSTALL.md)
 - 部署运维说明：[`docs/DEPLOY_OPS.md`](./docs/DEPLOY_OPS.md)
+- 使用手册：[`docs/USER_GUIDE.md`](./docs/USER_GUIDE.md)
 - Cookie 扩展说明：[`backend/douyin_api/chrome-cookie-sniffer/README.md`](./backend/douyin_api/chrome-cookie-sniffer/README.md)
 
 ## 17. 快速入口
