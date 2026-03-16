@@ -492,14 +492,24 @@
 }
 .project-card-meta-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 6px;
 }
 .project-card-industry-badge {
-  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: min(220px, 100%);
+  min-height: 42px;
   max-width: 100%;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  line-height: 1.25;
+  white-space: normal;
+  word-break: break-word;
+  text-align: center;
 }
 .project-card-status-inline {
   white-space: nowrap;
