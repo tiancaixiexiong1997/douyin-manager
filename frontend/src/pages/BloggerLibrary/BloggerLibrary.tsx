@@ -1325,7 +1325,7 @@ export default function BloggerLibrary() {
             <div className="filter-wrap">
               <Filter size={13} style={{ color: 'var(--text-muted)' }} />
               <select
-                className="filter-select"
+                className="filter-select app-select"
                 value={platformFilter}
                 onChange={e => {
                   setPlatformFilter(e.target.value);
@@ -1394,7 +1394,7 @@ export default function BloggerLibrary() {
           </div>
           <div className="blogger-pagination-actions">
             <select
-              className="form-input blogger-page-size"
+              className="form-input blogger-page-size app-select"
               value={pageSize}
               onChange={(e) => {
                 setPageSize(Number(e.target.value));

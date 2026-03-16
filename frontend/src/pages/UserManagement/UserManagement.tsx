@@ -220,7 +220,7 @@ export default function UserManagement() {
             }}
           />
           <select
-            className="form-input"
+            className="form-input app-select"
             value={roleFilter}
             onChange={(e) => {
               setRoleFilter(e.target.value as 'all' | UserRole);
@@ -233,7 +233,7 @@ export default function UserManagement() {
             <option value="viewer">访客</option>
           </select>
           <select
-            className="form-input"
+            className="form-input app-select"
             value={statusFilter}
             onChange={(e) => {
               setStatusFilter(e.target.value as 'all' | 'active' | 'inactive');
@@ -246,7 +246,7 @@ export default function UserManagement() {
             <option value="inactive">仅禁用</option>
           </select>
           <select
-            className="form-input"
+            className="form-input app-select"
             value={sortBy}
             onChange={(e) => {
               setSortBy(e.target.value as 'created_at' | 'username' | 'role' | 'is_active');
@@ -260,7 +260,7 @@ export default function UserManagement() {
             <option value="is_active">按状态</option>
           </select>
           <select
-            className="form-input"
+            className="form-input app-select"
             value={sortOrder}
             onChange={(e) => {
               setSortOrder(e.target.value as 'asc' | 'desc');
@@ -364,7 +364,7 @@ export default function UserManagement() {
         <div className="user-pagination">
           <span className="user-page-total">共 {total} 条 / {totalPages} 页</span>
           <select
-            className="form-input user-page-size"
+            className="form-input user-page-size app-select"
             value={pageSize}
             onChange={(e) => {
               const next = Number(e.target.value) || 10;
@@ -423,7 +423,7 @@ export default function UserManagement() {
                 onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))} />
               <input className="form-input" type="password" placeholder="登录密码（至少 6 位）" value={form.password}
                 onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} />
-              <select className="form-input" value={form.role}
+              <select className="form-input app-select" value={form.role}
                 onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as UserRole }))}>
                 <option value="member">成员</option>
                 <option value="viewer">访客</option>
@@ -450,7 +450,7 @@ export default function UserManagement() {
             <div className="modal-header"><h2 className="modal-title">编辑权限</h2></div>
             <div className="p-4 flex flex-col gap-3">
               <div className="text-sm text-secondary">用户：<strong>{selectedUser.username}</strong></div>
-              <select className="form-input" value={selectedUser.role}
+              <select className="form-input app-select" value={selectedUser.role}
                 onChange={(e) => setSelectedUser((u) => (u ? { ...u, role: e.target.value as UserRole } : u))}>
                 <option value="member">成员</option>
                 <option value="viewer">访客</option>

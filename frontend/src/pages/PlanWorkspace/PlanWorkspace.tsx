@@ -742,7 +742,7 @@ export default function PlanWorkspace() {
         <div className="plan-toolbar-filter">
           <Filter size={13} style={{ color: 'var(--text-muted)' }} />
           <select
-            className="plan-filter-select"
+            className="plan-filter-select app-select"
             value={statusFilter}
             onChange={(e) => {
               setStatusFilter(e.target.value as 'all' | 'draft' | 'in_progress' | 'completed');

@@ -636,7 +636,7 @@ function PerformanceModal({
           <div className="form-group">
             <label className="form-label">关联策划条目</label>
             <select
-              className="form-input"
+              className="form-input app-select"
               value={form.content_item_id || ''}
               onChange={(e) => {
                 const nextId = e.target.value || null;
