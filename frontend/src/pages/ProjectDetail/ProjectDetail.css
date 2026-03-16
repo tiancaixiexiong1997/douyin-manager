@@ -107,6 +107,10 @@
   box-shadow: 0 10px 24px rgba(2, 6, 23, 0.14);
 }
 
+.project-detail-select {
+  width: 100%;
+}
+
 .detail-positioning {
   margin-bottom: 4px;
 }

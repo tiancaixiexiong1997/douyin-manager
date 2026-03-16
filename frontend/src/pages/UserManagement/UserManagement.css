@@ -186,6 +186,10 @@
   width: min(480px, 92vw);
 }
 
+.user-filter-select {
+  width: 100%;
+}
+
 .user-pagination {
   margin-top: 12px;
   display: flex;

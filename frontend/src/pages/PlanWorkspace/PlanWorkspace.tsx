@@ -9,6 +9,7 @@ import {
   type PlanningIntakeDraft,
   type PlanningIntakeChatMessage,
 } from '../../api/client';
+import { CustomSelect } from '../../components/CustomSelect';
 import { Plus, X, Sparkles, ArrowRight, Clock, CheckCircle, Trash2, RefreshCw, Link as LinkIcon, Search, Filter } from '../../components/Icons';
 import { notifyError } from '../../utils/notify';
 import './PlanWorkspace.css';
@@ -41,6 +42,12 @@ const FAST_PROMPT_EXAMPLES = [
   '我做广州本地餐饮探店，目标客群是25-35岁上班族，想做“高性价比工作餐+周末聚餐”账号，30天起号。',
   '我是瑜伽教练，想做30岁女性居家减脂账号，主打每天10分钟可坚持，目标是私教咨询转化。',
   '我做护肤，想帮敏感肌女生避坑，内容以产品测评+成分科普为主，一个月先稳定更新10条。',
+];
+const STATUS_FILTER_OPTIONS = [
+  { value: 'all', label: '全部状态' },
+  { value: 'completed', label: '已完成' },
+  { value: 'in_progress', label: '生成中' },
+  { value: 'draft', label: '失败/草稿' },
 ];
 
 function mapRhythmTextToPreset(value: string): 'month10' | 'month12' | 'month15' {
@@ -741,19 +748,16 @@ export default function PlanWorkspace() {
         </div>
         <div className="plan-toolbar-filter">
           <Filter size={13} style={{ color: 'var(--text-muted)' }} />
-          <select
-            className="plan-filter-select app-select"
+          <CustomSelect
+            className="plan-filter-select"
+            triggerClassName="plan-filter-select-trigger"
             value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value as 'all' | 'draft' | 'in_progress' | 'completed');
+            options={STATUS_FILTER_OPTIONS}
+            onChange={(value) => {
+              setStatusFilter(value as 'all' | 'draft' | 'in_progress' | 'completed');
               setPage(1);
             }}
-          >
-            <option value="all">全部状态</option>
-            <option value="completed">已完成</option>
-            <option value="in_progress">生成中</option>
-            <option value="draft">失败/草稿</option>
-          </select>
+          />
         </div>
       </section>
 
@@ -917,20 +921,19 @@ export default function PlanWorkspace() {
             第 {page} / {totalPages} 页 · 共 {totalProjects} 个项目
           </div>
           <div className="plan-pagination-actions">
-            <select
-              className="form-input plan-page-size"
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
+            <CustomSelect
+              className="plan-page-size"
+              triggerClassName="form-input"
+              value={String(pageSize)}
+              options={PAGE_SIZE_OPTIONS.map((size) => ({
+                value: String(size),
+                label: `每页 ${size} 条`,
+              }))}
+              onChange={(value) => {
+                setPageSize(Number(value));
                 setPage(1);
               }}
-            >
-              {PAGE_SIZE_OPTIONS.map((size) => (
-                <option key={size} value={size}>
-                  每页 {size} 条
-                </option>
-              ))}
-            </select>
+            />
             <button
               className="btn btn-ghost btn-sm"
               disabled={!hasPrevPage || isFetching}

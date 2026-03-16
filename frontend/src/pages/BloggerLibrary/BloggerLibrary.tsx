@@ -9,6 +9,7 @@ import {
   type BloggerAnalysisReport,
   type VideoAnalysis,
 } from '../../api/client';
+import { CustomSelect } from '../../components/CustomSelect';
 import { Plus, X, Users, Trash2, RefreshCw, CheckCircle, Clock, Search, GitCompare, Filter, DouyinIcon, Sparkles } from '../../components/Icons';
 import { notifyError, notifyInfo, notifySuccess } from '../../utils/notify';
 import './BloggerLibrary.css';
@@ -17,6 +18,10 @@ const DEFAULT_PAGE_SIZE = 12;
 const PAGE_SIZE_OPTIONS = [12, 24, 48];
 const SEARCH_DEBOUNCE_MS = 350;
 const PLATFORM_OPTIONS = ['douyin', 'tiktok', 'bilibili'] as const;
+const PLATFORM_FILTER_OPTIONS = [
+  { value: 'all', label: '全部平台' },
+  ...PLATFORM_OPTIONS.map((platform) => ({ value: platform, label: platform })),
+];
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -1324,19 +1329,18 @@ export default function BloggerLibrary() {
             </div>
             <div className="filter-wrap">
               <Filter size={13} style={{ color: 'var(--text-muted)' }} />
-              <select
-                className="filter-select app-select"
+              <CustomSelect
+                className="filter-select"
+                triggerClassName="filter-select-trigger"
                 value={platformFilter}
-                onChange={e => {
-                  setPlatformFilter(e.target.value);
+                options={PLATFORM_FILTER_OPTIONS}
+                onChange={value => {
+                  setPlatformFilter(value);
                   setPage(1);
                   setSelectedIds([]);
                   setShowCompare(false);
                 }}
-              >
-                <option value="all">全部平台</option>
-                {PLATFORM_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
+              />
             </div>
           </div>
         </section>
@@ -1393,22 +1397,21 @@ export default function BloggerLibrary() {
             第 {page} / {totalPages} 页 · 共 {totalBloggers} 位博主
           </div>
           <div className="blogger-pagination-actions">
-            <select
-              className="form-input blogger-page-size app-select"
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
+            <CustomSelect
+              className="blogger-page-size"
+              triggerClassName="form-input"
+              value={String(pageSize)}
+              options={PAGE_SIZE_OPTIONS.map((size) => ({
+                value: String(size),
+                label: `每页 ${size} 条`,
+              }))}
+              onChange={(value) => {
+                setPageSize(Number(value));
                 setPage(1);
                 setSelectedIds([]);
                 setShowCompare(false);
               }}
-            >
-              {PAGE_SIZE_OPTIONS.map((size) => (
-                <option key={size} value={size}>
-                  每页 {size} 条
-                </option>
-              ))}
-            </select>
+            />
             <button
               className="btn btn-ghost btn-sm"
               disabled={!hasPrevPage || isFetching}

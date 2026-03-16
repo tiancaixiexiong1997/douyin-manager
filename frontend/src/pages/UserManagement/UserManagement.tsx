@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, KeyRound, Plus, Shield, Trash2, UserCog, UserRoundCheck, UserRoundX } from 'lucide-react';
 
 import { type UserCreateRequest, type UserItem, type UserRole, userApi } from '../../api/client';
+import { CustomSelect } from '../../components/CustomSelect';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import './UserManagement.css';
@@ -12,6 +13,37 @@ const roleLabelMap: Record<UserRole, string> = {
   member: '成员',
   viewer: '访客',
 };
+const ROLE_FILTER_OPTIONS = [
+  { value: 'all', label: '全部角色' },
+  { value: 'admin', label: '管理员' },
+  { value: 'member', label: '成员' },
+  { value: 'viewer', label: '访客' },
+];
+const STATUS_FILTER_OPTIONS = [
+  { value: 'all', label: '全部状态' },
+  { value: 'active', label: '仅启用' },
+  { value: 'inactive', label: '仅禁用' },
+];
+const SORT_BY_OPTIONS = [
+  { value: 'created_at', label: '按创建时间' },
+  { value: 'username', label: '按用户名' },
+  { value: 'role', label: '按角色' },
+  { value: 'is_active', label: '按状态' },
+];
+const SORT_ORDER_OPTIONS = [
+  { value: 'asc', label: '升序' },
+  { value: 'desc', label: '降序' },
+];
+const PAGE_SIZE_OPTIONS = [
+  { value: '10', label: '10 / 页' },
+  { value: '20', label: '20 / 页' },
+  { value: '50', label: '50 / 页' },
+];
+const ROLE_OPTIONS = [
+  { value: 'member', label: '成员' },
+  { value: 'viewer', label: '访客' },
+  { value: 'admin', label: '管理员' },
+];
 
 function roleClassName(role: UserRole) {
   return role === 'admin' ? 'badge-blue' : role === 'member' ? 'badge-green' : 'badge-yellow';
@@ -219,58 +251,49 @@ export default function UserManagement() {
               setSelectedIds([]);
             }}
           />
-          <select
-            className="form-input app-select"
+          <CustomSelect
+            className="user-filter-select"
+            triggerClassName="form-input"
             value={roleFilter}
-            onChange={(e) => {
-              setRoleFilter(e.target.value as 'all' | UserRole);
+            options={ROLE_FILTER_OPTIONS}
+            onChange={(value) => {
+              setRoleFilter(value as 'all' | UserRole);
               setPage(1);
             }}
-          >
-            <option value="all">全部角色</option>
-            <option value="admin">管理员</option>
-            <option value="member">成员</option>
-            <option value="viewer">访客</option>
-          </select>
-          <select
-            className="form-input app-select"
+          />
+          <CustomSelect
+            className="user-filter-select"
+            triggerClassName="form-input"
             value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value as 'all' | 'active' | 'inactive');
+            options={STATUS_FILTER_OPTIONS}
+            onChange={(value) => {
+              setStatusFilter(value as 'all' | 'active' | 'inactive');
               setPage(1);
               setSelectedIds([]);
             }}
-          >
-            <option value="all">全部状态</option>
-            <option value="active">仅启用</option>
-            <option value="inactive">仅禁用</option>
-          </select>
-          <select
-            className="form-input app-select"
+          />
+          <CustomSelect
+            className="user-filter-select"
+            triggerClassName="form-input"
             value={sortBy}
-            onChange={(e) => {
-              setSortBy(e.target.value as 'created_at' | 'username' | 'role' | 'is_active');
+            options={SORT_BY_OPTIONS}
+            onChange={(value) => {
+              setSortBy(value as 'created_at' | 'username' | 'role' | 'is_active');
               setPage(1);
               setSelectedIds([]);
             }}
-          >
-            <option value="created_at">按创建时间</option>
-            <option value="username">按用户名</option>
-            <option value="role">按角色</option>
-            <option value="is_active">按状态</option>
-          </select>
-          <select
-            className="form-input app-select"
+          />
+          <CustomSelect
+            className="user-filter-select"
+            triggerClassName="form-input"
             value={sortOrder}
-            onChange={(e) => {
-              setSortOrder(e.target.value as 'asc' | 'desc');
+            options={SORT_ORDER_OPTIONS}
+            onChange={(value) => {
+              setSortOrder(value as 'asc' | 'desc');
               setPage(1);
               setSelectedIds([]);
             }}
-          >
-            <option value="asc">升序</option>
-            <option value="desc">降序</option>
-          </select>
+          />
         </div>
         <div className="user-batch-bar">
           <label className="user-checkbox">
@@ -363,20 +386,18 @@ export default function UserManagement() {
 
         <div className="user-pagination">
           <span className="user-page-total">共 {total} 条 / {totalPages} 页</span>
-          <select
-            className="form-input user-page-size app-select"
-            value={pageSize}
-            onChange={(e) => {
-              const next = Number(e.target.value) || 10;
+          <CustomSelect
+            className="user-page-size"
+            triggerClassName="form-input"
+            value={String(pageSize)}
+            options={PAGE_SIZE_OPTIONS}
+            onChange={(value) => {
+              const next = Number(value) || 10;
               setPageSize(next);
               setPage(1);
               setJumpPageInput('');
             }}
-          >
-            <option value={10}>10 / 页</option>
-            <option value={20}>20 / 页</option>
-            <option value={50}>50 / 页</option>
-          </select>
+          />
           <button
             className="btn btn-ghost btn-sm"
             disabled={page <= 1 || isLoading}
@@ -423,12 +444,12 @@ export default function UserManagement() {
                 onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))} />
               <input className="form-input" type="password" placeholder="登录密码（至少 6 位）" value={form.password}
                 onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} />
-              <select className="form-input app-select" value={form.role}
-                onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as UserRole }))}>
-                <option value="member">成员</option>
-                <option value="viewer">访客</option>
-                <option value="admin">管理员</option>
-              </select>
+              <CustomSelect
+                triggerClassName="form-input"
+                value={form.role}
+                options={ROLE_OPTIONS}
+                onChange={(value) => setForm((f) => ({ ...f, role: value as UserRole }))}
+              />
             </div>
             <div className="modal-footer">
               <button className="btn btn-ghost" onClick={() => setIsCreateOpen(false)} disabled={createMutation.isPending}>取消</button>
@@ -450,12 +471,12 @@ export default function UserManagement() {
             <div className="modal-header"><h2 className="modal-title">编辑权限</h2></div>
             <div className="p-4 flex flex-col gap-3">
               <div className="text-sm text-secondary">用户：<strong>{selectedUser.username}</strong></div>
-              <select className="form-input app-select" value={selectedUser.role}
-                onChange={(e) => setSelectedUser((u) => (u ? { ...u, role: e.target.value as UserRole } : u))}>
-                <option value="member">成员</option>
-                <option value="viewer">访客</option>
-                <option value="admin">管理员</option>
-              </select>
+              <CustomSelect
+                triggerClassName="form-input"
+                value={selectedUser.role}
+                options={ROLE_OPTIONS}
+                onChange={(value) => setSelectedUser((u) => (u ? { ...u, role: value as UserRole } : u))}
+              />
               <label className="user-checkbox">
                 <input type="checkbox" checked={selectedUser.is_active}
                   onChange={(e) => setSelectedUser((u) => (u ? { ...u, is_active: e.target.checked } : u))} />

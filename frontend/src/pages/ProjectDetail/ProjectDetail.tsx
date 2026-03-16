@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { downloadApi, planningApi, taskApi, type ContentItem, type ContentPerformance, type ContentPerformanceCreateRequest, type VideoScript, type UpdatePlanningRequest, type TaskCenterItem } from '../../api/client';
+import { CustomSelect } from '../../components/CustomSelect';
 import { ArrowLeft, FileText, Loader2, ChevronDown, ChevronUp, Sparkles, Calendar, Pencil, Save, X, RefreshCw, Plus, Trash2, TrendingUp } from '../../components/Icons';
 import './ProjectDetail.css';
 
@@ -635,11 +636,19 @@ function PerformanceModal({
 
           <div className="form-group">
             <label className="form-label">关联策划条目</label>
-            <select
-              className="form-input app-select"
+            <CustomSelect
+              triggerClassName="form-input"
+              className="project-detail-select"
               value={form.content_item_id || ''}
-              onChange={(e) => {
-                const nextId = e.target.value || null;
+              options={[
+                { value: '', label: '不关联，作为独立回流记录' },
+                ...contentItems.map((item) => ({
+                  value: item.id,
+                  label: getContentItemLabel(item),
+                })),
+              ]}
+              onChange={(value) => {
+                const nextId = value || null;
                 setForm((prev) => {
                   const nextItem = nextId ? contentItemMap.get(nextId) || null : null;
                   const nextTitle = !prev.title.trim() && nextItem ? nextItem.title_direction : prev.title;
@@ -650,14 +659,7 @@ function PerformanceModal({
                   };
                 });
               }}
-            >
-              <option value="">不关联，作为独立回流记录</option>
-              {contentItems.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {getContentItemLabel(item)}
-                </option>
-              ))}
-            </select>
+            />
             {selectedContentItem && (
               <div className="form-hint">已关联到 {getContentItemLabel(selectedContentItem)}</div>
             )}

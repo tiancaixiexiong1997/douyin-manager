@@ -564,17 +564,17 @@
 }
 
 .filter-select {
-  background: rgba(15, 23, 42, 0.2);
-  border: 1px solid rgba(148, 163, 184, 0.26);
-  border-radius: 99px;
-  color: var(--text-primary);
-  font-size: 13px;
-  padding: 10px 14px;
-  outline: none;
-  cursor: pointer;
-  transition: all var(--transition-fast);
+  width: 144px;
 }
-.filter-select:hover { background: rgba(15, 23, 42, 0.28); }
+
+.filter-select-trigger {
+  min-height: 38px;
+  border-radius: 99px;
+  background: rgba(15, 23, 42, 0.2);
+  padding: 8px 14px;
+}
+
+.filter-select-trigger:hover { background: rgba(15, 23, 42, 0.28); }
 
 /* ===== 博主详情弹窗 ===== */
 .blogger-detail-modal {
@@ -861,8 +861,6 @@
 .blogger-page-size {
   width: 112px;
   min-width: 112px;
-  padding: 6px 8px;
-  font-size: 12px;
 }
 
 .blogger-page-jump {
@@ -938,7 +936,7 @@
 }
 
 [data-theme='light'] .search-input,
-[data-theme='light'] .filter-select {
+[data-theme='light'] .filter-select-trigger {
   background: #ffffff;
   border-color: rgba(148, 163, 184, 0.28);
 }

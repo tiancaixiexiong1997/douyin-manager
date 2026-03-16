@@ -762,18 +762,17 @@
 }
 
 .plan-filter-select {
-  background: rgba(15, 23, 42, 0.2);
-  border: 1px solid rgba(148, 163, 184, 0.26);
-  border-radius: 99px;
-  color: var(--text-primary);
-  font-size: 13px;
-  padding: 10px 14px;
-  outline: none;
-  cursor: pointer;
-  transition: all var(--transition-fast);
+  width: 148px;
 }
 
-.plan-filter-select:hover {
+.plan-filter-select-trigger {
+  min-height: 38px;
+  border-radius: 99px;
+  background: rgba(15, 23, 42, 0.2);
+  padding: 8px 14px;
+}
+
+.plan-filter-select-trigger:hover {
   background: rgba(15, 23, 42, 0.28);
 }
 
@@ -819,8 +818,6 @@
 .plan-page-size {
   width: 108px;
   min-width: 108px;
-  padding: 6px 8px;
-  font-size: 12px;
 }
 
 .plan-page-jump {
@@ -874,7 +871,7 @@
 }
 
 [data-theme='light'] .plan-search-input,
-[data-theme='light'] .plan-filter-select {
+[data-theme='light'] .plan-filter-select-trigger {
   background: #ffffff;
   border-color: rgba(148, 163, 184, 0.28);
 }
