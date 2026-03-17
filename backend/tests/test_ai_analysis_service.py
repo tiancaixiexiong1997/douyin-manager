@@ -4,6 +4,7 @@ from typing import Any
 import pytest
 
 from app.services.ai_analysis_service import AIAnalysisService
+from app.services.prompt_templates import BLOGGER_VIRAL_PROFILE_PROMPT_TEMPLATE
 
 
 def test_resolve_ffmpeg_timeout_uses_minimum_without_duration() -> None:
@@ -162,3 +163,19 @@ async def test_generate_account_plan_includes_timeline_fields_from_viral_profile
     assert "2月先试探，3月出现第一条起量内容" in user_prompt
     assert "第一条试探内容" in user_prompt
     assert "先用单点痛点破圈，再做场景延伸" in user_prompt
+
+
+def test_blogger_viral_profile_prompt_template_can_be_formatted_with_timeline_fields() -> None:
+    rendered = BLOGGER_VIRAL_PROFILE_PROMPT_TEMPLATE.format(
+        nickname="测试博主",
+        platform="douyin",
+        follower_count=1000,
+        signature="简介",
+        video_count=20,
+        text_data_json="[]",
+        analyses_json="[]",
+    )
+
+    assert '"timeline_entries"' in rendered
+    assert '"date"' in rendered
+    assert "{nickname}" not in rendered
