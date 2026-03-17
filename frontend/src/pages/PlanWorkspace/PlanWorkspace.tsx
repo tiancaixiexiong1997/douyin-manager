@@ -350,13 +350,13 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
                       key={`fast-example-${idx}-${example.title}`}
                       className="plan-intake-example-card"
                       type="button"
-                      onClick={() => sendIntakeMessage(example.prompt, 'fast')}
+                      onClick={() => setChatInput(example.prompt)}
                       disabled={intakeMutation.isPending}
                       title={example.prompt}
                     >
                       <span className="plan-intake-example-card-title">{example.title}</span>
                       <span className="plan-intake-example-card-text">{example.prompt}</span>
-                      <span className="plan-intake-example-card-action">一键套用</span>
+                      <span className="plan-intake-example-card-action">填入输入框</span>
                     </button>
                   ))}
                 </div>
