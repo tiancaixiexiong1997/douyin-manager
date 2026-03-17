@@ -123,6 +123,8 @@ async def get_settings(
         "AI_API_KEY_BACKUP": settings_dict.get("AI_API_KEY_BACKUP", app_settings.AI_API_KEY_BACKUP),
         "AI_BASE_URL_BACKUP": settings_dict.get("AI_BASE_URL_BACKUP", app_settings.AI_BASE_URL_BACKUP),
         "AI_MODEL_BACKUP": settings_dict.get("AI_MODEL_BACKUP", app_settings.AI_MODEL_BACKUP),
+        "GLOBAL_AI_FACT_RULES": settings_dict.get("GLOBAL_AI_FACT_RULES", ai_analysis_service.DEFAULT_GLOBAL_AI_FACT_RULES),
+        "GLOBAL_AI_WRITING_RULES": settings_dict.get("GLOBAL_AI_WRITING_RULES", ai_analysis_service.DEFAULT_GLOBAL_AI_WRITING_RULES),
         "BLOGGER_REPORT_PROMPT": settings_dict.get("BLOGGER_REPORT_PROMPT", ai_analysis_service.DEFAULT_BLOGGER_REPORT_PROMPT),
         "ACCOUNT_PLAN_PROMPT": settings_dict.get("ACCOUNT_PLAN_PROMPT", ai_analysis_service.DEFAULT_ACCOUNT_PLAN_PROMPT),
         "CONTENT_CALENDAR_PROMPT": settings_dict.get("CONTENT_CALENDAR_PROMPT", ai_analysis_service.DEFAULT_CONTENT_CALENDAR_PROMPT),

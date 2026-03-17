@@ -26,7 +26,12 @@ async def test_generate_content_calendar_includes_performance_recap_context(monk
     async def fake_record_prompt_run(**_kwargs: Any) -> None:
         return None
 
+    async def fake_build_system_prompt(*, scene_key: str, base_prompt: str) -> str:
+        assert scene_key == "content_calendar"
+        return base_prompt
+
     monkeypatch.setattr(service, "_resolve_prompt", fake_resolve_prompt)
+    monkeypatch.setattr(service, "_build_system_prompt", fake_build_system_prompt)
     monkeypatch.setattr(service, "_call_ai", fake_call_ai)
     monkeypatch.setattr(service, "_record_prompt_run", fake_record_prompt_run)
 
@@ -66,7 +71,12 @@ async def test_generate_content_calendar_handles_missing_performance_recap(monke
     async def fake_record_prompt_run(**_kwargs: Any) -> None:
         return None
 
+    async def fake_build_system_prompt(*, scene_key: str, base_prompt: str) -> str:
+        assert scene_key == "content_calendar"
+        return base_prompt
+
     monkeypatch.setattr(service, "_resolve_prompt", fake_resolve_prompt)
+    monkeypatch.setattr(service, "_build_system_prompt", fake_build_system_prompt)
     monkeypatch.setattr(service, "_call_ai", fake_call_ai)
     monkeypatch.setattr(service, "_record_prompt_run", fake_record_prompt_run)
 

@@ -19,6 +19,8 @@ from app.services.prompt_templates import (
     BLOGGER_REPORT_PROMPT_TEMPLATE,
     BLOGGER_VIRAL_PROFILE_PROMPT_TEMPLATE,
     CONTENT_CALENDAR_PROMPT_TEMPLATE,
+    GLOBAL_AI_FACT_RULES_TEMPLATE,
+    GLOBAL_AI_WRITING_RULES_TEMPLATE,
     NEXT_TOPIC_BATCH_PROMPT_TEMPLATE,
     PERFORMANCE_RECAP_PROMPT_TEMPLATE,
     PLANNING_INTAKE_PROMPT_TEMPLATE,
@@ -31,6 +33,8 @@ logger = logging.getLogger(__name__)
 class AIAnalysisService:
     """AI 分析服务，下载并压缩视频后整体发送给多模态 AI（含音频）"""
 
+    DEFAULT_GLOBAL_AI_FACT_RULES = GLOBAL_AI_FACT_RULES_TEMPLATE
+    DEFAULT_GLOBAL_AI_WRITING_RULES = GLOBAL_AI_WRITING_RULES_TEMPLATE
     DEFAULT_BLOGGER_REPORT_PROMPT = BLOGGER_REPORT_PROMPT_TEMPLATE
     DEFAULT_BLOGGER_VIRAL_PROFILE_PROMPT = BLOGGER_VIRAL_PROFILE_PROMPT_TEMPLATE
     DEFAULT_ACCOUNT_PLAN_PROMPT = ACCOUNT_PLAN_PROMPT_TEMPLATE
@@ -50,6 +54,16 @@ class AIAnalysisService:
         "planning_intake": "PLANNING_INTAKE_PROMPT",
         "video_script": "VIDEO_SCRIPT_PROMPT",
         "script_remake": "SCRIPT_REMAKE_PROMPT",
+    }
+    WRITING_RULE_SCENES = {
+        "blogger_viral_profile",
+        "account_plan",
+        "content_calendar",
+        "performance_recap",
+        "next_topic_batch",
+        "planning_intake",
+        "video_script",
+        "script_remake",
     }
 
     def __init__(self):
@@ -197,6 +211,27 @@ class AIAnalysisService:
             logger.warning("解析提示词版本失败(scene=%s): %s", scene_key, exc)
 
         return fallback_prompt, meta
+
+    async def _build_system_prompt(self, *, scene_key: str, base_prompt: str) -> str:
+        factual_rules = str(
+            await self._get_current_setting(
+                "GLOBAL_AI_FACT_RULES",
+                self.DEFAULT_GLOBAL_AI_FACT_RULES,
+            )
+        ).strip()
+        writing_rules = str(
+            await self._get_current_setting(
+                "GLOBAL_AI_WRITING_RULES",
+                self.DEFAULT_GLOBAL_AI_WRITING_RULES,
+            )
+        ).strip()
+
+        sections = [base_prompt.strip()]
+        if factual_rules:
+            sections.append(factual_rules)
+        if scene_key in self.WRITING_RULE_SCENES and writing_rules:
+            sections.append(writing_rules)
+        return "\n\n".join(section for section in sections if section)
 
     async def _record_prompt_run(
         self,
@@ -625,7 +660,7 @@ class AIAnalysisService:
             if account_plan_data:
                 core_identity = account_plan_data.get('core_identity', '未知定位')
                 target_audience = account_plan_data.get('target_audience', '未知受众')
-                system_prompt = (
+                base_system_prompt = (
                     f"你现在是「{core_identity}」这个账号的首席内容编导。\n"
                     f"你的目标受众是：{target_audience}。\n"
                     "你的核心工作原则：\n"
@@ -638,7 +673,7 @@ class AIAnalysisService:
                     "7. 禁止设计依赖演技、多人对戏或复杂调度的情景剧拍法"
                 )
             else:
-                system_prompt = (
+                base_system_prompt = (
                     "你是一位顶级短视频内容编导，专注于爆款结构拆解与复刻移植。\n"
                     "你的核心能力：精准识别一条视频'为什么能火'的底层原因——"
                     "不是它讲了什么，而是它用了什么情绪结构、钩子机制和节奏节拍——"
@@ -647,6 +682,11 @@ class AIAnalysisService:
                     "开头必须直接制造冲突或悬念，结尾必须留下让人想评论的钩子。\n"
                     "默认输出普通人单人拍法：口播+画中画，或跟拍Vlog；禁止情景剧式重表演脚本。"
                 )
+
+            system_prompt = await self._build_system_prompt(
+                scene_key="script_remake",
+                base_prompt=base_system_prompt,
+            )
 
             # 兜底 user_prompt：基于账号定位动态生成，而非静态文本
             if user_prompt and user_prompt.strip():
@@ -702,13 +742,14 @@ class AIAnalysisService:
 
     async def _call_ai_with_video(self, video_b64: str, title: str, description: str) -> dict:
         """携带完整视频（含音频）调用 AI API 分析"""
-        system_prompt = (
+        base_system_prompt = (
             "你是一位顶级短视频内容分析专家，专注于从视频的画面、音频和文案中提炼可复制的内容规律。\n"
             "你的分析标准：每个结论都必须能在视频中找到具体的画面或声音证据；"
             "描述风格特征时必须具体到操作层面（如'每5秒一次跳切'而非'节奏快'）；"
             "分析爆款因素时必须指出它触动了观众的哪种具体情绪，而不是笼统说'有吸引力'。\n"
             "你的分析目标：让另一个创作者读完报告后，能直接提炼出可复用的拍摄和文案方法论。"
         )
+        system_prompt = await self._build_system_prompt(scene_key="video_analysis", base_prompt=base_system_prompt)
         user_prompt = (
             "请基于这段完整视频（含画面与音频），以及视频文字信息，对该视频进行深度分析：\n\n"
             f"视频标题：{title}\n"
@@ -957,13 +998,14 @@ class AIAnalysisService:
     ) -> dict:
         """综合双轨数据生成报告"""
         import json
-        system_prompt = (
+        base_system_prompt = (
             "你是一位顶级短视频 IP 拆解分析师，专注于从数据中提炼博主的底层内容基因。\n"
             "你的分析标准：每一个结论都必须能在数据中找到具体证据，"
             "每一个定位描述都必须具体到可以指导内容选题，"
             "绝不输出'内容优质''风格独特'等无法操作的空泛描述。\n"
             "你的分析目标不是描述这个博主是谁，而是提炼出'为什么是他/她，而不是别人'。"
         )
+        system_prompt = await self._build_system_prompt(scene_key="blogger_report", base_prompt=base_system_prompt)
 
         text_data_json = json.dumps(videos_text_data, ensure_ascii=False, indent=2)
         analyses_json = json.dumps(videos_analysis, ensure_ascii=False, indent=2)
@@ -1004,11 +1046,12 @@ class AIAnalysisService:
         """生成“账号怎么策划 + 为什么火”的爆款归因报告。"""
         import json
 
-        system_prompt = (
+        base_system_prompt = (
             "你是一位严谨的短视频增长复盘顾问。\n"
             "输出必须是可执行结论，直接服务于‘复用成功模型’与‘避开错误模仿’。\n"
             "如果证据不足，请明确写‘数据不足’，不要臆造。"
         )
+        system_prompt = await self._build_system_prompt(scene_key="blogger_viral_profile", base_prompt=base_system_prompt)
 
         text_data_json = json.dumps(videos_text_data, ensure_ascii=False, indent=2)
         analyses_json = json.dumps(videos_analysis, ensure_ascii=False, indent=2)
@@ -1047,13 +1090,14 @@ class AIAnalysisService:
     ) -> dict:
         """生成方案"""
         import json
-        system_prompt = (
+        base_system_prompt = (
             "你是一位顶级短视频账号策划专家，核心能力是为客户找到在竞争中能真正站住脚的差异化支点。\n"
             "你的策划标准：定位必须具体到一句话让目标受众说'这说的就是我'，"
             "内容规划必须每条都有独立的选题价值而不是同类重复，"
             "所有建议必须考虑可持续执行性，不做只能红一次的噱头。\n"
             "你坚持的原则：宁可承认某个方向不适合客户，也不输出看起来完整但无法落地的空洞策划。"
         )
+        system_prompt = await self._build_system_prompt(scene_key="account_plan", base_prompt=base_system_prompt)
 
         normalized_reference_bloggers: list[dict] = []
         for blogger in reference_bloggers:
@@ -1132,10 +1176,11 @@ class AIAnalysisService:
             [str(item).strip() for item in recap.get("next_topic_angles", []) if str(item).strip()]
         ) or "暂无"
         
-        system_prompt = (
+        base_system_prompt = (
             "你是一个深谙抖音流量密码的资深账号主理人。请你根据已经确定的账号定位，重新规划 30 天的内容日历。"
             "请直接返回 JSON 格式的规划方案，不要有任何多余文字或 markdown 包裹。"
         )
+        system_prompt = await self._build_system_prompt(scene_key="content_calendar", base_prompt=base_system_prompt)
         
         prompt_template, prompt_meta = await self._resolve_prompt(
             scene_key="content_calendar",
@@ -1180,11 +1225,12 @@ class AIAnalysisService:
         """基于回流数据生成下一轮内容复盘建议。"""
         import json
 
-        system_prompt = (
+        base_system_prompt = (
             "你是一位顶级短视频增长复盘策略师。\n"
             "你的输出必须直接指导下一轮内容迭代，重点回答：什么值得继续放大、什么应该立刻优化、什么不要误判。\n"
             "如果样本量不够，请明确指出样本不足，但仍要给出谨慎、可执行的建议。"
         )
+        system_prompt = await self._build_system_prompt(scene_key="performance_recap", base_prompt=base_system_prompt)
 
         prompt_template, prompt_meta = await self._resolve_prompt(
             scene_key="performance_recap",
@@ -1221,11 +1267,12 @@ class AIAnalysisService:
         """基于复盘建议生成下一批 10 条可执行选题。"""
         import json
 
-        system_prompt = (
+        base_system_prompt = (
             "你是一位顶级短视频选题策划总监。\n"
             "你要输出的是一批可以马上进入脚本阶段的高质量选题，而不是抽象方向。\n"
             "优先放大已经验证有效的模式，同时保证题目之间有足够区分度。"
         )
+        system_prompt = await self._build_system_prompt(scene_key="next_topic_batch", base_prompt=base_system_prompt)
 
         prompt_template, prompt_meta = await self._resolve_prompt(
             scene_key="next_topic_batch",
@@ -1263,10 +1310,11 @@ class AIAnalysisService:
         """互动问诊：从聊天中提取策划草稿并给出下一步追问。"""
         import json
 
-        system_prompt = (
+        base_system_prompt = (
             "你是一位擅长抖音起号的策划顾问。"
             "你需要把用户的自然语言整理成结构化字段，并且只问最关键的问题。"
         )
+        system_prompt = await self._build_system_prompt(scene_key="planning_intake", base_prompt=base_system_prompt)
 
         limited_history = chat_history[-12:] if chat_history else []
         prompt_template, prompt_meta = await self._resolve_prompt(
@@ -1302,7 +1350,7 @@ class AIAnalysisService:
     ) -> dict:
         """生成视频脚本"""
         import json
-        system_prompt = (
+        base_system_prompt = (
             "你是一位顶级短视频脚本写作专家，你写的每一条脚本都以情绪曲线为骨架：前3秒制造张力，中段持续兑现，结尾留下钩子。\n"
             "你的写作标准：台词必须是真实的人会说出口的句子，不是条目式大纲；"
             "每个分镜都要推进情绪或信息，没有低密度的过渡场景；"
@@ -1311,6 +1359,7 @@ class AIAnalysisService:
             "执行约束：默认普通人单人拍摄，优先“口播主镜头+画中画补镜”，Vlog 场景采用“边做边说+必要补拍”；"
             "禁止输出依赖演技或多人表演的方案。"
         )
+        system_prompt = await self._build_system_prompt(scene_key="video_script", base_prompt=base_system_prompt)
 
         prompt_template, prompt_meta = await self._resolve_prompt(
             scene_key="video_script",

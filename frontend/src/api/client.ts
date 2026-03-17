@@ -757,6 +757,8 @@ export interface SettingsData {
   AI_API_KEY_BACKUP?: string;
   AI_BASE_URL_BACKUP?: string;
   AI_MODEL_BACKUP?: string;
+  GLOBAL_AI_FACT_RULES?: string;
+  GLOBAL_AI_WRITING_RULES?: string;
   BLOGGER_REPORT_PROMPT?: string;
   ACCOUNT_PLAN_PROMPT?: string;
   CONTENT_CALENDAR_PROMPT?: string;

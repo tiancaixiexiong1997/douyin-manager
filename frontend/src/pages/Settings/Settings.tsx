@@ -198,6 +198,7 @@ export default function Settings() {
     { id: 'basic', label: '基础配置', icon: SettingsIcon, group: '通用' },
     { id: 'crawler', label: '爬虫与认证', icon: Key, group: '通用' },
     { id: 'ai_upgrade', label: 'AI能力升级', icon: FlaskConical, group: 'AI实验' },
+    { id: 'prompt_global', label: '全局写作规则', icon: Bot, group: '系统提示词' },
     { id: 'prompt_blogger', label: '博主 IP 分析', icon: User, group: '系统提示词' },
     { id: 'prompt_plan', label: '账号策划方案', icon: LayoutTemplate, group: '系统提示词' },
     { id: 'prompt_script', label: '单条视频脚本', icon: FileText, group: '系统提示词' },
@@ -638,8 +639,46 @@ export default function Settings() {
                 </div>
               )}
 
+              {activeTab === 'prompt_global' && (
+                <div className="animate-fade-in prompt-full-height">
+                  <div className="form-group">
+                    <label className="prompt-label"><Bot size={16} className="text-primary-500"/> 全局事实底线 <span className="label-badge">Global</span></label>
+                    <textarea
+                      name="GLOBAL_AI_FACT_RULES"
+                      value={formData.GLOBAL_AI_FACT_RULES ?? ''}
+                      onChange={handleChange}
+                      className="prompt-textarea"
+                    />
+                    <div className="prompt-variables">
+                      <strong>作用范围：</strong>
+                      所有 AI 场景统一生效，主要约束不编造、信息不足直说、少空话、严格遵守输出格式。
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="prompt-label"><PenTool size={16} className="text-primary-500"/> 全局去 AI 味规则 <span className="label-badge">Global</span></label>
+                    <textarea
+                      name="GLOBAL_AI_WRITING_RULES"
+                      value={formData.GLOBAL_AI_WRITING_RULES ?? ''}
+                      onChange={handleChange}
+                      className="prompt-textarea"
+                    />
+                    <div className="prompt-variables">
+                      <strong>作用范围：</strong>
+                      仅对用户会直接看到的文案类场景生效，比如账号策划、脚本、复盘、下一批选题、互动问诊，用来压住导师腔、反问句和营销黑话。
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {activeTab === 'prompt_blogger' && (
                 <div className="animate-fade-in prompt-full-height">
+                  <div className="ai-card" style={{ marginBottom: 16 }}>
+                    <div className="ai-card-title"><Bot size={16} /> 当前提示词还会叠加全局规则</div>
+                    <div className="text-sm text-secondary">
+                      这里写的是场景专属约束；系统运行时会先注入“全局事实底线”，部分文案场景还会额外注入“全局去 AI 味规则”。
+                    </div>
+                  </div>
                   <div className="form-group">
                     <label className="prompt-label"><User size={16} className="text-primary-500"/> 博主 IP 分析提示词 <span className="label-badge">Prompt</span></label>
                     <textarea 
