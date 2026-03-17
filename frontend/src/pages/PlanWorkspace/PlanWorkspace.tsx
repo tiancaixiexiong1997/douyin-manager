@@ -217,6 +217,7 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
   const canGoNextStep1 = requiredMissingFields.length === 0;
   const canSubmit = canGoNextStep1 && !!goalTarget.trim() && !!timeWindows.trim();
   const completedRequiredCount = REQUIRED_INTAKE_FIELDS.length - requiredMissingFields.length;
+  const nextStepLabel = step === 1 ? '进入参考 IP' : '进入生成确认';
   const buildPayload = (): CreatePlanningRequest => {
     const executionBlock = [
       '【执行策略】',
@@ -268,6 +269,17 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
               <span className="plan-modal-step-label">{stepTitleMap[stepIndex].title}</span>
             </div>
           ))}
+        </div>
+
+        <div className="plan-modal-guide">
+          <div className="plan-modal-guide-item">
+            <strong>本次会生成</strong>
+            <span>账号定位、30天内容日历、后续脚本方向</span>
+          </div>
+          <div className="plan-modal-guide-item">
+            <strong>当前重点</strong>
+            <span>{stepTitleMap[step as 1 | 2 | 3].desc}</span>
+          </div>
         </div>
 
         <div className="plan-modal-content">
@@ -396,15 +408,17 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
               {intakeSummary && <div className="plan-intake-summary">{intakeSummary}</div>}
               <div className="plan-form-section">
                 <div className="plan-form-section-title">基础信息</div>
-                <div className="form-group">
-                  <label className="form-label">客户/品牌名称 *</label>
-                  <input className="form-input" placeholder="如：张三美妆工作室" value={form.client_name}
-                    onChange={e => setForm(f => ({ ...f, client_name: e.target.value }))} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">行业垂类 *</label>
-                  <input className="form-input" placeholder="如：美妆、健身、美食..." value={form.industry}
-                    onChange={e => setForm(f => ({ ...f, industry: e.target.value }))} />
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">客户/品牌名称 *</label>
+                    <input className="form-input" placeholder="如：张三美妆工作室" value={form.client_name}
+                      onChange={e => setForm(f => ({ ...f, client_name: e.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">行业垂类 *</label>
+                    <input className="form-input" placeholder="如：美妆、健身、美食..." value={form.industry}
+                      onChange={e => setForm(f => ({ ...f, industry: e.target.value }))} />
+                  </div>
                 </div>
               </div>
               <div className="plan-form-section">
@@ -457,6 +471,10 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
 
               <div className="form-group">
                 <label className="form-label">参考博主（推荐选择 3-5 个）</label>
+                <div className="plan-reference-selection-summary">
+                  <strong>{selectedReferenceBloggers.length}</strong>
+                  <span>已选参考 IP</span>
+                </div>
                 <div className="plan-reference-helper">
                   这里会影响账号定位、日历选题和后续脚本的表达风格，不是直接照搬某个 IP。
                 </div>
@@ -613,6 +631,14 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
                   </div>
                 )}
               </div>
+              <div className="plan-result-preview">
+                <div className="plan-result-preview-title">这次会给你什么</div>
+                <div className="plan-result-preview-list">
+                  <div className="plan-result-preview-item">账号定位与核心人设</div>
+                  <div className="plan-result-preview-item">30 天内容日历与每日方向</div>
+                  <div className="plan-result-preview-item">后续单条脚本生成基础</div>
+                </div>
+              </div>
               <div className="plan-confirm-note">
                 生成后将按“定位 → 30天日历 → 单条脚本”自动落地，你可以在详情页逐条编辑并复盘迭代。
               </div>
@@ -634,7 +660,7 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
               disabled={step === 1 && !canGoNextStep1}
               onClick={() => setStep((prev) => Math.min(TOTAL_CREATE_STEPS, prev + 1))}
             >
-              下一步 <ArrowRight size={14} />
+              {nextStepLabel} <ArrowRight size={14} />
             </button>
           ) : (
             <button
