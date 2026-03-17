@@ -400,6 +400,13 @@
   margin-top: 8px;
 }
 
+.plan-confirm-reference-list {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .plan-confirm-note {
   border: 1px dashed rgba(148, 163, 184, 0.3);
   border-radius: 12px;
@@ -444,6 +451,42 @@
 }
 .blogger-select-name { font-size: 13px; font-weight: 500; color: var(--text-primary); }
 .blogger-select-fans { font-size: 11px; color: var(--text-muted); }
+
+.plan-reference-preview {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.plan-reference-preview-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.plan-reference-preview-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.plan-reference-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(139, 92, 246, 0.26);
+  background: rgba(139, 92, 246, 0.12);
+  color: #c4b5fd;
+  font-size: 12px;
+  font-weight: 600;
+}
 
 /* 项目卡片列表 */
 .projects-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
@@ -516,6 +559,56 @@
   flex-shrink: 0;
 }
 .project-card-sig { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 3px; }
+.project-card-reference-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.project-card-reference-label {
+  flex-shrink: 0;
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.project-card-reference-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.project-card-reference-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(139, 92, 246, 0.22);
+  background: rgba(139, 92, 246, 0.1);
+  color: #c4b5fd;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.project-card-reference-more {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .project-card-stats { display: flex; gap: 10px; margin-top: 4px; font-size: 11px; color: var(--text-muted); }
 .project-card-stats span { display: flex; align-items: center; gap: 2px; }
 

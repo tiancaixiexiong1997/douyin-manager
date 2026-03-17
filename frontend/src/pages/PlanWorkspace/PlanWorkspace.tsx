@@ -96,6 +96,10 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const qc = useQueryClient();
   const { data: bloggers = [] } = useQuery({ queryKey: ['bloggers'], queryFn: () => bloggerApi.list() });
+  const selectedReferenceBloggers = useMemo(
+    () => bloggers.filter((blogger) => form.reference_blogger_ids.includes(blogger.id)),
+    [bloggers, form.reference_blogger_ids]
+  );
   const intakeMutation = useMutation({
     mutationFn: ({
       userMessage,
@@ -455,6 +459,18 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
                   ))}
                 </div>
               )}
+              {selectedReferenceBloggers.length > 0 && (
+                <div className="plan-reference-preview">
+                  <div className="plan-reference-preview-label">已选参考 IP</div>
+                  <div className="plan-reference-preview-list">
+                    {selectedReferenceBloggers.map((blogger) => (
+                      <span key={blogger.id} className="plan-reference-chip">
+                        {blogger.nickname}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">
@@ -540,6 +556,15 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
               <div className="plan-confirm-item"><span>发布节奏：</span><strong>{rhythmText}</strong></div>
               <div className="plan-confirm-item"><span>发布时间：</span><strong>{timeWindows || '未填写'}</strong></div>
               <div className="plan-confirm-item"><span>参考博主：</span><strong>{form.reference_blogger_ids.length} 位</strong></div>
+              {selectedReferenceBloggers.length > 0 && (
+                <div className="plan-confirm-reference-list">
+                  {selectedReferenceBloggers.map((blogger) => (
+                    <span key={blogger.id} className="plan-reference-chip">
+                      {blogger.nickname}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="plan-confirm-note">
               生成后将按“定位 → 30天日历 → 单条脚本”自动落地，你可以在详情页逐条编辑并复盘迭代。
@@ -594,9 +619,17 @@ export default function PlanWorkspace() {
   const [homepageUrl, setHomepageUrl] = useState('');
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const { data: bloggers = [] } = useQuery({
+    queryKey: ['bloggers'],
+    queryFn: () => bloggerApi.list(),
+  });
   const debouncedKeyword = useDebouncedValue(searchQuery.trim(), SEARCH_DEBOUNCE_MS);
   const selectedStatus = statusFilter === 'all' ? undefined : statusFilter;
   const hasActiveFilters = !!debouncedKeyword || statusFilter !== 'all';
+  const bloggerNameMap = useMemo(
+    () => new Map(bloggers.map((blogger) => [blogger.id, blogger.nickname])),
+    [bloggers]
+  );
 
   const { data: projectsPage, isLoading, isFetching } = useQuery({
     queryKey: ['planning-projects', page, pageSize, debouncedKeyword, selectedStatus],
@@ -788,7 +821,14 @@ export default function PlanWorkspace() {
         </div>
       ) : (
         <div className="projects-grid">
-          {projects.map(project => (
+          {projects.map(project => {
+            const referenceNames = (project.reference_blogger_ids || [])
+              .map((bloggerId) => bloggerNameMap.get(bloggerId))
+              .filter((name): name is string => Boolean(name));
+            const visibleReferenceNames = referenceNames.slice(0, 2);
+            const extraReferenceCount = Math.max(referenceNames.length - visibleReferenceNames.length, 0);
+
+            return (
             <div key={project.id} style={{ position: 'relative' }}>
               <div
                 className="project-card card card-glow"
@@ -824,6 +864,21 @@ export default function PlanWorkspace() {
                     <div className="project-card-sig">
                       {project.account_signature || project.target_audience}
                     </div>
+                    {referenceNames.length > 0 && (
+                      <div className="project-card-reference-row">
+                        <span className="project-card-reference-label">参考 IP</span>
+                        <div className="project-card-reference-list">
+                          {visibleReferenceNames.map((name) => (
+                            <span key={name} className="project-card-reference-chip" title={name}>
+                              {name}
+                            </span>
+                          ))}
+                          {extraReferenceCount > 0 && (
+                            <span className="project-card-reference-more">+{extraReferenceCount}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
                     {(project.account_follower_count != null || project.account_video_count != null) && (
                       <div className="project-card-stats">
                         {project.account_follower_count != null && (
@@ -911,7 +966,7 @@ export default function PlanWorkspace() {
                 </div>
               </div>
             </div>
-          ))}
+          )})}
         </div>
       )}
 

@@ -76,6 +76,42 @@
   font-size: 13px;
 }
 
+.detail-hero-reference-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.detail-hero-reference-label {
+  flex-shrink: 0;
+  margin-top: 4px;
+  color: rgba(226, 232, 240, 0.68);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.detail-hero-reference-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.detail-hero-reference-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(196, 181, 253, 0.26);
+  background: rgba(139, 92, 246, 0.16);
+  color: #ede9fe;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .spin-icon {
   animation: spin 1s linear infinite;
   flex-shrink: 0;

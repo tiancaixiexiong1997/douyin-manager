@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { downloadApi, planningApi, taskApi, type ContentItem, type ContentPerformance, type ContentPerformanceCreateRequest, type VideoScript, type UpdatePlanningRequest, type TaskCenterItem } from '../../api/client';
+import { bloggerApi, downloadApi, planningApi, taskApi, type ContentItem, type ContentPerformance, type ContentPerformanceCreateRequest, type VideoScript, type UpdatePlanningRequest, type TaskCenterItem } from '../../api/client';
 import { CustomSelect } from '../../components/CustomSelect';
 import { ArrowLeft, FileText, Loader2, ChevronDown, ChevronUp, Sparkles, Calendar, Pencil, Save, X, RefreshCw, Plus, Trash2, TrendingUp } from '../../components/Icons';
 import './ProjectDetail.css';
@@ -857,6 +857,10 @@ export default function ProjectDetail() {
     // 保持轻轮询，确保刷新/重开页面后仍可追踪脚本生成状态
     refetchInterval: 5000,
   });
+  const { data: bloggers = [] } = useQuery({
+    queryKey: ['bloggers'],
+    queryFn: () => bloggerApi.list(),
+  });
 
   const { data: scriptTaskPage } = useQuery({
     queryKey: ['content-script-tasks', id],
@@ -950,6 +954,10 @@ export default function ProjectDetail() {
     performanceList.map((row) => row.content_item_id).filter((value): value is string => Boolean(value))
   );
   const pendingContentItems = (project.content_items || []).filter((item) => !linkedContentItemIds.has(item.id));
+  const bloggerNameMap = new Map(bloggers.map((blogger) => [blogger.id, blogger.nickname]));
+  const referenceNames = (project.reference_blogger_ids || [])
+    .map((bloggerId) => bloggerNameMap.get(bloggerId))
+    .filter((name): name is string => Boolean(name));
 
   return (
     <div className="project-detail-page animate-fade-in">
@@ -975,6 +983,18 @@ export default function ProjectDetail() {
             <span className="badge badge-purple">{project.industry}</span>
             <span className="detail-hero-audience">{project.target_audience}</span>
           </div>
+          {referenceNames.length > 0 && (
+            <div className="detail-hero-reference-row">
+              <span className="detail-hero-reference-label">参考 IP</span>
+              <div className="detail-hero-reference-list">
+                {referenceNames.map((name) => (
+                  <span key={name} className="detail-hero-reference-chip">
+                    {name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <button className="btn btn-ghost btn-sm" onClick={() => setShowEditProject(true)}>
           <Pencil size={13} /> 编辑信息
