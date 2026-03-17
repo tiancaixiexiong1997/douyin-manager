@@ -216,6 +216,7 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
   const displayInferredFields = inferredFields.filter((field) => INTAKE_DISPLAY_LABELS[field]);
   const canGoNextStep1 = requiredMissingFields.length === 0;
   const canSubmit = canGoNextStep1 && !!goalTarget.trim() && !!timeWindows.trim();
+  const completedRequiredCount = REQUIRED_INTAKE_FIELDS.length - requiredMissingFields.length;
   const buildPayload = (): CreatePlanningRequest => {
     const executionBlock = [
       '【执行策略】',
@@ -276,6 +277,16 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
             <section className="plan-intake-chat">
               <div className="plan-intake-chat-title">互动问诊</div>
               <div className="plan-intake-chat-desc">先聊清楚你的现状和目标，我会自动整理成可执行草稿。</div>
+              <div className="plan-intake-overview">
+                <div className="plan-intake-overview-item">
+                  <strong>{completedRequiredCount}/{REQUIRED_INTAKE_FIELDS.length}</strong>
+                  <span>核心信息已补齐</span>
+                </div>
+                <div className="plan-intake-overview-item">
+                  <strong>{chatHistory.filter((item) => item.role === 'user').length}</strong>
+                  <span>本轮已输入</span>
+                </div>
+              </div>
               <div className="plan-intake-fast-hint">一句话也可以直接出草稿，点“极速生成”。</div>
               <div className="plan-intake-messages">
                 {chatHistory.map((message, idx) => (
@@ -306,19 +317,23 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
                   ))}
                 </div>
               )}
-              <div className="plan-intake-suggestions">
-                {FAST_PROMPT_EXAMPLES.map((example, idx) => (
-                  <button
-                    key={`fast-example-${idx}`}
-                    className="plan-intake-chip"
-                    type="button"
-                    onClick={() => sendIntakeMessage(example, 'fast')}
-                    disabled={intakeMutation.isPending}
-                    title={example}
-                  >
-                    极速示例 {idx + 1}
-                  </button>
-                ))}
+              <div className="plan-intake-example-block">
+                <div className="plan-intake-example-title">快速示例</div>
+                <div className="plan-intake-example-desc">如果你还没想好怎么描述，可以直接点一个示例改着用。</div>
+                <div className="plan-intake-suggestions">
+                  {FAST_PROMPT_EXAMPLES.map((example, idx) => (
+                    <button
+                      key={`fast-example-${idx}`}
+                      className="plan-intake-chip"
+                      type="button"
+                      onClick={() => sendIntakeMessage(example, 'fast')}
+                      disabled={intakeMutation.isPending}
+                      title={example}
+                    >
+                      极速示例 {idx + 1}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="plan-intake-input-row">
                 <textarea
@@ -356,6 +371,7 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
 
             <section className="plan-intake-form">
               <div className="plan-intake-form-title">结构化草稿</div>
+              <div className="plan-intake-form-desc">右侧是 AI 帮你整理后的关键字段，你也可以直接手动改。</div>
               <div className={`plan-intake-state ${canGoNextStep1 ? 'ready' : 'pending'}`}>
                 {canGoNextStep1 ? '关键信息已补齐，可进入下一步' : `还缺 ${displayMissingFields.length} 项必填信息`}
               </div>
@@ -378,90 +394,111 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
                 </div>
               )}
               {intakeSummary && <div className="plan-intake-summary">{intakeSummary}</div>}
-              <div className="form-group">
-                <label className="form-label">客户/品牌名称 *</label>
-                <input className="form-input" placeholder="如：张三美妆工作室" value={form.client_name}
-                  onChange={e => setForm(f => ({ ...f, client_name: e.target.value }))} />
+              <div className="plan-form-section">
+                <div className="plan-form-section-title">基础信息</div>
+                <div className="form-group">
+                  <label className="form-label">客户/品牌名称 *</label>
+                  <input className="form-input" placeholder="如：张三美妆工作室" value={form.client_name}
+                    onChange={e => setForm(f => ({ ...f, client_name: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">行业垂类 *</label>
+                  <input className="form-input" placeholder="如：美妆、健身、美食..." value={form.industry}
+                    onChange={e => setForm(f => ({ ...f, industry: e.target.value }))} />
+                </div>
               </div>
-              <div className="form-group">
-                <label className="form-label">行业垂类 *</label>
-                <input className="form-input" placeholder="如：美妆、健身、美食..." value={form.industry}
-                  onChange={e => setForm(f => ({ ...f, industry: e.target.value }))} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">目标受众画像 *</label>
-                <textarea className="form-input form-textarea" placeholder="描述目标用户：如 25-35岁 职场女性，关注护肤和精致生活..."
-                  value={form.target_audience}
-                  onChange={e => setForm(f => ({ ...f, target_audience: e.target.value }))} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">账号定位与内容支柱 *</label>
-                <textarea
-                  className="form-input form-textarea"
-                  placeholder="如：专业测评+真实改造+避坑清单；内容支柱：测评/教程/答疑..."
-                  value={form.ip_requirements}
-                  onChange={e => setForm(f => ({ ...f, ip_requirements: e.target.value }))}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">独特优势/亮点</label>
-                <input className="form-input" placeholder="如：有10年美妆师经验、自创护肤配方..." value={form.unique_advantage}
-                  onChange={e => setForm(f => ({ ...f, unique_advantage: e.target.value }))} />
+              <div className="plan-form-section">
+                <div className="plan-form-section-title">定位草稿</div>
+                <div className="form-group">
+                  <label className="form-label">目标受众画像 *</label>
+                  <textarea className="form-input form-textarea" placeholder="描述目标用户：如 25-35岁 职场女性，关注护肤和精致生活..."
+                    value={form.target_audience}
+                    onChange={e => setForm(f => ({ ...f, target_audience: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">账号定位与内容支柱 *</label>
+                  <textarea
+                    className="form-input form-textarea"
+                    placeholder="如：专业测评+真实改造+避坑清单；内容支柱：测评/教程/答疑..."
+                    value={form.ip_requirements}
+                    onChange={e => setForm(f => ({ ...f, ip_requirements: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">独特优势/亮点</label>
+                  <input className="form-input" placeholder="如：有10年美妆师经验、自创护肤配方..." value={form.unique_advantage}
+                    onChange={e => setForm(f => ({ ...f, unique_advantage: e.target.value }))} />
+                </div>
               </div>
             </section>
           </div>
         )}
 
         {step === 2 && (
-          <div className="flex flex-col gap-4 animate-fade-in">
-            <div className="form-group">
-              <label className="form-label">对标表达风格</label>
-              <input className="form-input" placeholder="如：轻松幽默、专业权威、温暖治愈..." value={form.style_preference}
-                onChange={e => setForm(f => ({ ...f, style_preference: e.target.value }))} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">商业目标</label>
-              <input
-                className="form-input"
-                placeholder="如：私域引流、转化咨询、品牌曝光"
-                value={form.business_goal}
-                onChange={e => setForm(f => ({ ...f, business_goal: e.target.value }))}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">参考博主（推荐选择 3-5 个）</label>
-              {bloggers.length === 0 ? (
-                <div className="no-bloggers-tip">
-                  IP 库暂无博主，<Link to="/bloggers" onClick={onClose}>先去添加</Link>
+          <div className="plan-reference-layout animate-fade-in">
+            <section className="plan-reference-main">
+              <div className="plan-form-section">
+                <div className="plan-form-section-title">参考风格补充</div>
+                <div className="form-group">
+                  <label className="form-label">对标表达风格</label>
+                  <input className="form-input" placeholder="如：轻松幽默、专业权威、温暖治愈..." value={form.style_preference}
+                    onChange={e => setForm(f => ({ ...f, style_preference: e.target.value }))} />
                 </div>
-              ) : (
-                <div className="blogger-selector">
-                  {bloggers.map(b => (
-                    <button
-                      key={b.id}
-                      className={`blogger-select-item ${form.reference_blogger_ids.includes(b.id) ? 'selected' : ''}`}
-                      onClick={() => setForm(f => ({
-                        ...f,
-                        reference_blogger_ids: f.reference_blogger_ids.includes(b.id)
-                          ? f.reference_blogger_ids.filter(id => id !== b.id)
-                          : [...f.reference_blogger_ids, b.id]
-                      }))}
-                    >
-                      <div className="blogger-select-avatar">{b.nickname[0]}</div>
-                      <div>
-                        <div className="blogger-select-name">{b.nickname}</div>
-                        <div className="blogger-select-fans">{(b.follower_count / 10000).toFixed(1)}w</div>
-                      </div>
-                      {form.reference_blogger_ids.includes(b.id) && (
-                        <CheckCircle size={14} style={{ marginLeft: 'auto', color: 'var(--primary-500)' }} />
-                      )}
-                    </button>
-                  ))}
+                <div className="form-group">
+                  <label className="form-label">商业目标</label>
+                  <input
+                    className="form-input"
+                    placeholder="如：私域引流、转化咨询、品牌曝光"
+                    value={form.business_goal}
+                    onChange={e => setForm(f => ({ ...f, business_goal: e.target.value }))}
+                  />
                 </div>
-              )}
-              {selectedReferenceBloggers.length > 0 && (
-                <div className="plan-reference-preview">
-                  <div className="plan-reference-preview-label">已选参考 IP</div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">参考博主（推荐选择 3-5 个）</label>
+                <div className="plan-reference-helper">
+                  这里会影响账号定位、日历选题和后续脚本的表达风格，不是直接照搬某个 IP。
+                </div>
+                {bloggers.length === 0 ? (
+                  <div className="no-bloggers-tip">
+                    IP 库暂无博主，<Link to="/bloggers" onClick={onClose}>先去添加</Link>
+                  </div>
+                ) : (
+                  <div className="blogger-selector">
+                    {bloggers.map(b => (
+                      <button
+                        key={b.id}
+                        className={`blogger-select-item ${form.reference_blogger_ids.includes(b.id) ? 'selected' : ''}`}
+                        onClick={() => setForm(f => ({
+                          ...f,
+                          reference_blogger_ids: f.reference_blogger_ids.includes(b.id)
+                            ? f.reference_blogger_ids.filter(id => id !== b.id)
+                            : [...f.reference_blogger_ids, b.id]
+                        }))}
+                      >
+                        <div className="blogger-select-avatar">{b.nickname[0]}</div>
+                        <div>
+                          <div className="blogger-select-name">{b.nickname}</div>
+                          <div className="blogger-select-fans">{(b.follower_count / 10000).toFixed(1)}w</div>
+                        </div>
+                        {form.reference_blogger_ids.includes(b.id) && (
+                          <CheckCircle size={14} style={{ marginLeft: 'auto', color: 'var(--primary-500)' }} />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <aside className="plan-reference-side">
+              <div className="plan-reference-side-card">
+                <div className="plan-reference-side-title">已选参考 IP</div>
+                <div className="plan-reference-side-subtitle">
+                  当前已选择 {selectedReferenceBloggers.length} 位，建议保留 3-5 位最有代表性的参考对象。
+                </div>
+                {selectedReferenceBloggers.length > 0 ? (
                   <div className="plan-reference-preview-list">
                     {selectedReferenceBloggers.map((blogger) => (
                       <span key={blogger.id} className="plan-reference-chip">
@@ -469,106 +506,117 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
                       </span>
                     ))}
                   </div>
+                ) : (
+                  <div className="plan-reference-empty">还没选择参考 IP，可以先从最像你想做的账号开始选。</div>
+                )}
+              </div>
+
+              <div className="plan-reference-side-card">
+                <div className="plan-reference-side-title">
+                  <LinkIcon size={13} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+                  策划账号主页
                 </div>
-              )}
-            </div>
-            <div className="form-group">
-              <label className="form-label">
-                <LinkIcon size={13} style={{ marginRight: 4, verticalAlign: 'middle' }} />
-                策划账号主页地址
-                <span className="text-muted" style={{ fontSize: 12, marginLeft: 6 }}>（可选，后期也可补填）</span>
-              </label>
-              <input
-                className="form-input"
-                placeholder="粘贴抖音主页链接，自动抓取头像、昵称、简介..."
-                value={form.account_homepage_url || ''}
-                onChange={e => setForm(f => ({ ...f, account_homepage_url: e.target.value }))}
-              />
-            </div>
+                <div className="plan-reference-side-subtitle">可选，后面也能补填。填了以后系统会同步头像、昵称和主页简介。</div>
+                <input
+                  className="form-input"
+                  placeholder="粘贴抖音主页链接，自动抓取头像、昵称、简介..."
+                  value={form.account_homepage_url || ''}
+                  onChange={e => setForm(f => ({ ...f, account_homepage_url: e.target.value }))}
+                />
+              </div>
+            </aside>
           </div>
         )}
 
         {step === 3 && (
-          <div className="flex flex-col gap-4 animate-fade-in">
-            <div className="form-group">
-              <label className="form-label">发布节奏 *</label>
-              <div className="count-options">
-                {[
-                  { label: '每月10条', value: 'month10' as const },
-                  { label: '每月12条', value: 'month12' as const },
-                  { label: '每月15条', value: 'month15' as const },
-                ].map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={`count-option${rhythmPreset === option.value ? ' active' : ''}`}
-                    onClick={() => setRhythmPreset(option.value)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-              <p className="form-hint">默认推荐每月10条（约3天1条），优先保证稳定更新与质量。</p>
-            </div>
-            <div className="grid-2">
-              <div className="form-group">
-                <label className="form-label">发布时间窗口 *</label>
-                <input
-                  className="form-input"
-                  placeholder="如：19:00、21:00"
-                  value={timeWindows}
-                  onChange={(e) => setTimeWindows(e.target.value)}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">30天阶段目标 *</label>
-                <input
-                  className="form-input"
-                  placeholder="如：30天发布10条，跑出2条高潜内容"
-                  value={goalTarget}
-                  onChange={(e) => setGoalTarget(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="form-group">
-              <label className="form-label">迭代规则</label>
-              <input
-                className="form-input"
-                placeholder="如：每周复盘1次，每次只改1-2个变量"
-                value={iterationRule}
-                onChange={(e) => setIterationRule(e.target.value)}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">商业目标（可选）</label>
-              <input
-                className="form-input"
-                placeholder="如：私域引流、转化咨询、品牌曝光"
-                value={form.business_goal}
-                onChange={e => setForm(f => ({ ...f, business_goal: e.target.value }))}
-              />
-            </div>
-            <div className="plan-confirm-card">
-              <div className="plan-confirm-title">生成前确认</div>
-              <div className="plan-confirm-item"><span>账号/品牌：</span><strong>{form.client_name || '未填写'}</strong></div>
-              <div className="plan-confirm-item"><span>行业：</span><strong>{form.industry || '未填写'}</strong></div>
-              <div className="plan-confirm-item"><span>受众：</span><strong>{form.target_audience || '未填写'}</strong></div>
-              <div className="plan-confirm-item"><span>发布节奏：</span><strong>{rhythmText}</strong></div>
-              <div className="plan-confirm-item"><span>发布时间：</span><strong>{timeWindows || '未填写'}</strong></div>
-              <div className="plan-confirm-item"><span>参考博主：</span><strong>{form.reference_blogger_ids.length} 位</strong></div>
-              {selectedReferenceBloggers.length > 0 && (
-                <div className="plan-confirm-reference-list">
-                  {selectedReferenceBloggers.map((blogger) => (
-                    <span key={blogger.id} className="plan-reference-chip">
-                      {blogger.nickname}
-                    </span>
-                  ))}
+          <div className="plan-final-layout animate-fade-in">
+            <section className="plan-final-main">
+              <div className="plan-form-section">
+                <div className="plan-form-section-title">执行设置</div>
+                <div className="form-group">
+                  <label className="form-label">发布节奏 *</label>
+                  <div className="count-options">
+                    {[
+                      { label: '每月10条', value: 'month10' as const },
+                      { label: '每月12条', value: 'month12' as const },
+                      { label: '每月15条', value: 'month15' as const },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`count-option${rhythmPreset === option.value ? ' active' : ''}`}
+                        onClick={() => setRhythmPreset(option.value)}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="form-hint">默认推荐每月10条（约3天1条），优先保证稳定更新与质量。</p>
                 </div>
-              )}
-            </div>
-            <div className="plan-confirm-note">
-              生成后将按“定位 → 30天日历 → 单条脚本”自动落地，你可以在详情页逐条编辑并复盘迭代。
-            </div>
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">发布时间窗口 *</label>
+                    <input
+                      className="form-input"
+                      placeholder="如：19:00、21:00"
+                      value={timeWindows}
+                      onChange={(e) => setTimeWindows(e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">30天阶段目标 *</label>
+                    <input
+                      className="form-input"
+                      placeholder="如：30天发布10条，跑出2条高潜内容"
+                      value={goalTarget}
+                      onChange={(e) => setGoalTarget(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">迭代规则</label>
+                  <input
+                    className="form-input"
+                    placeholder="如：每周复盘1次，每次只改1-2个变量"
+                    value={iterationRule}
+                    onChange={(e) => setIterationRule(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">商业目标（可选）</label>
+                  <input
+                    className="form-input"
+                    placeholder="如：私域引流、转化咨询、品牌曝光"
+                    value={form.business_goal}
+                    onChange={e => setForm(f => ({ ...f, business_goal: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </section>
+
+            <aside className="plan-final-side">
+              <div className="plan-confirm-card">
+                <div className="plan-confirm-title">生成前确认</div>
+                <div className="plan-confirm-item"><span>账号/品牌：</span><strong>{form.client_name || '未填写'}</strong></div>
+                <div className="plan-confirm-item"><span>行业：</span><strong>{form.industry || '未填写'}</strong></div>
+                <div className="plan-confirm-item"><span>受众：</span><strong>{form.target_audience || '未填写'}</strong></div>
+                <div className="plan-confirm-item"><span>发布节奏：</span><strong>{rhythmText}</strong></div>
+                <div className="plan-confirm-item"><span>发布时间：</span><strong>{timeWindows || '未填写'}</strong></div>
+                <div className="plan-confirm-item"><span>参考博主：</span><strong>{form.reference_blogger_ids.length} 位</strong></div>
+                {selectedReferenceBloggers.length > 0 && (
+                  <div className="plan-confirm-reference-list">
+                    {selectedReferenceBloggers.map((blogger) => (
+                      <span key={blogger.id} className="plan-reference-chip">
+                        {blogger.nickname}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="plan-confirm-note">
+                生成后将按“定位 → 30天日历 → 单条脚本”自动落地，你可以在详情页逐条编辑并复盘迭代。
+              </div>
+            </aside>
           </div>
         )}
 
