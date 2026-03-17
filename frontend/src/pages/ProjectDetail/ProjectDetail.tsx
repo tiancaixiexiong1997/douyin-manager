@@ -317,15 +317,15 @@ function EditProjectModal({ project, onClose, onSaved }: {
     onSuccess: onSaved,
   });
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal animate-scale-in" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
+      <div className="modal edit-project-modal animate-scale-in" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2 className="modal-title">编辑策划信息</h2>
           <button className="btn btn-icon btn-ghost" onClick={onClose}><X size={18} /></button>
         </div>
 
-        <div className="flex flex-col gap-4" style={{ padding: '0 0 4px' }}>
+        <div className="flex flex-col gap-4 edit-project-modal-body" style={{ padding: '0 0 4px' }}>
           <div className="grid-2">
             <div className="form-group">
               <label className="form-label">客户/品牌名称 *</label>
@@ -372,7 +372,8 @@ function EditProjectModal({ project, onClose, onSaved }: {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -435,15 +436,15 @@ function EditPlanModal({ projectId, plan, onClose, onSaved }: {
     onSuccess: onSaved,
   });
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal animate-scale-in" style={{ maxWidth: 640 }} onClick={e => e.stopPropagation()}>
+      <div className="modal edit-plan-modal animate-scale-in" style={{ maxWidth: 640 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2 className="modal-title">编辑账号定位方案</h2>
           <button className="btn btn-icon btn-ghost" onClick={onClose}><X size={18} /></button>
         </div>
 
-        <div className="flex flex-col gap-4" style={{ padding: '0 0 4px' }}>
+        <div className="flex flex-col gap-4 edit-plan-modal-body" style={{ padding: '0 0 4px' }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>账号定位</div>
           <div className="form-group">
             <label className="form-label">核心定位 Slogan</label>
@@ -515,7 +516,8 @@ function EditPlanModal({ projectId, plan, onClose, onSaved }: {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

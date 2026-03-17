@@ -135,6 +135,23 @@
   border-color: rgba(59, 130, 246, 0.2);
 }
 
+.edit-project-modal,
+.edit-plan-modal {
+  width: min(640px, 96vw);
+  max-height: min(88vh, calc(100vh - 32px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.edit-project-modal-body,
+.edit-plan-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
 .detail-reference-scope-card {
   border-radius: 20px;
   border: 1px solid rgba(148, 163, 184, 0.22);
@@ -795,6 +812,13 @@
 
   .detail-hero-meta {
     flex-wrap: wrap;
+  }
+
+  .edit-project-modal,
+  .edit-plan-modal {
+    width: 96vw;
+    max-height: calc(100vh - 20px);
+    padding: 20px;
   }
 
   .detail-reference-scope-head {
