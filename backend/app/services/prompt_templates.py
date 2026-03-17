@@ -88,12 +88,13 @@ BLOGGER_VIRAL_PROFILE_PROMPT_TEMPLATE = (
     "# 任务要求\n"
     "- 结论必须基于输入数据，不允许空泛词（如：内容很好、很真实）\n"
     "- 每个关键结论尽量给出视频标题或数据作为证据\n"
+    "- 必须结合发布时间顺序，看清起号前、起量节点、爆点出现后和后续延续期的内容安排\n"
     "- 输出必须可执行，能直接指导另一个账号落地\n\n"
     "# 输入数据\n"
     "【博主基本信息】\n"
     "昵称：{nickname}\n平台：{platform}\n粉丝量：{follower_count}\n"
     "简介：{signature}\n作品数：{video_count}\n\n"
-    "【视频大盘数据】\n"
+    "【视频大盘数据（已按发布时间升序排序）】\n"
     "{text_data_json}\n\n"
     "【代表作深度分析】\n"
     "{analyses_json}\n\n"
@@ -118,6 +119,24 @@ BLOGGER_VIRAL_PROFILE_PROMPT_TEMPLATE = (
     '      "title": "样本视频标题或特征描述",\n'
     '      "reason": "该样本支持的结论"\n'
     "    }}\n"
+    "  ],\n"
+    '  "timeline_overview": "80-150字，概括这个账号从试探到起量再到延续的内容路径，信息不足时写数据不足",\n'
+    '  "timeline_entries": [\n'
+    "    {\n"
+    '      "date": "关键日期，优先 YYYY-MM-DD",\n'
+    '      "title": "对应视频标题或阶段动作",\n'
+    '      "phase": "阶段标签，如起号试探期/起量节点/爆发延续期/转向试错期",\n'
+    '      "performance_signal": "为什么这是关键节点（如高互动/连续放大/方向转向），没有明确数据就写样本判断",\n'
+    '      "topic_pattern": "这一条所代表的选题模式或内容动作",\n'
+    '      "post_fire_role": "这条内容在爆点前后承担的角色，如试探/验证/放大/承接/转向",\n'
+    '      "why_it_mattered": "这条对起号过程为什么重要，以及对后续排题有什么影响"\n'
+    "    }\n"
+    "  ],\n"
+    '  "post_fire_arrangement": "100-180字，说明爆点出现后，这个账号是怎么承接、放大、试错或转向的；信息不足时写数据不足",\n'
+    '  "planning_takeaways": [\n'
+    '    "对参考策划最有价值的启发1",\n'
+    '    "启发2",\n'
+    '    "启发3"\n'
     "  ],\n"
     '  "confidence_score": 0.0\n'
     "}}\n"
@@ -149,6 +168,7 @@ ACCOUNT_PLAN_PROMPT_TEMPLATE = (
     "{bloggers_text}\n\n"
     "# 使用规则（非常重要）\n"
     "- 若参考数据中存在 viral_profile，请优先吸收其中的 account_planning_logic、why_it_went_viral、content_playbook、risk_warnings\n"
+    "- 若 viral_profile 中存在 timeline_overview、timeline_entries、post_fire_arrangement、planning_takeaways，请优先参考其起号路径、爆点前后选题变化、延续打法，但不要直接照搬具体日期或标题\n"
     "- 输出时不要照抄参考账号，要提炼可执行结构并结合客户条件重写\n"
     "- 若 viral_profile 与其他字段冲突，以更具体、证据更强的结论为准\n\n"
     "# 输出要求\n"

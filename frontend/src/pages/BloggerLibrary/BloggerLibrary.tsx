@@ -7,6 +7,7 @@ import {
   type AddBloggerRequest,
   type ReanalyzeBloggerRequest,
   type BloggerAnalysisReport,
+  type BloggerViralProfile,
   type VideoAnalysis,
 } from '../../api/client';
 import { CustomSelect } from '../../components/CustomSelect';
@@ -41,6 +42,25 @@ function normalizeTypicalHooks(report: BloggerAnalysisReport | undefined): strin
   if (hooks.length > 0) return hooks;
   const fallback = String(copywriting.typical_hook || '').trim();
   return fallback ? [fallback] : [];
+}
+
+function normalizeTimelineEntries(profile: BloggerViralProfile | undefined) {
+  if (!profile || !Array.isArray(profile.timeline_entries)) return [];
+  return profile.timeline_entries.filter(
+    (item) =>
+      Boolean(
+        item
+        && (
+          item.date
+          || item.title
+          || item.phase
+          || item.performance_signal
+          || item.topic_pattern
+          || item.post_fire_role
+          || item.why_it_mattered
+        ),
+      ),
+  );
 }
 
 function AddBloggerModal({ onClose }: { onClose: () => void }) {
@@ -341,6 +361,7 @@ function BloggerDetailModal({ blogger, onClose }: { blogger: Blogger; onClose: (
 
   const report = detail?.analysis_report;
   const viralProfile = report?.viral_profile;
+  const timelineEntries = normalizeTimelineEntries(viralProfile);
   const viralProfileStep = repTaskProgress?.step;
   const isViralProfileBusy = viralProfileStep === 'viral_profile' || viralProfileStep === 'viral_profile_queued';
   const wasViralProfileBusyRef = useRef(false);
@@ -361,6 +382,16 @@ function BloggerDetailModal({ blogger, onClose }: { blogger: Blogger; onClose: (
     const mins = Math.floor(seconds / 60);
     const rest = seconds % 60;
     return rest > 0 ? `${mins}分${rest}秒` : `${mins}分钟`;
+  };
+  const formatTimelineDate = (value?: string) => {
+    if (!value) return '日期未知';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date);
   };
 
   const setRepMutation = useMutation({
@@ -708,6 +739,49 @@ function BloggerDetailModal({ blogger, onClose }: { blogger: Blogger; onClose: (
                             </span>
                           ))}
                         </div>
+                      </div>
+                    )}
+                    {(viralProfile.timeline_overview || timelineEntries.length > 0 || viralProfile.post_fire_arrangement || (viralProfile.planning_takeaways && viralProfile.planning_takeaways.length > 0)) && (
+                      <div className="viral-timeline-card">
+                        <div className="report-item-label">起号日历回放</div>
+                        {viralProfile.timeline_overview && (
+                          <div className="viral-timeline-overview">{viralProfile.timeline_overview}</div>
+                        )}
+                        {timelineEntries.length > 0 && (
+                          <div className="viral-timeline-list">
+                            {timelineEntries.map((entry, idx) => (
+                              <div key={`${entry.date || 'unknown'}-${entry.title || idx}`} className="viral-timeline-item">
+                                <div className="viral-timeline-head">
+                                  <div className="viral-timeline-date">{formatTimelineDate(entry.date)}</div>
+                                  {entry.phase ? <span className="badge badge-blue">{entry.phase}</span> : null}
+                                </div>
+                                <div className="viral-timeline-title">{entry.title || '关键节点'}</div>
+                                <div className="viral-timeline-meta">
+                                  {entry.topic_pattern ? <span>选题模式：{entry.topic_pattern}</span> : null}
+                                  {entry.post_fire_role ? <span>节点角色：{entry.post_fire_role}</span> : null}
+                                  {entry.performance_signal ? <span>表现信号：{entry.performance_signal}</span> : null}
+                                </div>
+                                {entry.why_it_mattered ? <div className="viral-timeline-why">{entry.why_it_mattered}</div> : null}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {viralProfile.post_fire_arrangement && (
+                          <div className="viral-timeline-note">
+                            <div className="report-item-label">爆点后内容安排</div>
+                            <div className="report-item-value">{viralProfile.post_fire_arrangement}</div>
+                          </div>
+                        )}
+                        {viralProfile.planning_takeaways && viralProfile.planning_takeaways.length > 0 && (
+                          <div className="viral-timeline-note">
+                            <div className="report-item-label">策划可借鉴点</div>
+                            <ul className="report-elements">
+                              {viralProfile.planning_takeaways.map((item, idx) => (
+                                <li key={`${item}-${idx}`}>{item}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

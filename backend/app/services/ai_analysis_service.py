@@ -990,7 +990,14 @@ class AIAnalysisService:
         )
         system_prompt = await self._build_system_prompt(scene_key="blogger_viral_profile", base_prompt=base_system_prompt)
 
-        text_data_json = json.dumps(videos_text_data, ensure_ascii=False, indent=2)
+        def _published_sort_key(item: dict) -> tuple[int, str]:
+            published_at = str(item.get("published_at") or "").strip()
+            if not published_at:
+                return (1, "")
+            return (0, published_at)
+
+        sorted_videos_text_data = sorted(videos_text_data, key=_published_sort_key)
+        text_data_json = json.dumps(sorted_videos_text_data, ensure_ascii=False, indent=2)
         analyses_json = json.dumps(videos_analysis, ensure_ascii=False, indent=2)
 
         prompt_template, prompt_meta = await self._resolve_prompt(
@@ -1043,11 +1050,49 @@ class AIAnalysisService:
             if not isinstance(viral_profile, dict):
                 viral_profile = report.get("viral_profile") if isinstance(report.get("viral_profile"), dict) else {}
 
+            timeline_entries = viral_profile.get("timeline_entries", []) if isinstance(viral_profile, dict) else []
+            if not isinstance(timeline_entries, list):
+                timeline_entries = []
+            normalized_timeline_entries: list[dict[str, str]] = []
+            for item in timeline_entries[:8]:
+                if not isinstance(item, dict):
+                    continue
+                normalized_timeline_entries.append(
+                    {
+                        "date": str(item.get("date", "") or "").strip(),
+                        "title": str(item.get("title", "") or "").strip(),
+                        "phase": str(item.get("phase", "") or "").strip(),
+                        "performance_signal": str(item.get("performance_signal", "") or "").strip(),
+                        "topic_pattern": str(item.get("topic_pattern", "") or "").strip(),
+                        "post_fire_role": str(item.get("post_fire_role", "") or "").strip(),
+                        "why_it_mattered": str(item.get("why_it_mattered", "") or "").strip(),
+                    }
+                )
+
+            planning_takeaways = viral_profile.get("planning_takeaways", []) if isinstance(viral_profile, dict) else []
+            if not isinstance(planning_takeaways, list):
+                planning_takeaways = []
+
+            normalized_viral_profile = {
+                "account_planning_logic": str(viral_profile.get("account_planning_logic", "") or "").strip(),
+                "why_it_went_viral": str(viral_profile.get("why_it_went_viral", "") or "").strip(),
+                "content_playbook": [str(item).strip() for item in viral_profile.get("content_playbook", []) if str(item).strip()][:5]
+                if isinstance(viral_profile, dict) and isinstance(viral_profile.get("content_playbook"), list)
+                else [],
+                "risk_warnings": [str(item).strip() for item in viral_profile.get("risk_warnings", []) if str(item).strip()][:4]
+                if isinstance(viral_profile, dict) and isinstance(viral_profile.get("risk_warnings"), list)
+                else [],
+                "timeline_overview": str(viral_profile.get("timeline_overview", "") or "").strip(),
+                "timeline_entries": normalized_timeline_entries,
+                "post_fire_arrangement": str(viral_profile.get("post_fire_arrangement", "") or "").strip(),
+                "planning_takeaways": [str(item).strip() for item in planning_takeaways if str(item).strip()][:5],
+            }
+
             # 只保留对账号策划最有价值的字段，避免被截断时丢失关键信息。
             normalized_reference_bloggers.append(
                 {
                     "nickname": blogger.get("nickname"),
-                    "viral_profile": viral_profile,
+                    "viral_profile": normalized_viral_profile,
                     "ip_positioning": report.get("ip_positioning", {}),
                     "content_strategy": report.get("content_strategy", {}),
                     "growth_insights": report.get("growth_insights", {}),

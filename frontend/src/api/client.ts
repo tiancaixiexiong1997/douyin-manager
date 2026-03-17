@@ -252,9 +252,21 @@ export interface BloggerViralProfile {
   content_playbook?: string[];
   risk_warnings?: string[];
   evidence_samples?: Array<{
-    title?: string;
-    reason?: string;
+      title?: string;
+      reason?: string;
   }>;
+  timeline_overview?: string;
+  timeline_entries?: Array<{
+    date?: string;
+    title?: string;
+    phase?: string;
+    performance_signal?: string;
+    topic_pattern?: string;
+    post_fire_role?: string;
+    why_it_mattered?: string;
+  }>;
+  post_fire_arrangement?: string;
+  planning_takeaways?: string[];
   confidence_score?: number;
 }
 
