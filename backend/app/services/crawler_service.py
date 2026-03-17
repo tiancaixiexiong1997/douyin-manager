@@ -358,17 +358,27 @@ class CrawlerService:
             return None
 
     @staticmethod
+    def _extract_cover_url(video_node: dict) -> Optional[str]:
+        """优先返回静态封面，避免 dynamic_cover 这类动态预览图混进结果。"""
+        for key in ("origin_cover", "cover", "dynamic_cover"):
+            cover_data = video_node.get(key)
+            if isinstance(cover_data, dict):
+                url_list = cover_data.get("url_list", [])
+                for url in url_list:
+                    if url:
+                        return url
+            elif isinstance(cover_data, str) and cover_data:
+                return cover_data
+        return None
+
+    @staticmethod
     def _parse_video_item(item: dict) -> Optional[dict]:
         """解析单条视频数据"""
         try:
             video_node = item.get("video", {})
 
-            # 封面图
-            cover_url = None
-            cover_data = video_node.get("cover") or video_node.get("dynamic_cover")
-            if isinstance(cover_data, dict):
-                url_list = cover_data.get("url_list", [])
-                cover_url = url_list[0] if url_list else None
+            # 封面图：优先使用静态封面，其次才退到 dynamic_cover。
+            cover_url = CrawlerService._extract_cover_url(video_node)
 
             # 视频播放地址 - 优先使用无水印高清 CDN 地址
             # NOTE: 核心逻辑与 douyin_api/hybrid_crawler.py 保持一致：
