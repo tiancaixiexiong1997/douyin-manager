@@ -304,6 +304,16 @@
   color: var(--text-muted);
 }
 
+.plan-intake-suggestion-block {
+  margin-top: 10px;
+}
+
+.plan-intake-suggestion-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
 .plan-intake-chip {
   border: 1px solid rgba(148, 163, 184, 0.35);
   border-radius: 999px;
@@ -321,6 +331,56 @@
   background: rgba(59, 130, 246, 0.14);
 }
 
+.plan-intake-example-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.plan-intake-example-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 132px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.18);
+  text-align: left;
+  transition: transform var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.plan-intake-example-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(96, 165, 250, 0.42);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.plan-intake-example-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.plan-intake-example-card-text {
+  flex: 1;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.plan-intake-example-card-action {
+  font-size: 12px;
+  font-weight: 700;
+  color: #93c5fd;
+}
+
 .plan-intake-input-row {
   margin-top: 12px;
   display: grid;
@@ -333,6 +393,31 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.plan-intake-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plan-intake-composer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.plan-intake-composer-head span {
+  font-weight: 600;
+}
+
+.plan-intake-composer-head em {
+  font-style: normal;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .plan-intake-input {
@@ -1189,6 +1274,15 @@
   border-color: rgba(148, 163, 184, 0.22);
 }
 
+[data-theme='light'] .plan-intake-example-card {
+  background: #ffffff;
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
+[data-theme='light'] .plan-intake-example-card-action {
+  color: #2563eb;
+}
+
 [data-theme='light'] .plan-confirm-note {
   background: #f8fafc;
   border-color: rgba(148, 163, 184, 0.32);
@@ -1317,6 +1411,10 @@
   .plan-overview {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .plan-intake-example-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 768px) {
@@ -1366,6 +1464,11 @@
 
   .plan-intake-action-row {
     flex-direction: row;
+  }
+
+  .plan-intake-composer-head {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .plan-modal .modal-footer {

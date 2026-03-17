@@ -39,10 +39,19 @@ const INTAKE_DISPLAY_LABELS: Record<string, string> = {
   iteration_rule: '迭代规则',
 };
 const FAST_PROMPT_EXAMPLES = [
-  '我做广州本地餐饮探店，目标客群是25-35岁上班族，想做“高性价比工作餐+周末聚餐”账号，30天起号。',
-  '我是瑜伽教练，想做30岁女性居家减脂账号，主打每天10分钟可坚持，目标是私教咨询转化。',
-  '我做护肤，想帮敏感肌女生避坑，内容以产品测评+成分科普为主，一个月先稳定更新10条。',
-];
+  {
+    title: '本地探店起号',
+    prompt: '我做广州本地餐饮探店，目标客群是25-35岁上班族，想做“高性价比工作餐+周末聚餐”账号，30天起号。',
+  },
+  {
+    title: '教练转化咨询',
+    prompt: '我是瑜伽教练，想做30岁女性居家减脂账号，主打每天10分钟可坚持，目标是私教咨询转化。',
+  },
+  {
+    title: '护肤避坑科普',
+    prompt: '我做护肤，想帮敏感肌女生避坑，内容以产品测评+成分科普为主，一个月先稳定更新10条。',
+  },
+] as const;
 const STATUS_FILTER_OPTIONS = [
   { value: 'all', label: '全部状态' },
   { value: 'completed', label: '已完成' },
@@ -315,7 +324,9 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
                 <div ref={chatEndRef} />
               </div>
               {suggestedQuestions.length > 0 && (
-                <div className="plan-intake-suggestions">
+                <div className="plan-intake-suggestion-block">
+                  <div className="plan-intake-suggestion-title">继续追问建议</div>
+                  <div className="plan-intake-suggestions">
                   {suggestedQuestions.map((question, idx) => (
                     <button
                       key={`${question}-${idx}`}
@@ -328,26 +339,34 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
                     </button>
                   ))}
                 </div>
+                </div>
               )}
               <div className="plan-intake-example-block">
                 <div className="plan-intake-example-title">快速示例</div>
                 <div className="plan-intake-example-desc">如果你还没想好怎么描述，可以直接点一个示例改着用。</div>
-                <div className="plan-intake-suggestions">
+                <div className="plan-intake-example-grid">
                   {FAST_PROMPT_EXAMPLES.map((example, idx) => (
                     <button
-                      key={`fast-example-${idx}`}
-                      className="plan-intake-chip"
+                      key={`fast-example-${idx}-${example.title}`}
+                      className="plan-intake-example-card"
                       type="button"
-                      onClick={() => sendIntakeMessage(example, 'fast')}
+                      onClick={() => sendIntakeMessage(example.prompt, 'fast')}
                       disabled={intakeMutation.isPending}
-                      title={example}
+                      title={example.prompt}
                     >
-                      极速示例 {idx + 1}
+                      <span className="plan-intake-example-card-title">{example.title}</span>
+                      <span className="plan-intake-example-card-text">{example.prompt}</span>
+                      <span className="plan-intake-example-card-action">一键套用</span>
                     </button>
                   ))}
                 </div>
               </div>
               <div className="plan-intake-input-row">
+                <div className="plan-intake-composer">
+                  <div className="plan-intake-composer-head">
+                    <span>告诉 AI 你的账号现状、行业、目标和想做的内容方向</span>
+                    <em>回车发送，Shift + 回车换行</em>
+                  </div>
                 <textarea
                   className="form-input plan-intake-input"
                   placeholder="例如：我做本地餐饮探店，主打高性价比，目标是30天稳定起号..."
@@ -360,6 +379,7 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
                     }
                   }}
                 />
+                </div>
                 <div className="plan-intake-action-row">
                   <button
                     className="btn btn-ghost"
