@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { aiPromptApi, settingApi, type PromptVersion, type SettingsData } from '../../api/client';
-import { Save, Settings as SettingsIcon, Link2, Key, Cpu, User, FileText, LayoutTemplate, PenTool, Bot, FlaskConical, GitCompare, Star, RefreshCw, Copy, QrCode, RotateCcw } from 'lucide-react';
+import { settingApi, type SettingsData } from '../../api/client';
+import { Save, Settings as SettingsIcon, Link2, Key, Cpu, User, FileText, LayoutTemplate, PenTool, Bot, Copy, QrCode, RotateCcw, RefreshCw } from 'lucide-react';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import './Settings.css';
 
@@ -9,50 +9,11 @@ export default function Settings() {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<SettingsData>({});
   const [activeTab, setActiveTab] = useState('basic');
-  const [selectedScene, setSelectedScene] = useState('blogger_report');
-  const [versionLabel, setVersionLabel] = useState('');
-  const [versionTemplate, setVersionTemplate] = useState('');
-  const [abName, setAbName] = useState('');
-  const [abVersionA, setAbVersionA] = useState('');
-  const [abVersionB, setAbVersionB] = useState('');
-  const [abTrafficA, setAbTrafficA] = useState(50);
-  const [compareA, setCompareA] = useState('');
-  const [compareB, setCompareB] = useState('');
-  const isAiUpgradeTab = activeTab === 'ai_upgrade';
   const isCrawlerTab = activeTab === 'crawler';
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
     queryFn: () => settingApi.getSettings(),
-  });
-
-  const { data: scenes = [] } = useQuery({
-    queryKey: ['prompt-scenes'],
-    queryFn: () => aiPromptApi.scenes(),
-  });
-
-  const { data: versions = [] } = useQuery({
-    queryKey: ['prompt-versions', selectedScene],
-    queryFn: () => aiPromptApi.listVersions(selectedScene),
-    enabled: isAiUpgradeTab && Boolean(selectedScene),
-  });
-
-  const { data: experiments = [] } = useQuery({
-    queryKey: ['prompt-experiments', selectedScene],
-    queryFn: () => aiPromptApi.listExperiments(selectedScene),
-    enabled: isAiUpgradeTab && Boolean(selectedScene),
-  });
-
-  const { data: runs = [] } = useQuery({
-    queryKey: ['prompt-runs', selectedScene],
-    queryFn: () => aiPromptApi.listRuns({ scene_key: selectedScene, limit: 30 }),
-    enabled: isAiUpgradeTab && Boolean(selectedScene),
-  });
-
-  const { data: compareResult } = useQuery({
-    queryKey: ['prompt-compare', compareA, compareB],
-    queryFn: () => aiPromptApi.compare(compareA, compareB),
-    enabled: isAiUpgradeTab && Boolean(compareA && compareB),
   });
 
   const {
@@ -85,61 +46,6 @@ export default function Settings() {
       const message = err instanceof Error ? err.message : '未知错误';
       notifyError(`保存失败：${message}`);
     }
-  });
-
-  const createVersionMutation = useMutation({
-    mutationFn: () => aiPromptApi.createVersion({
-      scene_key: selectedScene,
-      version_label: versionLabel.trim(),
-      template_text: versionTemplate,
-      is_active: false,
-    }),
-    onSuccess: () => {
-      setVersionLabel('');
-      setVersionTemplate('');
-      queryClient.invalidateQueries({ queryKey: ['prompt-versions', selectedScene] });
-    },
-    onError: (err: unknown) => notifyError(err instanceof Error ? err.message : '创建版本失败'),
-  });
-
-  const activateVersionMutation = useMutation({
-    mutationFn: (versionId: string) => aiPromptApi.activateVersion(versionId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['prompt-versions', selectedScene] });
-    },
-    onError: (err: unknown) => notifyError(err instanceof Error ? err.message : '激活版本失败'),
-  });
-
-  const createExperimentMutation = useMutation({
-    mutationFn: () => aiPromptApi.createExperiment({
-      scene_key: selectedScene,
-      name: abName.trim(),
-      version_a_id: abVersionA,
-      version_b_id: abVersionB,
-      traffic_ratio_a: abTrafficA,
-      is_active: true,
-    }),
-    onSuccess: () => {
-      setAbName('');
-      queryClient.invalidateQueries({ queryKey: ['prompt-experiments', selectedScene] });
-    },
-    onError: (err: unknown) => notifyError(err instanceof Error ? err.message : '创建实验失败'),
-  });
-
-  const toggleExperimentMutation = useMutation({
-    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
-      aiPromptApi.updateExperiment(id, { is_active: isActive }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['prompt-experiments', selectedScene] });
-    },
-  });
-
-  const scoreRunMutation = useMutation({
-    mutationFn: ({ runId, score, feedback }: { runId: string; score: number; feedback?: string }) =>
-      aiPromptApi.scoreRun(runId, { score, feedback }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['prompt-runs', selectedScene] });
-    },
   });
 
   const rotateExtractorTokenMutation = useMutation({
@@ -197,7 +103,6 @@ export default function Settings() {
   const tabs = [
     { id: 'basic', label: '基础配置', icon: SettingsIcon, group: '通用' },
     { id: 'crawler', label: '爬虫与认证', icon: Key, group: '通用' },
-    { id: 'ai_upgrade', label: 'AI能力升级', icon: FlaskConical, group: 'AI实验' },
     { id: 'prompt_global', label: '全局写作规则', icon: Bot, group: '系统提示词' },
     { id: 'prompt_blogger', label: '博主 IP 分析', icon: User, group: '系统提示词' },
     { id: 'prompt_plan', label: '账号策划方案', icon: LayoutTemplate, group: '系统提示词' },
@@ -232,21 +137,6 @@ export default function Settings() {
             >
               <Key size={16} /> 爬虫与认证设置
             </button>
-
-            <div className="settings-menu-group" style={{ marginTop: '16px' }}>AI 能力实验</div>
-            {tabs.filter(t => t.group === 'AI实验').map(tab => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  className={`settings-menu-item ${activeTab === tab.id ? 'active' : ''}`}
-                  onClick={() => setActiveTab(tab.id)}
-                >
-                  <Icon size={16} /> {tab.label}
-                </button>
-              );
-            })}
-            
             <div className="settings-menu-group" style={{ marginTop: '16px' }}>系统提示词 (Prompts)</div>
             {tabs.filter(t => t.group === '系统提示词').map(tab => {
               const Icon = tab.icon;
@@ -270,11 +160,9 @@ export default function Settings() {
                 <div className="tab-icon-wrap"><ActiveTabIcon size={18} className="text-primary-500" /></div>
                 {getActiveTabInfo()?.label}
               </h2>
-              {activeTab !== 'ai_upgrade' && (
-                <button type="submit" className="btn btn-primary btn-sm" disabled={mutation.isPending}>
-                  <Save size={14} /> {mutation.isPending ? '保存中...' : '保存当前设置'}
-                </button>
-              )}
+              <button type="submit" className="btn btn-primary btn-sm" disabled={mutation.isPending}>
+                <Save size={14} /> {mutation.isPending ? '保存中...' : '保存当前设置'}
+              </button>
             </div>
 
             <div className="settings-scroll-area">
@@ -480,164 +368,6 @@ export default function Settings() {
                 </div>
               )}
 
-              {activeTab === 'ai_upgrade' && (
-                <div className="animate-fade-in ai-upgrade-panel">
-                  <div className="ai-card">
-                    <div className="ai-card-title"><FlaskConical size={16} /> 场景与版本管理</div>
-                    <div className="ai-row">
-                      <label>选择场景</label>
-                      <select className="form-input" value={selectedScene} onChange={(e) => setSelectedScene(e.target.value)}>
-                        {scenes.map((scene) => (
-                          <option key={scene.scene_key} value={scene.scene_key}>
-                            {scene.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="ai-grid-2">
-                      <input
-                        className="form-input"
-                        placeholder="版本号，如 v2.1"
-                        value={versionLabel}
-                        onChange={(e) => setVersionLabel(e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-primary btn-sm"
-                        disabled={!versionLabel.trim() || !versionTemplate.trim() || createVersionMutation.isPending}
-                        onClick={() => createVersionMutation.mutate()}
-                      >
-                        <Save size={13} /> 创建版本
-                      </button>
-                    </div>
-                    <textarea
-                      className="prompt-textarea ai-template-box"
-                      placeholder="输入该版本提示词模板"
-                      value={versionTemplate}
-                      onChange={(e) => setVersionTemplate(e.target.value)}
-                    />
-                    <div className="ai-version-list">
-                      {versions.map((v: PromptVersion) => (
-                        <div key={v.id} className={`ai-version-item ${v.is_active ? 'active' : ''}`}>
-                          <div>
-                            <div className="ai-version-name">{v.version_label}</div>
-                            <div className="ai-version-meta">{new Date(v.created_at).toLocaleString('zh-CN')} · {v.created_by || 'system'}</div>
-                          </div>
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm"
-                            disabled={v.is_active || activateVersionMutation.isPending}
-                            onClick={() => activateVersionMutation.mutate(v.id)}
-                          >
-                            {v.is_active ? '当前激活' : '设为激活'}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="ai-card">
-                    <div className="ai-card-title"><GitCompare size={16} /> A/B 对比与评分</div>
-                    <div className="ai-grid-3">
-                      <input className="form-input" placeholder="实验名" value={abName} onChange={(e) => setAbName(e.target.value)} />
-                      <select className="form-input" value={abVersionA} onChange={(e) => setAbVersionA(e.target.value)}>
-                        <option value="">版本 A</option>
-                        {versions.map((v) => <option key={v.id} value={v.id}>{v.version_label}</option>)}
-                      </select>
-                      <select className="form-input" value={abVersionB} onChange={(e) => setAbVersionB(e.target.value)}>
-                        <option value="">版本 B</option>
-                        {versions.map((v) => <option key={v.id} value={v.id}>{v.version_label}</option>)}
-                      </select>
-                    </div>
-                    <div className="ai-grid-2">
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        className="form-input"
-                        value={abTrafficA}
-                        onChange={(e) => setAbTrafficA(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
-                        placeholder="A流量占比(%)"
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-primary btn-sm"
-                        disabled={!abName.trim() || !abVersionA || !abVersionB || createExperimentMutation.isPending}
-                        onClick={() => createExperimentMutation.mutate()}
-                      >
-                        创建并激活实验
-                      </button>
-                    </div>
-                    <div className="ai-exp-list">
-                      {experiments.map((exp) => (
-                        <div className="ai-exp-item" key={exp.id}>
-                          <div>
-                            <div className="ai-version-name">{exp.name}</div>
-                            <div className="ai-version-meta">A流量: {exp.traffic_ratio_a}% · B流量: {100 - exp.traffic_ratio_a}%</div>
-                          </div>
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm"
-                            onClick={() => toggleExperimentMutation.mutate({ id: exp.id, isActive: !exp.is_active })}
-                          >
-                            {exp.is_active ? '停用' : '启用'}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="ai-grid-2 ai-compare-box">
-                      <select className="form-input" value={compareA} onChange={(e) => setCompareA(e.target.value)}>
-                        <option value="">选择对比版本 A</option>
-                        {versions.map((v) => <option key={v.id} value={v.id}>{v.version_label}</option>)}
-                      </select>
-                      <select className="form-input" value={compareB} onChange={(e) => setCompareB(e.target.value)}>
-                        <option value="">选择对比版本 B</option>
-                        {versions.map((v) => <option key={v.id} value={v.id}>{v.version_label}</option>)}
-                      </select>
-                    </div>
-                    {compareResult && (
-                      <div className="ai-compare-result">
-                        <div>版本A：运行 {compareResult.version_a.runs} 次，均分 {compareResult.version_a.avg_score?.toFixed(2) || '-'}</div>
-                        <div>版本B：运行 {compareResult.version_b.runs} 次，均分 {compareResult.version_b.avg_score?.toFixed(2) || '-'}</div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="ai-card">
-                    <div className="ai-card-title"><Star size={16} /> 生成结果评分</div>
-                    <div className="ai-run-list">
-                      {runs.map((run) => (
-                        <div className="ai-run-item" key={run.id}>
-                          <div>
-                            <div className="ai-version-name">{new Date(run.created_at).toLocaleString('zh-CN')}</div>
-                            <div className="ai-version-meta">
-                              状态: {run.status} · 分支: {run.ab_branch || 'BASE'} · 当前分: {run.score ?? '-'}
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm"
-                            onClick={() => {
-                              const score = window.prompt('请输入评分（0-10）', run.score != null ? String(run.score) : '8');
-                              if (!score) return;
-                              const num = Number(score);
-                              if (Number.isNaN(num) || num < 0 || num > 10) {
-                                notifyError('评分需在 0-10 之间');
-                                return;
-                              }
-                              const feedback = window.prompt('可选：补充反馈', run.feedback || '') || undefined;
-                              scoreRunMutation.mutate({ runId: run.id, score: num, feedback });
-                            }}
-                          >
-                            打分
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {activeTab === 'prompt_global' && (
                 <div className="animate-fade-in prompt-full-height">

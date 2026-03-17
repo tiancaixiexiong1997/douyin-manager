@@ -7,7 +7,6 @@ import base64
 import logging
 import tempfile
 import subprocess
-import random
 import math
 from typing import Any, Optional
 
@@ -170,47 +169,15 @@ class AIAnalysisService:
         default_prompt: str,
         db: Optional[Any] = None,
     ) -> tuple[str, dict]:
-        """解析当前场景应使用的提示词（支持激活版本与 A/B）。"""
-        if db is None:
-            from app.models.db_session import AsyncSessionLocal
-
-            async with AsyncSessionLocal() as session:
-                return await self._resolve_prompt(scene_key=scene_key, default_prompt=default_prompt, db=session)
-
+        """解析当前场景应使用的提示词（固定使用当前设置，不再走版本实验链路）。"""
         setting_key = self.PROMPT_SCENE_SETTING_MAP.get(scene_key, "")
         fallback_prompt = await self._get_current_setting(setting_key, default_prompt)
-        meta = {
+        return fallback_prompt, {
             "prompt_version_id": None,
             "ab_experiment_id": None,
             "ab_branch": "BASE",
             "scene_key": scene_key,
         }
-        try:
-            from app.repository.prompt_repo import prompt_repo
-
-            experiment = await prompt_repo.get_active_experiment(db, scene_key)
-            if experiment:
-                choose_a = random.random() < (max(0, min(100, experiment.traffic_ratio_a)) / 100.0)
-                version_id = experiment.version_a_id if choose_a else experiment.version_b_id
-                version = await prompt_repo.get_version(db, version_id)
-                if version:
-                    meta.update(
-                        {
-                            "prompt_version_id": version.id,
-                            "ab_experiment_id": experiment.id,
-                            "ab_branch": "A" if choose_a else "B",
-                        }
-                    )
-                    return version.template_text, meta
-
-            active_version = await prompt_repo.get_active_version(db, scene_key)
-            if active_version:
-                meta.update({"prompt_version_id": active_version.id, "ab_branch": "BASE"})
-                return active_version.template_text, meta
-        except Exception as exc:
-            logger.warning("解析提示词版本失败(scene=%s): %s", scene_key, exc)
-
-        return fallback_prompt, meta
 
     async def _build_system_prompt(self, *, scene_key: str, base_prompt: str) -> str:
         factual_rules = str(
@@ -242,38 +209,8 @@ class AIAnalysisService:
         run_context: Optional[dict] = None,
         db: Optional[Any] = None,
     ) -> None:
-        """记录单次提示词运行结果，用于评分与 A/B 对比。"""
-        payload = {
-            "scene_key": scene_key,
-            "entity_type": (run_context or {}).get("entity_type"),
-            "entity_id": (run_context or {}).get("entity_id"),
-            "status": "failed" if result.get("error") else "success",
-            "prompt_version_id": prompt_meta.get("prompt_version_id"),
-            "ab_experiment_id": prompt_meta.get("ab_experiment_id"),
-            "ab_branch": prompt_meta.get("ab_branch"),
-            "output_preview": "",
-        }
-        try:
-            import json
-
-            payload["output_preview"] = json.dumps(result, ensure_ascii=False)[:500]
-        except Exception:
-            payload["output_preview"] = str(result)[:500]
-
-        try:
-            from app.repository.prompt_repo import prompt_repo
-
-            if db is not None:
-                await prompt_repo.create_run(db, payload)
-                return
-
-            from app.models.db_session import AsyncSessionLocal
-
-            async with AsyncSessionLocal() as session:
-                await prompt_repo.create_run(session, payload)
-                await session.commit()
-        except Exception as exc:
-            logger.warning("记录提示词运行失败(scene=%s): %s", scene_key, exc)
+        """实验链路已停用，保留空实现以兼容现有调用。"""
+        return None
 
     async def _download_video_with_retry(
         self,
