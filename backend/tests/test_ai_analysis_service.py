@@ -44,20 +44,6 @@ def test_resolve_ai_overall_timeout_prefers_heavy_calendar_scene(monkeypatch: py
     assert timeout == 240
 
 
-def test_resolve_provider_timeout_budget_prioritizes_primary_for_calendar_scene() -> None:
-    service = AIAnalysisService()
-
-    timeout = service._resolve_provider_timeout_budget(
-        scene_key="content_calendar",
-        overall_timeout_seconds=240,
-        remaining_seconds=240,
-        provider_index=0,
-        provider_count=2,
-    )
-
-    assert timeout >= 180
-
-
 def test_build_system_prompt_includes_fact_rules_for_all_scenes(monkeypatch) -> None:
     service = AIAnalysisService()
 

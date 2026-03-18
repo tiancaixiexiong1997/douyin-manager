@@ -22,7 +22,7 @@ router = APIRouter()
 public_router = APIRouter()
 logger = logging.getLogger(__name__)
 
-SENSITIVE_SETTING_KEYS = {"AI_API_KEY", "AI_API_KEY_BACKUP", "DOUYIN_COOKIE"}
+SENSITIVE_SETTING_KEYS = {"AI_API_KEY", "DOUYIN_COOKIE"}
 SENSITIVE_MASK = "********"
 COOKIE_PLACEHOLDER_MARKERS = {
     "please_replace_with_your_own_cookie",
@@ -119,10 +119,6 @@ async def get_settings(
         "AI_API_KEY": settings_dict.get("AI_API_KEY", app_settings.AI_API_KEY),
         "AI_BASE_URL": settings_dict.get("AI_BASE_URL", app_settings.AI_BASE_URL),
         "AI_MODEL": settings_dict.get("AI_MODEL", app_settings.AI_MODEL),
-        "AI_FAILOVER_ENABLED": settings_dict.get("AI_FAILOVER_ENABLED", str(app_settings.AI_FAILOVER_ENABLED).lower()),
-        "AI_API_KEY_BACKUP": settings_dict.get("AI_API_KEY_BACKUP", app_settings.AI_API_KEY_BACKUP),
-        "AI_BASE_URL_BACKUP": settings_dict.get("AI_BASE_URL_BACKUP", app_settings.AI_BASE_URL_BACKUP),
-        "AI_MODEL_BACKUP": settings_dict.get("AI_MODEL_BACKUP", app_settings.AI_MODEL_BACKUP),
         "GLOBAL_AI_FACT_RULES": settings_dict.get("GLOBAL_AI_FACT_RULES", ai_analysis_service.DEFAULT_GLOBAL_AI_FACT_RULES),
         "GLOBAL_AI_WRITING_RULES": settings_dict.get("GLOBAL_AI_WRITING_RULES", ai_analysis_service.DEFAULT_GLOBAL_AI_WRITING_RULES),
         "BLOGGER_REPORT_PROMPT": settings_dict.get("BLOGGER_REPORT_PROMPT", ai_analysis_service.DEFAULT_BLOGGER_REPORT_PROMPT),

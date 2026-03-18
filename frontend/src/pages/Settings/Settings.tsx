@@ -201,62 +201,6 @@ export default function Settings() {
                     <span className="help-text">推荐使用性能较强的模型，例如 gemini-2.0-flash 或 gpt-4o</span>
                   </div>
 
-                  <div className="form-group">
-                    <label><RefreshCw size={16} className="text-primary-500"/> 自动故障切换</label>
-                    <div className="failover-toggle">
-                      <button
-                        type="button"
-                        className={`failover-toggle-btn ${(formData.AI_FAILOVER_ENABLED ?? 'false') === 'false' ? 'active' : ''}`}
-                        onClick={() => setDraft((prev) => ({ ...prev, AI_FAILOVER_ENABLED: 'false' }))}
-                      >
-                        关闭
-                      </button>
-                      <button
-                        type="button"
-                        className={`failover-toggle-btn ${(formData.AI_FAILOVER_ENABLED ?? 'false') === 'true' ? 'active' : ''}`}
-                        onClick={() => setDraft((prev) => ({ ...prev, AI_FAILOVER_ENABLED: 'true' }))}
-                      >
-                        开启（主线路失败自动切换）
-                      </button>
-                    </div>
-                    <span className="help-text">开启后，主运营商超时/失败会自动调用备用运营商。</span>
-                  </div>
-
-                  <div className="form-group">
-                    <label><Key size={16} className="text-primary-500"/> 备用 AI API Key</label>
-                    <input
-                      type="password"
-                      name="AI_API_KEY_BACKUP"
-                      value={formData.AI_API_KEY_BACKUP ?? ''}
-                      onChange={handleChange}
-                      placeholder="备用线路 key"
-                    />
-                    <span className="help-text">仅在自动故障切换开启时生效。</span>
-                  </div>
-
-                  <div className="form-group">
-                    <label><Link2 size={16} className="text-primary-500"/> 备用 AI Base URL</label>
-                    <input
-                      type="text"
-                      name="AI_BASE_URL_BACKUP"
-                      value={formData.AI_BASE_URL_BACKUP ?? ''}
-                      onChange={handleChange}
-                      placeholder="https://xxx/v1"
-                    />
-                    <span className="help-text">备用运营商接口地址，需带 /v1。</span>
-                  </div>
-
-                  <div className="form-group">
-                    <label><Bot size={16} className="text-primary-500"/> 备用模型名称</label>
-                    <input
-                      type="text"
-                      name="AI_MODEL_BACKUP"
-                      value={formData.AI_MODEL_BACKUP ?? ''}
-                      onChange={handleChange}
-                      placeholder="如 gemini-2.5-flash"
-                    />
-                    <span className="help-text">建议填同能力层级模型，确保切换后质量接近。</span>
-                  </div>
                 </div>
               )}
 

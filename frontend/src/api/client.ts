@@ -790,10 +790,6 @@ export interface SettingsData {
   AI_API_KEY?: string;
   AI_BASE_URL?: string;
   AI_MODEL?: string;
-  AI_FAILOVER_ENABLED?: string;
-  AI_API_KEY_BACKUP?: string;
-  AI_BASE_URL_BACKUP?: string;
-  AI_MODEL_BACKUP?: string;
   GLOBAL_AI_FACT_RULES?: string;
   GLOBAL_AI_WRITING_RULES?: string;
   BLOGGER_REPORT_PROMPT?: string;
