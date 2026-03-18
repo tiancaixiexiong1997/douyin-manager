@@ -25,7 +25,7 @@ PROMPT_SCENES = {
     "blogger_report": {"name": "博主IP分析", "setting_key": "BLOGGER_REPORT_PROMPT"},
     "blogger_viral_profile": {"name": "博主爆款归因", "setting_key": "BLOGGER_VIRAL_PROFILE_PROMPT"},
     "account_plan": {"name": "账号策划", "setting_key": "ACCOUNT_PLAN_PROMPT"},
-    "content_calendar": {"name": "内容日历生成", "setting_key": "ACCOUNT_PLAN_PROMPT"},
+    "content_calendar": {"name": "内容日历生成", "setting_key": "CONTENT_CALENDAR_PROMPT"},
     "video_script": {"name": "视频脚本生成", "setting_key": "VIDEO_SCRIPT_PROMPT"},
     "script_remake": {"name": "脚本拆解复刻", "setting_key": "SCRIPT_REMAKE_PROMPT"},
 }

@@ -95,6 +95,16 @@ class PlanningRepository:
             await db.flush()
         return project
 
+    async def update_strategy_result(self, db: AsyncSession, project_id: str, account_plan: dict) -> Optional[PlanningProject]:
+        """仅更新账号定位与内容策略，不生成日历。"""
+        project = await self.get_by_id(db, project_id)
+        if project:
+            project.account_plan = account_plan
+            project.content_calendar = []
+            project.status = "strategy_completed"
+            await db.flush()
+        return project
+
     async def add_content_item(self, db: AsyncSession, data: dict) -> ContentItem:
         """添加内容条目"""
         item = ContentItem(**data)

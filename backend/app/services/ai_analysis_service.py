@@ -169,7 +169,7 @@ class AIAnalysisService:
         if scene_key == "account_plan":
             return any(
                 self._has_meaningful_value(result.get(key))
-                for key in ("account_positioning", "content_strategy", "content_calendar")
+                for key in ("account_positioning", "content_strategy")
             )
         if scene_key == "content_calendar":
             return self._has_meaningful_value(result.get("content_calendar"))

@@ -561,6 +561,89 @@ def _has_meaningful_plan_result(account_positioning: dict | None, content_strate
     return has_positioning or has_strategy or bool(calendar)
 
 
+def _has_meaningful_strategy_result(account_positioning: dict | None, content_strategy: dict | None) -> bool:
+    positioning = account_positioning if isinstance(account_positioning, dict) else {}
+    strategy = content_strategy if isinstance(content_strategy, dict) else {}
+    has_positioning = any(bool(_safe_text(value)) for value in positioning.values())
+    has_strategy = any(bool(_safe_text(value)) for value in strategy.values())
+    return has_positioning or has_strategy
+
+
+async def _enqueue_strategy_generation(
+    *,
+    db: AsyncSession,
+    project,
+    current_user: User,
+    client_data: dict,
+    blogger_ids: list,
+    task_key: str,
+    action: str,
+    detail: str,
+) -> dict:
+    previous_status = project.status
+    project.status = "strategy_generating"
+    cancellation_registry.clear(project.id)
+    await task_center_repo.upsert_task(
+        db,
+        task_key=task_key,
+        task_type="planning_generate",
+        title=f"生成定位：{getattr(project, 'client_name', project.id)}",
+        entity_type="planning_project",
+        entity_id=project.id,
+        status=TaskStatus.QUEUED.value,
+        progress_step="queued",
+        message="定位生成任务已提交",
+    )
+    await db.commit()
+
+    try:
+        enqueue_task(
+            "app.tasks.run_planning_generate",
+            project.id,
+            client_data,
+            blogger_ids,
+            task_key,
+            previous_status,
+            job_id=task_key,
+            description=f"planning strategy {project.id}",
+        )
+    except RuntimeError as exc:
+        project = await planning_repository.get_by_id(db, project.id)
+        if project:
+            project.status = previous_status
+        await operation_log_repo.create(
+            db,
+            action="planning.enqueue_failed",
+            entity_type="planning_project",
+            entity_id=project.id,
+            actor=current_user.username,
+            detail="定位生成任务入队失败，状态已回退",
+            extra={"error": str(exc)},
+        )
+        await task_center_repo.update_status(
+            db,
+            task_key,
+            status=TaskStatus.FAILED.value,
+            progress_step="enqueue_failed",
+            message="定位生成任务入队失败",
+            error_message=str(exc),
+        )
+        await db.commit()
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    await operation_log_repo.create(
+        db,
+        action=action,
+        entity_type="planning_project",
+        entity_id=project.id,
+        actor=current_user.username,
+        detail=detail,
+        extra={"status": "strategy_generating"},
+    )
+    await db.commit()
+    return {"message": "已开始生成账号定位方案", "status": "strategy_generating"}
+
+
 def _normalize_draft(raw: dict) -> dict[str, str]:
     return {key: _safe_text(raw.get(key)) for key in INTAKE_DRAFT_KEYS}
 
@@ -908,8 +991,8 @@ async def create_planning(
 ):
     """
     创建账号策划项目：
-    1. 保存项目基本信息
-    2. 后台异步生成账号定位和30天内容日历
+    1. 保存项目基本信息为草稿
+    2. 由用户手动触发“生成账号定位方案”
     """
     # 如果填了主页地址，先抓取账号信息
     account_info = {}
@@ -937,7 +1020,7 @@ async def create_planning(
         "style_preference": request.style_preference,
         "business_goal": request.business_goal,
         "reference_blogger_ids": request.reference_blogger_ids,
-        "status": "in_progress",
+        "status": "draft",
         **account_info,
     })
     await operation_log_repo.create(
@@ -955,54 +1038,41 @@ async def create_planning(
     )
     await db.commit()
 
-    task_key = f"planning:{project.id}:generate"
-    await task_center_repo.upsert_task(
-        db,
-        task_key=task_key,
-        task_type="planning_generate",
-        title=f"生成策划：{getattr(project, 'client_name', request.client_name)}",
-        entity_type="planning_project",
-        entity_id=project.id,
-        status=TaskStatus.QUEUED.value,
-        progress_step="queued",
-        message="任务已提交，等待执行",
-    )
-    await db.commit()
-
-    try:
-        enqueue_task(
-            "app.tasks.run_planning_generate",
-            project.id,
-            request.model_dump(),
-            request.reference_blogger_ids,
-            task_key,
-            "draft",
-            job_id=task_key,
-            description=f"planning generate {project.id}",
-        )
-    except RuntimeError as exc:
-        project.status = "draft"
-        await operation_log_repo.create(
-            db,
-            action="planning.enqueue_failed",
-            entity_type="planning_project",
-            entity_id=project.id,
-            actor=current_user.username,
-            detail="策划任务入队失败，状态已回退为草稿",
-            extra={"error": str(exc)},
-        )
-        await task_center_repo.update_status(
-            db,
-            task_key,
-            status=TaskStatus.FAILED.value,
-            progress_step="enqueue_failed",
-            message="策划任务入队失败",
-            error_message=str(exc),
-        )
-        await db.commit()
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
     return project
+
+
+@router.post("/{project_id}/generate-strategy", summary="生成账号定位方案")
+async def generate_strategy(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_member_or_admin),
+):
+    project = await planning_repository.get_by_id(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    if project.status in {"strategy_generating", "calendar_generating", "in_progress"}:
+        raise HTTPException(status_code=400, detail="生成中的项目正在排队，不可重复生成")
+
+    client_data = {
+        "client_name": project.client_name,
+        "industry": project.industry,
+        "target_audience": project.target_audience,
+        "unique_advantage": project.unique_advantage,
+        "ip_requirements": project.ip_requirements,
+        "style_preference": project.style_preference,
+        "business_goal": project.business_goal,
+        "reference_blogger_ids": project.reference_blogger_ids or [],
+    }
+    return await _enqueue_strategy_generation(
+        db=db,
+        project=project,
+        current_user=current_user,
+        client_data=client_data,
+        blogger_ids=project.reference_blogger_ids or [],
+        task_key=f"planning:{project.id}:generate-strategy",
+        action="planning.generate_strategy",
+        detail="生成账号定位方案",
+    )
 
 
 @router.get("", response_model=list[PlanningListResponse] | PlanningPagedResponse, summary="获取所有策划项目")
@@ -1051,27 +1121,19 @@ async def get_project(project_id: str, db: AsyncSession = Depends(get_db)):
     return project
 
 
-@router.post("/{project_id}/retry", summary="重新生成失败的策划(草稿)")
+@router.post("/{project_id}/retry", summary="重新生成账号定位方案")
 async def retry_project(
     project_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_member_or_admin),
 ):
-    """重新开始被网络中断变为草稿状态的项目"""
+    """重新生成账号定位方案。"""
     project = await planning_repository.get_by_id(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="项目不存在")
     
-    if project.status == "in_progress":
+    if project.status in {"strategy_generating", "calendar_generating", "in_progress"}:
         raise HTTPException(status_code=400, detail="生成中的项目正在排队，不可重复生成")
-    previous_status = project.status
-
-    # 标记为进行中。内容清理由后台任务落库前统一处理，避免入队失败导致数据丢失。
-    project.status = "in_progress"
-
-    from app.services.cancellation import cancellation_registry
-    cancellation_registry.clear(project_id)
-    await db.commit()
 
     # 提取重构参数
     client_data = {
@@ -1084,67 +1146,16 @@ async def retry_project(
         "business_goal": project.business_goal,
         "reference_blogger_ids": project.reference_blogger_ids or []
     }
-
-    task_key = f"planning:{project.id}:retry"
-    await task_center_repo.upsert_task(
-        db,
-        task_key=task_key,
-        task_type="planning_generate",
-        title=f"重新生成策划：{getattr(project, 'client_name', project_id)}",
-        entity_type="planning_project",
-        entity_id=project.id,
-        status=TaskStatus.QUEUED.value,
-        progress_step="queued",
-        message="重试任务已提交",
-    )
-    await db.commit()
-
-    try:
-        enqueue_task(
-            "app.tasks.run_planning_generate",
-            project.id,
-            client_data,
-            project.reference_blogger_ids or [],
-            task_key,
-            previous_status,
-            job_id=task_key,
-            description=f"planning retry {project.id}",
-        )
-    except RuntimeError as exc:
-        project = await planning_repository.get_by_id(db, project_id)
-        if project:
-            project.status = previous_status
-        await operation_log_repo.create(
-            db,
-            action="planning.enqueue_failed",
-            entity_type="planning_project",
-            entity_id=project_id,
-            actor=current_user.username,
-            detail="策划重试任务入队失败，状态已回退",
-            extra={"error": str(exc)},
-        )
-        await task_center_repo.update_status(
-            db,
-            task_key,
-            status=TaskStatus.FAILED.value,
-            progress_step="enqueue_failed",
-            message="策划重试任务入队失败",
-            error_message=str(exc),
-        )
-        await db.commit()
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-    await operation_log_repo.create(
-        db,
+    return await _enqueue_strategy_generation(
+        db=db,
+        project=project,
+        current_user=current_user,
+        client_data=client_data,
+        blogger_ids=project.reference_blogger_ids or [],
+        task_key=f"planning:{project.id}:retry",
         action="planning.retry",
-        entity_type="planning_project",
-        entity_id=project.id,
-        actor=current_user.username,
-        detail="重新生成策划项目",
-        extra={"status": "in_progress"},
+        detail="重新生成账号定位方案",
     )
-
-    return {"message": "已开始重新生成", "status": "in_progress"}
 
 
 @router.patch("/{project_id}", response_model=PlanningResponse, summary="编辑策划项目基本信息")
@@ -1174,24 +1185,24 @@ async def update_project(
     return project
 
 
-@router.post("/{project_id}/regenerate-calendar", summary="单独重新生成内容日历")
+@router.post("/{project_id}/regenerate-calendar", summary="基于当前定位生成或重生成30天内容日历")
 async def regenerate_calendar(
     project_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_member_or_admin),
 ):
-    """基于当前账号定位，单独重新生成 30 天内容日历"""
+    """基于当前账号定位，生成或重生成 30 天内容日历。"""
     project = await planning_repository.get_by_id(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="项目不存在")
-    if project.status == "in_progress":
+    if project.status in {"strategy_generating", "calendar_generating", "in_progress"}:
         raise HTTPException(status_code=400, detail="生成中的项目正在排队，不可重复生成")
     if not project.account_plan:
         raise HTTPException(status_code=400, detail="账号策划尚未生成，无法单独生成日历")
     previous_status = project.status
 
     # 仅更新状态，避免入队失败时丢失已有结果。
-    project.status = "in_progress"
+    project.status = "calendar_generating"
 
     from app.services.cancellation import cancellation_registry
     cancellation_registry.clear(project_id)
@@ -1212,16 +1223,23 @@ async def regenerate_calendar(
     has_performance_recap = bool(
         isinstance(project.account_plan, dict) and isinstance(project.account_plan.get("performance_recap"), dict)
     )
+    has_existing_calendar = bool(project.content_calendar) or bool(project.content_items)
+    calendar_task_title = "重生成日历" if has_existing_calendar else "生成日历"
+    queue_message = (
+        "30天日历生成任务已提交，AI 将结合最新复盘建议优化选题"
+        if has_performance_recap
+        else "30天日历生成任务已提交"
+    )
     await task_center_repo.upsert_task(
         db,
         task_key=task_key,
         task_type="planning_calendar",
-        title=f"重生成日历：{getattr(project, 'client_name', project_id)}",
+        title=f"{calendar_task_title}：{getattr(project, 'client_name', project_id)}",
         entity_type="planning_project",
         entity_id=project.id,
         status=TaskStatus.QUEUED.value,
         progress_step="queued",
-        message="日历重生成任务已提交，AI 将结合最新复盘建议优化选题" if has_performance_recap else "日历重生成任务已提交",
+        message=queue_message,
     )
     await db.commit()
 
@@ -1245,7 +1263,7 @@ async def regenerate_calendar(
             entity_type="planning_project",
             entity_id=project_id,
             actor=current_user.username,
-            detail="日历重生成任务入队失败，状态已回退",
+            detail="30天日历任务入队失败，状态已回退",
             extra={"error": str(exc)},
         )
         await task_center_repo.update_status(
@@ -1253,7 +1271,7 @@ async def regenerate_calendar(
             task_key,
             status=TaskStatus.FAILED.value,
             progress_step="enqueue_failed",
-            message="日历重生成任务入队失败",
+            message="30天日历任务入队失败",
             error_message=str(exc),
         )
         await db.commit()
@@ -1265,11 +1283,11 @@ async def regenerate_calendar(
         entity_type="planning_project",
         entity_id=project.id,
         actor=current_user.username,
-        detail="重新生成30天内容日历",
-        extra={"status": "in_progress", "has_performance_recap": has_performance_recap},
+        detail="生成30天内容日历" if not has_existing_calendar else "重新生成30天内容日历",
+        extra={"status": "calendar_generating", "has_performance_recap": has_performance_recap},
     )
 
-    return {"message": "已开始重新生成内容日历", "status": "in_progress"}
+    return {"message": "已开始生成30天内容日历", "status": "calendar_generating"}
 
 
 @router.delete("/{project_id}", summary="删除策划项目")
@@ -1866,7 +1884,7 @@ async def _generate_plan_background(
                 resolved_task_key,
                 status=TaskStatus.RUNNING.value,
                 progress_step="ai_generate",
-                message="AI 正在生成账号定位和内容日历",
+                message="AI 正在生成账号定位方案",
             )
             await db.commit()
             result = await ai_analysis_service.generate_account_plan(
@@ -1890,36 +1908,16 @@ async def _generate_plan_background(
                 logger.info(f"项目 {project_id} 在 AI 完成后被取消，不写入数据库")
                 return
 
-            # 解析内容日历 (如果 key 不全，get() 返回默认空值，需要防止后续出错)
             account_positioning = result.get("account_positioning", {})
             content_strategy = result.get("content_strategy", {})
-            raw_content_calendar = _normalize_content_calendar(result.get("content_calendar", []))
-            backup_topic_pool = _normalize_backup_topic_pool(result.get("backup_topic_pool", []))
-            generated_quality_notes = _safe_text(result.get("quality_notes"))
 
-            if not _has_meaningful_plan_result(account_positioning, content_strategy, raw_content_calendar):
-                logger.error("项目 %s AI 返回空策划结果，拒绝覆盖原有内容", project_id)
-                raise ValueError("AI 返回的策划结果为空，未覆盖原有内容")
-
-            draft_account_plan = {
-                "account_positioning": account_positioning,
-                "content_strategy": content_strategy,
-            }
-            content_calendar, backup_topic_pool, calendar_generation_meta, guardrail_quality_notes = await _apply_calendar_quality_guardrails(
-                raw_calendar=raw_content_calendar,
-                backup_pool=backup_topic_pool,
-                client_data=client_data,
-                account_plan=draft_account_plan,
-                project_id=project_id,
-                db=db,
-            )
+            if not _has_meaningful_strategy_result(account_positioning, content_strategy):
+                logger.error("项目 %s AI 返回空定位结果，拒绝覆盖原有内容", project_id)
+                raise ValueError("AI 返回的定位结果为空，未覆盖原有内容")
 
             account_plan = {
                 "account_positioning": account_positioning,
                 "content_strategy": content_strategy,
-                "backup_topic_pool": backup_topic_pool,
-                "calendar_generation_meta": calendar_generation_meta,
-                "quality_notes": "；".join(filter(None, [generated_quality_notes, guardrail_quality_notes])),
             }
 
             # 更新项目
@@ -1928,34 +1926,24 @@ async def _generate_plan_background(
                 resolved_task_key,
                 status=TaskStatus.RUNNING.value,
                 progress_step="persist",
-                message="正在写入策划结果",
+                message="正在写入账号定位结果",
             )
             await planning_repository.delete_content_items_by_project(db, project_id)
-            await planning_repository.update_plan_result(db, project_id, account_plan, content_calendar)
-
-            # 批量创建内容条目
-            for item_data in content_calendar:
-                await planning_repository.add_content_item(db, {
-                    "project_id": project_id,
-                    "day_number": item_data.get("day", 1),
-                    "title_direction": item_data.get("title_direction", ""),
-                    "content_type": _normalize_content_type(item_data.get("content_type")),
-                    "tags": item_data.get("tags", []),
-                })
+            await planning_repository.update_strategy_result(db, project_id, account_plan)
 
             await db.commit()
-            logger.info(f"项目 {project_id} 策划生成完成")
+            logger.info(f"项目 {project_id} 定位方案生成完成")
             await task_center_repo.update_status(
                 db,
                 resolved_task_key,
                 status=TaskStatus.COMPLETED.value,
                 progress_step="done",
-                message=f"策划生成完成，共 {len(content_calendar)} 条内容",
+                message="账号定位方案生成完成，可继续生成 30 天日历",
             )
             await db.commit()
 
         except Exception as e:
-            logger.error(f"项目 {project_id} 策划生成失败: {e}", exc_info=True)
+            logger.error(f"项目 {project_id} 定位生成失败: {e}", exc_info=True)
             project = await planning_repository.get_by_id(db, project_id)
             if project:
                 project.status = fallback_status or "draft"
@@ -1965,7 +1953,7 @@ async def _generate_plan_background(
                 resolved_task_key,
                 status=TaskStatus.FAILED.value,
                 progress_step="failed",
-                message="策划生成失败",
+                message="账号定位方案生成失败",
                 error_message=str(e),
             )
             await db.commit()
@@ -1983,16 +1971,17 @@ async def _generate_calendar_only_background(
     async with AsyncSessionLocal() as db:
         resolved_task_key = task_key or f"planning:{project_id}:calendar"
         project = await planning_repository.get_by_id(db, project_id)
+        has_existing_calendar = bool(project and (project.content_calendar or project.content_items))
         await task_center_repo.upsert_task(
             db,
             task_key=resolved_task_key,
             task_type="planning_calendar",
-            title=f"重生成日历：{project.client_name if project else project_id}",
+            title=f"{'重生成日历' if has_existing_calendar else '生成日历'}：{project.client_name if project else project_id}",
             entity_type="planning_project",
             entity_id=project_id,
             status=TaskStatus.RUNNING.value,
             progress_step="start",
-            message="开始重生成内容日历",
+            message="开始生成30天内容日历",
         )
         await db.commit()
         try:
@@ -2008,7 +1997,7 @@ async def _generate_calendar_only_background(
                 await db.commit()
                 return
 
-            logger.info(f"日历重构: 开始为项目 {project_id} 重新生成 30 天内容日历...")
+            logger.info(f"日历重构: 开始为项目 {project_id} 生成 30 天内容日历...")
             await task_center_repo.update_status(
                 db,
                 resolved_task_key,
@@ -2073,13 +2062,13 @@ async def _generate_calendar_only_background(
                 })
 
             await db.commit()
-            logger.info(f"日历重构: 项目 {project_id} 内容日历重新生成完成")
+            logger.info(f"日历重构: 项目 {project_id} 内容日历生成完成")
             await task_center_repo.update_status(
                 db,
                 resolved_task_key,
                 status=TaskStatus.COMPLETED.value,
                 progress_step="done",
-                message=f"日历重生成完成，共 {len(content_calendar)} 条内容",
+                message=f"30天日历生成完成，共 {len(content_calendar)} 条内容",
             )
             await db.commit()
 

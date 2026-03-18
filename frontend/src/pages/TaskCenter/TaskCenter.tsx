@@ -19,8 +19,8 @@ type TaskStatusFilter = '' | NonNullable<TaskCenterQueryParams['status']>;
 const TASK_TYPE_LABELS: Record<string, string> = {
   blogger_collect: '博主采集',
   blogger_viral_profile: '博主爆款归因',
-  planning_generate: '账号策划生成',
-  planning_calendar: '日历重生成',
+  planning_generate: '账号定位生成',
+  planning_calendar: '30天日历生成',
   script_extraction: '脚本拆解',
 };
 
@@ -30,6 +30,7 @@ const ACTION_LABELS: Record<string, string> = {
   'download.parse': '解析下载链接',
   'download.proxy': '代理下载视频',
   'planning.create': '新建策划项目',
+  'planning.generate_strategy': '生成账号定位方案',
   'planning.delete': '删除策划项目',
   'planning.enqueue_failed': '策划任务入队失败',
   'planning.generate_script': '生成单条脚本',
@@ -39,8 +40,8 @@ const ACTION_LABELS: Record<string, string> = {
   'planning.performance_recap.generate': '生成AI复盘',
   'planning.next_topic_batch.generate': '生成下一批选题',
   'planning.next_topic_batch.import': '导入选题到日历',
-  'planning.regenerate_calendar': '重生成 30 天日历',
-  'planning.retry': '重试策划生成',
+  'planning.regenerate_calendar': '生成 30 天日历',
+  'planning.retry': '重新生成账号定位方案',
   'planning.update': '更新策划信息',
   'planning.update_content_item': '更新日历条目',
   'planning.update_homepage': '更新账号主页链接',

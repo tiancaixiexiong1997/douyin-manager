@@ -124,7 +124,7 @@ async def test_generate_account_plan_includes_timeline_fields_from_viral_profile
     async def fake_call_ai(_system_prompt: str, user_prompt: str, scene_key: str | None = None) -> dict[str, Any]:
         assert scene_key == "account_plan"
         captured["user_prompt"] = user_prompt
-        return {"account_positioning": {}, "content_strategy": {}, "content_calendar": []}
+        return {"account_positioning": {}, "content_strategy": {}}
 
     async def fake_record_prompt_run(**_kwargs: Any) -> None:
         return None
@@ -287,7 +287,7 @@ def test_scene_result_validator_rejects_empty_account_plan() -> None:
 
     assert service._is_scene_result_acceptable(
         "account_plan",
-        {"account_positioning": {}, "content_strategy": {}, "content_calendar": []},
+        {"account_positioning": {}, "content_strategy": {}},
     ) is False
 
 
@@ -296,7 +296,7 @@ def test_scene_result_validator_accepts_nonempty_account_plan() -> None:
 
     assert service._is_scene_result_acceptable(
         "account_plan",
-        {"account_positioning": {"core_identity": "同城探店账号"}, "content_strategy": {}, "content_calendar": []},
+        {"account_positioning": {"core_identity": "同城探店账号"}, "content_strategy": {}},
     ) is True
 
 
@@ -309,8 +309,9 @@ def test_scene_result_validator_rejects_empty_calendar_gap_fill() -> None:
     ) is False
 
 
-def test_account_and_calendar_prompts_require_backup_pool_and_anti_self_indulgent_rules() -> None:
-    assert "backup_topic_pool" in ACCOUNT_PLAN_PROMPT_TEMPLATE
+def test_account_and_calendar_prompts_require_staged_output_and_anti_self_indulgent_rules() -> None:
+    assert "当前阶段只做账号定位和内容策略" in ACCOUNT_PLAN_PROMPT_TEMPLATE
+    assert "不要输出 30 天日历" in ACCOUNT_PLAN_PROMPT_TEMPLATE
     assert "backup_topic_pool" in CONTENT_CALENDAR_PROMPT_TEMPLATE
     assert "肉香盖过班味" in ACCOUNT_PLAN_PROMPT_TEMPLATE
     assert "全是笑声" in CONTENT_CALENDAR_PROMPT_TEMPLATE

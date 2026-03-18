@@ -55,10 +55,34 @@ const FAST_PROMPT_EXAMPLES = [
 ] as const;
 const STATUS_FILTER_OPTIONS = [
   { value: 'all', label: '全部状态' },
+  { value: 'draft', label: '草稿/待开始' },
+  { value: 'strategy_generating', label: '定位生成中' },
+  { value: 'strategy_completed', label: '定位已完成' },
+  { value: 'calendar_generating', label: '日历生成中' },
   { value: 'completed', label: '已完成' },
-  { value: 'in_progress', label: '生成中' },
-  { value: 'draft', label: '失败/草稿' },
 ];
+
+type ProjectStage = 'draft' | 'strategy_generating' | 'strategy_completed' | 'calendar_generating' | 'completed';
+
+function inferProjectStage(project: {
+  status: string;
+  account_plan?: {
+    account_positioning?: unknown;
+    content_strategy?: unknown;
+    calendar_generation_meta?: unknown;
+  } | null;
+}) {
+  const hasStrategy = Boolean(project.account_plan?.account_positioning || project.account_plan?.content_strategy);
+  const hasCalendar = Boolean(project.account_plan?.calendar_generation_meta);
+  if (project.status === 'strategy_generating') return 'strategy_generating';
+  if (project.status === 'strategy_completed') return 'strategy_completed';
+  if (project.status === 'calendar_generating') return 'calendar_generating';
+  if (project.status === 'completed') return 'completed';
+  if (project.status === 'in_progress') {
+    return hasStrategy && hasCalendar ? 'calendar_generating' : 'strategy_generating';
+  }
+  return hasStrategy ? (hasCalendar ? 'completed' : 'strategy_completed') : 'draft';
+}
 
 function mapRhythmTextToPreset(value: string): 'month10' | 'month12' | 'month15' {
   if (value.includes('15')) return 'month15';
@@ -76,6 +100,7 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
 }
 
 function CreatePlanModal({ onClose }: { onClose: () => void }) {
+  const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<CreatePlanningRequest>({
     client_name: '',
@@ -96,7 +121,7 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
   const [chatHistory, setChatHistory] = useState<PlanningIntakeChatMessage[]>([
     {
       role: 'assistant',
-      content: '先告诉我你现在的账号情况吧。我会一步步梳理，确认无误后再进入参考博主和最终生成。',
+      content: '先告诉我你现在的账号情况吧。我会一步步梳理，确认无误后再进入参考博主和项目创建。',
     },
   ]);
   const [missingFields, setMissingFields] = useState<string[]>([...REQUIRED_INTAKE_FIELDS]);
@@ -168,7 +193,11 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
   });
   const mutation = useMutation({
     mutationFn: planningApi.create,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['planning-projects'] }); onClose(); },
+    onSuccess: (project) => {
+      qc.invalidateQueries({ queryKey: ['planning-projects'] });
+      onClose();
+      navigate(`/planning/${project.id}`);
+    },
   });
 
   useEffect(() => {
@@ -212,7 +241,7 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
     () => ({
       1: { title: '互动问诊', desc: '边聊边梳理定位，先补齐关键字段' },
       2: { title: '对标参考', desc: '选参考博主与主页，统一对标口径' },
-      3: { title: '确认生成', desc: '确认发布策略后启动 AI 策划' },
+      3: { title: '确认创建', desc: '确认信息后创建项目草稿，进入详情页继续生成定位' },
     }),
     []
   );
@@ -284,7 +313,7 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
         <div className="plan-modal-guide">
           <div className="plan-modal-guide-item">
             <strong>本次会生成</strong>
-            <span>账号定位、30天内容日历、后续脚本方向</span>
+            <span>先创建策划项目，下一步进入详情页生成账号定位方案</span>
           </div>
           <div className="plan-modal-guide-item">
             <strong>当前重点</strong>
@@ -655,13 +684,13 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
               <div className="plan-result-preview">
                 <div className="plan-result-preview-title">这次会给你什么</div>
                 <div className="plan-result-preview-list">
-                  <div className="plan-result-preview-item">账号定位与核心人设</div>
-                  <div className="plan-result-preview-item">30 天内容日历与每日方向</div>
-                  <div className="plan-result-preview-item">后续单条脚本生成基础</div>
+                  <div className="plan-result-preview-item">先创建项目草稿并保存问诊信息</div>
+                  <div className="plan-result-preview-item">进入详情页后先生成账号定位方案</div>
+                  <div className="plan-result-preview-item">确认定位后再生成 30 天日历</div>
                 </div>
               </div>
               <div className="plan-confirm-note">
-                生成后将按“定位 → 30天日历 → 单条脚本”自动落地，你可以在详情页逐条编辑并复盘迭代。
+                创建完成后将进入详情页，按“定位 → 30天日历 → 单条脚本”分阶段落地。
               </div>
             </aside>
           </div>
@@ -690,8 +719,8 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
               onClick={() => mutation.mutate(buildPayload())}
             >
               {mutation.isPending ?
-                <><div className="spinner" style={{ width: 14, height: 14 }} /> AI 策划中...</> :
-                <><Sparkles size={14} /> 开始 AI 策划</>
+                <><div className="spinner" style={{ width: 14, height: 14 }} /> 创建中...</> :
+                <><Sparkles size={14} /> 创建项目并进入详情</>
               }
             </button>
           )}
@@ -707,7 +736,7 @@ export default function PlanWorkspace() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [jumpPageInput, setJumpPageInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'in_progress' | 'completed'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | ProjectStage>('all');
   const [deleteConfirmId, setDeleteConfirmId] = useState<{ id: string, name: string } | null>(null);
   const [retryConfirmId, setRetryConfirmId] = useState<{ id: string, name: string } | null>(null);
   const [homepageEditId, setHomepageEditId] = useState<{ id: string, name: string } | null>(null);
@@ -742,8 +771,11 @@ export default function PlanWorkspace() {
   const hasPrevPage = page > 1;
   const hasNextPage = page < totalPages;
 
-  const completedCount = projects.filter((p) => p.status === 'completed').length;
-  const generatingCount = projects.filter((p) => p.status === 'in_progress').length;
+  const completedCount = projects.filter((p) => inferProjectStage(p) === 'completed').length;
+  const generatingCount = projects.filter((p) => {
+    const stage = inferProjectStage(p);
+    return stage === 'strategy_generating' || stage === 'calendar_generating';
+  }).length;
   const completionRate = projects.length > 0 ? Math.round((completedCount / projects.length) * 100) : 0;
 
   const deleteMutation = useMutation({
@@ -758,6 +790,10 @@ export default function PlanWorkspace() {
 
   const retryMutation = useMutation({
     mutationFn: planningApi.retry,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['planning-projects'] }),
+  });
+  const generateStrategyMutation = useMutation({
+    mutationFn: planningApi.generateStrategy,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['planning-projects'] }),
   });
 
@@ -784,7 +820,7 @@ export default function PlanWorkspace() {
         <div>
           <div className="plan-hero-pill"><Sparkles size={13} /> Strategy Workspace</div>
           <h1>账号策划工作台</h1>
-          <p>定位输入 → 对标拆解 → 30天日历 → 单条脚本 → 复盘迭代，按同一套流程稳定起号。</p>
+          <p>先生成账号定位方案，再基于定位生成 30 天日历，降低超时和整批返工。</p>
         </div>
         <button className="btn btn-primary" onClick={() => setShowModal(true)}>
           <Plus size={16} /> 新建策划
@@ -809,22 +845,22 @@ export default function PlanWorkspace() {
         <div className="plan-workflow-item">
           <span className="plan-workflow-index">3</span>
           <div>
-            <div className="plan-workflow-title">日历排布</div>
-            <div className="plan-workflow-desc">默认每月10条（约3天1条）</div>
+            <div className="plan-workflow-title">定位生成</div>
+            <div className="plan-workflow-desc">先产出定位、人设、内容支柱和表达策略</div>
           </div>
         </div>
         <div className="plan-workflow-item">
           <span className="plan-workflow-index">4</span>
           <div>
-            <div className="plan-workflow-title">脚本生成</div>
-            <div className="plan-workflow-desc">发布前48小时生成并做人设化改写</div>
+            <div className="plan-workflow-title">日历排布</div>
+            <div className="plan-workflow-desc">确认定位后，再生成 30 天内容日历</div>
           </div>
         </div>
         <div className="plan-workflow-item">
           <span className="plan-workflow-index">5</span>
           <div>
-            <div className="plan-workflow-title">复盘迭代</div>
-            <div className="plan-workflow-desc">每周只调整1-2个变量</div>
+            <div className="plan-workflow-title">脚本与迭代</div>
+            <div className="plan-workflow-desc">脚本生成、回流复盘、每周只调1-2个变量</div>
           </div>
         </div>
       </section>
@@ -882,7 +918,7 @@ export default function PlanWorkspace() {
             value={statusFilter}
             options={STATUS_FILTER_OPTIONS}
             onChange={(value) => {
-              setStatusFilter(value as 'all' | 'draft' | 'in_progress' | 'completed');
+              setStatusFilter(value as 'all' | ProjectStage);
               setPage(1);
             }}
           />
@@ -906,7 +942,7 @@ export default function PlanWorkspace() {
               <>
                 <div className="empty-icon"><Sparkles size={28} /></div>
                 <div className="empty-title">还没有策划项目</div>
-                <div className="empty-desc">填写客户信息和 IP 需求，AI 将为你生成完整的账号定位和内容日历</div>
+                <div className="empty-desc">先创建项目草稿，再分两步生成账号定位和 30 天内容日历。</div>
                 <button className="btn btn-primary plan-empty-btn" onClick={() => setShowModal(true)}>
                   <Plus size={15} /> 创建第一个策划
                 </button>
@@ -917,6 +953,7 @@ export default function PlanWorkspace() {
       ) : (
         <div className="projects-grid">
           {projects.map(project => {
+            const stage = inferProjectStage(project);
             const referenceNames = (project.reference_blogger_ids || [])
               .map((bloggerId) => bloggerNameMap.get(bloggerId))
               .filter((name): name is string => Boolean(name));
@@ -949,11 +986,14 @@ export default function PlanWorkspace() {
                     <div className="project-card-meta-row">
                       <span className="badge badge-purple project-card-industry-badge">{project.industry}</span>
                       <span className={`badge project-card-status-inline ${
-                        project.status === 'completed' ? 'badge-green' :
-                        project.status === 'in_progress' ? 'badge-yellow' : 'badge-purple'
+                        stage === 'completed' ? 'badge-green' :
+                        stage === 'strategy_completed' ? 'badge-blue' :
+                        stage === 'draft' ? 'badge-purple' : 'badge-yellow'
                       }`}>
-                        {project.status === 'completed' ? <><CheckCircle size={10} /> 已完成</> :
-                         project.status === 'in_progress' ? <><Clock size={10} /> 生成中...</> : '失败/草稿'}
+                        {stage === 'completed' ? <><CheckCircle size={10} /> 已完成</> :
+                         stage === 'strategy_completed' ? '定位已完成' :
+                         stage === 'strategy_generating' ? <><Clock size={10} /> 定位生成中...</> :
+                         stage === 'calendar_generating' ? <><Clock size={10} /> 日历生成中...</> : '草稿'}
                       </span>
                     </div>
                     <div className="project-card-sig">
@@ -1020,22 +1060,29 @@ export default function PlanWorkspace() {
 
                   {/* 右侧：状态 + 操作按钮 */}
                   <div className="project-card-actions">
-                    {project.status !== 'in_progress' && (
+                    {stage !== 'strategy_generating' && stage !== 'calendar_generating' && (
                       <button
                         className="btn btn-icon project-card-action-btn project-card-action-refresh"
-                        title="重新生成"
+                        title={project.account_plan ? '重新生成定位方案' : '生成定位方案'}
                         onClick={e => {
                           e.preventDefault();
                           e.stopPropagation();
-                          setRetryConfirmId({ id: project.id, name: project.client_name });
+                          if (project.account_plan) {
+                            setRetryConfirmId({ id: project.id, name: project.client_name });
+                          } else {
+                            generateStrategyMutation.mutate(project.id, {
+                              onError: (err) => notifyError('生成定位失败：' + err.message),
+                            });
+                          }
                         }}
+                        disabled={generateStrategyMutation.isPending}
                       >
                         <RefreshCw size={14} />
                       </button>
                     )}
                     <button
                       className="btn btn-icon project-card-action-btn project-card-action-delete"
-                      title={project.status === 'in_progress' ? '停止生成并删除' : '删除项目'}
+                      title={stage === 'strategy_generating' || stage === 'calendar_generating' ? '停止生成并删除' : '删除项目'}
                       onClick={e => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -1125,7 +1172,7 @@ export default function PlanWorkspace() {
         <div className="modal-overlay" onClick={() => !retryMutation.isPending && setRetryConfirmId(null)}>
           <div className="modal animate-scale-in" style={{ width: 400 }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="modal-title">重新生成策划</h2>
+              <h2 className="modal-title">重新生成定位方案</h2>
               <button 
                 className="btn btn-icon btn-ghost" 
                 onClick={() => setRetryConfirmId(null)}
@@ -1135,7 +1182,7 @@ export default function PlanWorkspace() {
               </button>
             </div>
             <div className="p-4" style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              确定要重新生成项目 <strong>【{retryConfirmId.name}】</strong> 的策划方案吗？原有数据将会被覆盖更新。
+              确定要重新生成项目 <strong>【{retryConfirmId.name}】</strong> 的账号定位方案吗？已有定位会被覆盖，后续 30 天日历需要基于新定位重新生成。
             </div>
             <div className="modal-footer" style={{ marginTop: 8 }}>
               <button 
@@ -1155,7 +1202,7 @@ export default function PlanWorkspace() {
                 }}
                 disabled={retryMutation.isPending}
               >
-                {retryMutation.isPending ? '生成中...' : '确认生成'}
+                {retryMutation.isPending ? '生成中...' : '确认生成定位'}
               </button>
             </div>
           </div>

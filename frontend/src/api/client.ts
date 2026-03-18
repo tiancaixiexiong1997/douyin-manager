@@ -354,7 +354,7 @@ export interface BloggerListQueryParams extends ListQueryParams {
 
 export interface PlanningListQueryParams extends ListQueryParams {
   keyword?: string;
-  status?: 'draft' | 'in_progress' | 'completed';
+  status?: 'draft' | 'strategy_generating' | 'strategy_completed' | 'calendar_generating' | 'completed' | 'in_progress';
 }
 
 export const bloggerApi = {
@@ -433,7 +433,7 @@ export interface PlanningProject {
   account_video_count?: number;
   account_plan?: AccountPlan;
   content_calendar?: ContentCalendarItem[];
-  status: 'draft' | 'in_progress' | 'completed';
+  status: 'draft' | 'strategy_generating' | 'strategy_completed' | 'calendar_generating' | 'completed' | 'in_progress';
   content_items?: ContentItem[];
   created_at: string;
   updated_at: string;
@@ -703,6 +703,10 @@ export const planningApi = {
   /** 创建策划项目 */
   create: (data: CreatePlanningRequest): Promise<PlanningProject> =>
     api.post('/planning', data),
+
+  /** 生成账号定位方案 */
+  generateStrategy: (id: string): Promise<{ message: string; status: string }> =>
+    api.post(`/planning/${id}/generate-strategy`),
 
   /** 获取项目列表 */
   list: (params?: PlanningListQueryParams): Promise<PlanningProject[]> =>

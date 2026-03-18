@@ -11,6 +11,27 @@ import './ProjectDetail.css';
 type ScriptTaskStatus = TaskCenterItem['status'] | null;
 type CalendarDisplayItem = ContentItem & { calendarMeta?: ContentCalendarItem | null };
 const BATCH_GROUP_FILTER_PREFIX = 'batch_group:';
+type ProjectStage = 'draft' | 'strategy_generating' | 'strategy_completed' | 'calendar_generating' | 'completed';
+
+function inferProjectStage(project: {
+  status: string;
+  account_plan?: {
+    account_positioning?: unknown;
+    content_strategy?: unknown;
+    calendar_generation_meta?: unknown;
+  } | null;
+}): ProjectStage {
+  const hasStrategy = Boolean(project.account_plan?.account_positioning || project.account_plan?.content_strategy);
+  const hasCalendar = Boolean(project.account_plan?.calendar_generation_meta);
+  if (project.status === 'strategy_generating') return 'strategy_generating';
+  if (project.status === 'strategy_completed') return 'strategy_completed';
+  if (project.status === 'calendar_generating') return 'calendar_generating';
+  if (project.status === 'completed') return 'completed';
+  if (project.status === 'in_progress') {
+    return hasStrategy && hasCalendar ? 'calendar_generating' : 'strategy_generating';
+  }
+  return hasStrategy ? (hasCalendar ? 'completed' : 'strategy_completed') : 'draft';
+}
 
 function normalizeCalendarContentType(value?: string | null): string {
   const raw = String(value || '').trim();
@@ -873,6 +894,13 @@ export default function ProjectDetail() {
   const [editingPerformance, setEditingPerformance] = useState<ContentPerformance | null>(null);
   const [calendarFilter, setCalendarFilter] = useState<string>('all');
 
+  const generateStrategyMutation = useMutation({
+    mutationFn: () => planningApi.generateStrategy(id!),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['project', id] });
+    },
+  });
+
   const regenerateCalendarMutation = useMutation({
     mutationFn: () => planningApi.regenerateCalendar(id!),
     onSuccess: () => {
@@ -984,8 +1012,11 @@ export default function ProjectDetail() {
   }
 
   const plan = project.account_plan;
+  const currentStage = inferProjectStage(project);
   const positioning = plan?.account_positioning;
   const strategy = plan?.content_strategy;
+  const hasStrategy = Boolean(positioning || strategy);
+  const hasCalendar = Boolean((project.content_calendar || []).length > 0 || (project.content_items || []).length > 0);
   const performanceRecap = plan?.performance_recap;
   const nextTopicBatch = plan?.next_topic_batch;
   const contentItemMap = new Map((project.content_items || []).map((item) => [item.id, item]));
@@ -1041,11 +1072,15 @@ export default function ProjectDetail() {
         <Link to="/planning" className="btn btn-ghost btn-sm">
           <ArrowLeft size={14} /> 返回列表
         </Link>
-        <span className={`badge ${project.status === 'completed' ? 'badge-green' :
-            project.status === 'in_progress' ? 'badge-yellow' : 'badge-purple'
-          }`}>
-          {project.status === 'completed' ? '已完成' :
-            project.status === 'in_progress' ? 'AI 生成中...' : '草稿'}
+        <span className={`badge ${
+          currentStage === 'completed' ? 'badge-green' :
+          currentStage === 'strategy_completed' ? 'badge-blue' :
+          currentStage === 'strategy_generating' || currentStage === 'calendar_generating' ? 'badge-yellow' : 'badge-purple'
+        }`}>
+          {currentStage === 'completed' ? '已完成' :
+            currentStage === 'strategy_completed' ? '定位已完成' :
+            currentStage === 'strategy_generating' ? '定位生成中...' :
+            currentStage === 'calendar_generating' ? '日历生成中...' : '草稿'}
         </span>
       </div>
 
@@ -1071,21 +1106,45 @@ export default function ProjectDetail() {
             </div>
           )}
         </div>
-        <button className="btn btn-ghost btn-sm" onClick={() => setShowEditProject(true)}>
-          <Pencil size={13} /> 编辑信息
-        </button>
+        <div className="flex items-center gap-2">
+          {currentStage === 'draft' && (
+            <button className="btn btn-primary btn-sm" onClick={() => generateStrategyMutation.mutate()} disabled={generateStrategyMutation.isPending}>
+              <Sparkles size={13} /> {generateStrategyMutation.isPending ? '生成中...' : '生成账号定位方案'}
+            </button>
+          )}
+          {(currentStage === 'strategy_completed' || (hasStrategy && !hasCalendar && currentStage !== 'calendar_generating')) && (
+            <button className="btn btn-primary btn-sm" onClick={() => regenerateCalendarMutation.mutate()} disabled={regenerateCalendarMutation.isPending}>
+              <Calendar size={13} /> {regenerateCalendarMutation.isPending ? '生成中...' : '生成30天日历'}
+            </button>
+          )}
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowEditProject(true)}>
+            <Pencil size={13} /> 编辑信息
+          </button>
+        </div>
       </div>
 
-      {project.status === 'in_progress' && !project.account_plan && (
+      {currentStage === 'strategy_generating' && (
         <div className="generating-tip">
           <Loader2 size={16} className="spin-icon" />
-          AI 正在生成账号策划方案，请稍等...（通常需要 1-3 分钟，页面会自动刷新）
+          AI 正在生成账号定位方案，请稍等...（页面会自动刷新）
         </div>
       )}
-      {project.status === 'in_progress' && project.account_plan && (
+      {currentStage === 'calendar_generating' && (
         <div className="generating-tip generating-tip-info">
           <Loader2 size={16} className="spin-icon" />
-          AI 正在重新生成 30 天内容日历方案，请稍等...（期间您可以继续浏览和编辑上方账号策略）
+          AI 正在生成 30 天内容日历方案，请稍等...（期间您可以继续浏览和编辑上方账号策略）
+        </div>
+      )}
+
+      {!hasStrategy && currentStage === 'draft' && (
+        <div className="card detail-section">
+          <div className="empty-state" style={{ padding: '24px 16px' }}>
+            <div className="empty-title">先生成账号定位方案</div>
+            <div className="empty-desc">先确认核心定位、人设标签、内容支柱和表达策略，再进入 30 天日历生成，能明显降低超时和整批返工。</div>
+            <button className="btn btn-primary" onClick={() => generateStrategyMutation.mutate()} disabled={generateStrategyMutation.isPending}>
+              <Sparkles size={14} /> {generateStrategyMutation.isPending ? '生成中...' : '开始生成账号定位方案'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -1124,6 +1183,11 @@ export default function ProjectDetail() {
           >
             <h2 className="section-title detail-section-title">账号定位方案</h2>
             <div className="flex items-center gap-2 detail-section-actions" onClick={e => e.stopPropagation()}>
+              {currentStage !== 'strategy_generating' && currentStage !== 'calendar_generating' && (
+                <button className="btn btn-ghost btn-sm" onClick={() => generateStrategyMutation.mutate()} disabled={generateStrategyMutation.isPending}>
+                  <RefreshCw size={13} /> {generateStrategyMutation.isPending ? '生成中...' : '重新生成定位'}
+                </button>
+              )}
               <button className="btn btn-ghost btn-sm" onClick={() => setShowEditPlan(true)}>
                 <Pencil size={13} /> 编辑
               </button>
@@ -1204,7 +1268,7 @@ export default function ProjectDetail() {
       )}
 
       {/* 30天内容日历 */}
-      {((project.content_items && project.content_items.length > 0) || (project.status === 'in_progress' && project.account_plan)) && (
+      {(hasStrategy && (hasCalendar || currentStage === 'calendar_generating')) && (
         <div className="detail-calendar-wrap">
           <div className="detail-calendar-head">
             <div className="detail-calendar-title-wrap">
@@ -1217,7 +1281,7 @@ export default function ProjectDetail() {
                 <span className="badge badge-blue">{filteredCalendarItems.length} 条已筛选</span>
               )}
             </div>
-            {project.status !== 'in_progress' && (
+            {currentStage !== 'strategy_generating' && currentStage !== 'calendar_generating' && hasCalendar && (
               <button
                 className="btn btn-ghost btn-sm"
                 onClick={() => setShowRegenerateConfirm(true)}
@@ -1227,7 +1291,7 @@ export default function ProjectDetail() {
             )}
           </div>
 
-          {project.status === 'in_progress' && (!project.content_items || project.content_items.length === 0) ? (
+          {currentStage === 'calendar_generating' && !hasCalendar ? (
             <div className="card detail-calendar-empty">
               <Loader2 size={32} className="spin-icon detail-calendar-empty-icon" />
               <div className="detail-calendar-empty-text">正在为您深度规划每天的内容方向与形式...</div>

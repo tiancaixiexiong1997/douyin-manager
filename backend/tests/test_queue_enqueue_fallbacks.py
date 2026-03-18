@@ -70,13 +70,27 @@ async def test_script_create_marks_failed_when_enqueue_fails(
 
 
 @pytest.mark.asyncio
-async def test_planning_create_rolls_back_status_when_enqueue_fails(
+async def test_generate_strategy_rolls_back_status_when_enqueue_fails(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    project = SimpleNamespace(id="proj-1", status="in_progress")
+    project = SimpleNamespace(
+        id="proj-1",
+        status="draft",
+        client_name="client",
+        industry="餐饮",
+        target_audience="年轻用户",
+        unique_advantage="",
+        ip_requirements="真实",
+        style_preference="",
+        business_goal="",
+        reference_blogger_ids=[],
+    )
 
-    async def fake_create(_db: object, _data: dict) -> SimpleNamespace:
+    async def fake_get_by_id(_db: object, _project_id: str) -> SimpleNamespace:
         return project
+
+    async def fake_upsert_task(*_args, **_kwargs) -> None:
+        return None
 
     async def fake_log(*_args, **_kwargs) -> None:
         return None
@@ -84,20 +98,13 @@ async def test_planning_create_rolls_back_status_when_enqueue_fails(
     def fake_enqueue(*_args, **_kwargs) -> None:
         raise RuntimeError("queue unavailable")
 
-    monkeypatch.setattr(planning_endpoint.planning_repository, "create", fake_create)
+    monkeypatch.setattr(planning_endpoint.planning_repository, "get_by_id", fake_get_by_id)
+    monkeypatch.setattr(planning_endpoint.task_center_repo, "upsert_task", fake_upsert_task)
+    monkeypatch.setattr(planning_endpoint.task_center_repo, "update_status", fake_upsert_task)
     monkeypatch.setattr(planning_endpoint.operation_log_repo, "create", fake_log)
     monkeypatch.setattr(planning_endpoint, "enqueue_task", fake_enqueue)
 
-    response = await client.post(
-        "/api/planning",
-        json={
-            "client_name": "client",
-            "industry": "餐饮",
-            "target_audience": "年轻用户",
-            "ip_requirements": "真实",
-            "reference_blogger_ids": [],
-        },
-    )
+    response = await client.post("/api/planning/proj-1/generate-strategy")
 
     assert response.status_code == 503
     assert project.status == "draft"

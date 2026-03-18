@@ -24,6 +24,26 @@ function formatDateLabel(value?: string | null): string {
   return formatBackendDate(value, { month: '2-digit', day: '2-digit' }, '--');
 }
 
+function inferProjectStage(project: {
+  status: string;
+  account_plan?: {
+    account_positioning?: unknown;
+    content_strategy?: unknown;
+    calendar_generation_meta?: unknown;
+  } | null;
+}): 'draft' | 'strategy_generating' | 'strategy_completed' | 'calendar_generating' | 'completed' {
+  const hasStrategy = Boolean(project.account_plan?.account_positioning || project.account_plan?.content_strategy);
+  const hasCalendar = Boolean(project.account_plan?.calendar_generation_meta);
+  if (project.status === 'strategy_generating') return 'strategy_generating';
+  if (project.status === 'strategy_completed') return 'strategy_completed';
+  if (project.status === 'calendar_generating') return 'calendar_generating';
+  if (project.status === 'completed') return 'completed';
+  if (project.status === 'in_progress') {
+    return hasStrategy && hasCalendar ? 'calendar_generating' : 'strategy_generating';
+  }
+  return hasStrategy ? (hasCalendar ? 'completed' : 'strategy_completed') : 'draft';
+}
+
 export default function Dashboard() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -64,7 +84,7 @@ export default function Dashboard() {
     refetchInterval: 5000,
   });
 
-  const completedProjects = projects.filter(p => p.status === 'completed');
+  const completedProjects = projects.filter((p) => inferProjectStage(p) === 'completed');
   const runningTasks = taskCenter?.summary?.running ?? 0;
   const queuedTasks = taskCenter?.summary?.queued ?? 0;
   const analyzedBloggers = bloggers.filter(b => b.is_analyzed);
@@ -122,7 +142,15 @@ export default function Dashboard() {
     ...sortedProjects.slice(0, 3).map((p) => ({
       id: `project-${p.id}`,
       title: `项目「${p.client_name}」状态更新`,
-      desc: p.status === 'completed' ? '策划已完成，可进入详情复查' : p.status === 'in_progress' ? 'AI 正在生成中' : '项目处于草稿阶段',
+      desc: inferProjectStage(p) === 'completed'
+        ? '30 天日历已完成，可进入详情复查'
+        : inferProjectStage(p) === 'strategy_completed'
+          ? '定位已完成，等待生成 30 天日历'
+          : inferProjectStage(p) === 'strategy_generating'
+            ? 'AI 正在生成账号定位方案'
+            : inferProjectStage(p) === 'calendar_generating'
+              ? 'AI 正在生成 30 天日历'
+              : '项目处于草稿阶段',
       time: p.updated_at,
       link: `/planning/${p.id}`,
       type: 'project',
@@ -225,7 +253,9 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="dash-list">
-              {sortedProjects.slice(0, 5).map((p) => (
+              {sortedProjects.slice(0, 5).map((p) => {
+                const stage = inferProjectStage(p);
+                return (
                 <Link to={`/planning/${p.id}`} key={p.id} className="dash-project-item">
                   <div className="dash-project-left">
                     <div className="dash-project-avatar">
@@ -245,16 +275,19 @@ export default function Dashboard() {
                   </div>
                   <div className="dash-project-right">
                     <span className={`badge ${
-                      p.status === 'completed' ? 'badge-green' :
-                      p.status === 'in_progress' ? 'badge-yellow' : 'badge-purple'
+                      stage === 'completed' ? 'badge-green' :
+                      stage === 'strategy_completed' ? 'badge-blue' :
+                      stage === 'strategy_generating' || stage === 'calendar_generating' ? 'badge-yellow' : 'badge-purple'
                     }`}>
-                      {p.status === 'completed' ? '已完成' :
-                       p.status === 'in_progress' ? '生成中' : '草稿'}
+                      {stage === 'completed' ? '已完成' :
+                       stage === 'strategy_completed' ? '定位已完成' :
+                       stage === 'strategy_generating' ? '定位生成中' :
+                       stage === 'calendar_generating' ? '日历生成中' : '草稿'}
                     </span>
                     <ArrowRight size={14} />
                   </div>
                 </Link>
-              ))}
+              )})}
             </div>
           )}
         </div>

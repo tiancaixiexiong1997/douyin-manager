@@ -30,7 +30,9 @@ class AnalysisMode(str, enum.Enum):
 class PlanStatus(str, enum.Enum):
     """策划状态"""
     DRAFT = "draft"
-    IN_PROGRESS = "in_progress"
+    STRATEGY_GENERATING = "strategy_generating"
+    STRATEGY_COMPLETED = "strategy_completed"
+    CALENDAR_GENERATING = "calendar_generating"
     COMPLETED = "completed"
 
 
