@@ -7,7 +7,9 @@ import {
   type AddBloggerRequest,
   type ReanalyzeBloggerRequest,
   type BloggerAnalysisReport,
+  type BloggerProgress,
   type BloggerViralProfile,
+  type PagedListResponse,
   type VideoAnalysis,
 } from '../../api/client';
 import { CustomSelect } from '../../components/CustomSelect';
@@ -23,6 +25,34 @@ const PLATFORM_FILTER_OPTIONS = [
   { value: 'all', label: '全部平台' },
   ...PLATFORM_OPTIONS.map((platform) => ({ value: platform, label: platform })),
 ];
+const TERMINAL_PROGRESS_STEPS = new Set(['idle', 'done', 'failed']);
+
+function isActiveProgressStep(step?: string): boolean {
+  return Boolean(step) && !TERMINAL_PROGRESS_STEPS.has(String(step));
+}
+
+function markBloggerAsAnalyzing(
+  data: PagedListResponse<Blogger> | Blogger[] | undefined,
+  bloggerId: string,
+): PagedListResponse<Blogger> | Blogger[] | undefined {
+  if (!data) return data;
+  if (Array.isArray(data)) {
+    return data.map((item) => (
+      item.id === bloggerId
+        ? { ...item, is_analyzed: false }
+        : item
+    ));
+  }
+  if (!Array.isArray(data.items)) return data;
+  return {
+    ...data,
+    items: data.items.map((item) => (
+      item.id === bloggerId
+        ? { ...item, is_analyzed: false }
+        : item
+    )),
+  };
+}
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -1069,16 +1099,22 @@ function BloggerCard({ blogger, onDelete, onReanalyze, selected, onSelect }: {
   onSelect?: (id: string, checked: boolean) => void;
 }) {
   const [showDetail, setShowDetail] = useState(false);
+  const qc = useQueryClient();
+  const cachedProgress = qc.getQueryData<BloggerProgress>(['blogger-progress', blogger.id]);
+  const shouldTrackProgress = !blogger.is_analyzed || isActiveProgressStep(cachedProgress?.step);
 
-  // NOTE: 当博主未完成分析时轮询进度（每 3 秒），完成后自动停止
+  // NOTE: 未完成分析或刚触发重采集时轮询进度（每 3 秒），终态后自动停止。
   const { data: progress } = useQuery({
     queryKey: ['blogger-progress', blogger.id],
     queryFn: () => bloggerApi.getProgress(blogger.id),
-    enabled: !blogger.is_analyzed,
-    refetchInterval: !blogger.is_analyzed ? 3000 : false,
+    enabled: shouldTrackProgress,
+    refetchInterval: (query) => {
+      const step = (query.state.data as BloggerProgress | undefined)?.step ?? cachedProgress?.step;
+      if (isActiveProgressStep(step)) return 3000;
+      return !blogger.is_analyzed ? 3000 : false;
+    },
   });
-
-
+  const shouldShowProgress = Boolean(progress && progress.step !== 'done' && progress.step !== 'idle');
 
   // 进度步骤文字颜色映射
   const progressColorMap: Record<string, string> = {
@@ -1097,6 +1133,7 @@ function BloggerCard({ blogger, onDelete, onReanalyze, selected, onSelect }: {
   const progressColor = progress ? (progressColorMap[progress.step] || 'var(--text-muted)') : undefined;
   const isProgressFailed = progress?.step === 'failed';
   const isProgressDone = progress?.step === 'done';
+  const progressMessage = progress?.message || '任务执行中...';
   const progressIcon = isProgressFailed ? (
     <X size={10} style={{ marginRight: 3 }} />
   ) : isProgressDone ? (
@@ -1130,18 +1167,18 @@ function BloggerCard({ blogger, onDelete, onReanalyze, selected, onSelect }: {
         <div className="blogger-card-info">
           <div className="flex items-center gap-2">
             <h3 className="blogger-card-name">{blogger.nickname}</h3>
-            {blogger.is_analyzed ? (
-              <span className="badge badge-green" style={{ fontSize: 11 }}>
-                <CheckCircle size={10} style={{ marginRight: 3 }} />已分析
-              </span>
-            ) : progress && progress.step !== 'idle' ? (
+            {shouldShowProgress ? (
               <span
                 className="badge badge-progress"
                 style={{ fontSize: 11, color: progressColor, background: `${progressColor}18`, borderColor: `${progressColor}40` }}
-                title={progress.message}
+                title={progressMessage}
               >
                 {progressIcon}
-                {progress.message}
+                {progressMessage}
+              </span>
+            ) : blogger.is_analyzed ? (
+              <span className="badge badge-green" style={{ fontSize: 11 }}>
+                <CheckCircle size={10} style={{ marginRight: 3 }} />已分析
               </span>
             ) : (
               <span className="badge badge-yellow" style={{ fontSize: 11 }}>
@@ -1309,9 +1346,18 @@ export default function BloggerLibrary() {
 
   const reanalyzeMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data?: ReanalyzeBloggerRequest }) => bloggerApi.reanalyze(id, data),
-    onSuccess: () => {
+    onSuccess: (_result, variables) => {
+      qc.setQueryData<BloggerProgress>(['blogger-progress', variables.id], {
+        step: 'queued',
+        message: '重采集任务已提交',
+      });
+      qc.setQueriesData(
+        { queryKey: ['bloggers'] },
+        (oldData: PagedListResponse<Blogger> | Blogger[] | undefined) => markBloggerAsAnalyzing(oldData, variables.id),
+      );
       qc.invalidateQueries({ queryKey: ['bloggers'] });
-      qc.invalidateQueries({ queryKey: ['blogger-progress'] });
+      qc.invalidateQueries({ queryKey: ['blogger-progress', variables.id] });
+      qc.invalidateQueries({ queryKey: ['blogger-detail', variables.id] });
       setReanalyzeTarget(null);
     },
   });

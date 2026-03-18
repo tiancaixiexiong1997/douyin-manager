@@ -1,4 +1,5 @@
 from collections.abc import AsyncGenerator
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -15,7 +16,11 @@ import app.api.endpoints.planning as planning_endpoint
 @pytest.fixture
 async def client() -> AsyncGenerator[AsyncClient, None]:
     class DummyDB:
-        pass
+        async def commit(self) -> None:
+            return None
+
+        async def refresh(self, _obj: Any) -> None:
+            return None
 
     async def override_get_db() -> AsyncGenerator[Any, None]:
         yield DummyDB()
@@ -275,3 +280,62 @@ async def test_planning_list_with_filters_forwards_query_to_repo(client: AsyncCl
         "keyword": "教育",
         "status": "completed",
     }
+
+
+@pytest.mark.asyncio
+async def test_reanalyze_sets_queued_progress_immediately(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    blogger = SimpleNamespace(
+        id="blogger-1",
+        platform="douyin",
+        blogger_id="sec_123",
+        nickname="测试博主",
+        video_count=12,
+        representative_video_url=None,
+        is_analyzed=True,
+        analysis_report={"summary": "old"},
+        avatar_url=None,
+        signature=None,
+        follower_count=0,
+        following_count=0,
+        total_like_count=0,
+    )
+    captured: dict[str, Any] = {}
+
+    async def fake_get_by_id(_db: Any, blogger_id: str) -> Any:
+        assert blogger_id == "blogger-1"
+        return blogger
+
+    async def fake_reset_analysis(_db: Any, blogger_id: str) -> None:
+        captured["reset_analysis_id"] = blogger_id
+
+    async def fake_upsert_task(_db: Any, **kwargs: Any) -> None:
+        captured["task"] = kwargs
+
+    def fake_set_progress(task_id: str, step: str, message: str | None = None) -> None:
+        captured["progress"] = {
+            "task_id": task_id,
+            "step": step,
+            "message": message,
+        }
+
+    def fake_enqueue_task(*args: Any, **kwargs: Any) -> None:
+        captured["enqueue"] = {"args": args, "kwargs": kwargs}
+
+    monkeypatch.setattr(blogger_endpoint.blogger_repository, "get_by_id", fake_get_by_id)
+    monkeypatch.setattr(blogger_endpoint.blogger_repository, "reset_analysis", fake_reset_analysis)
+    monkeypatch.setattr(blogger_endpoint.task_center_repo, "upsert_task", fake_upsert_task)
+    monkeypatch.setattr(blogger_endpoint.progress_registry, "set", fake_set_progress)
+    monkeypatch.setattr(blogger_endpoint, "enqueue_task", fake_enqueue_task)
+
+    response = await client.post("/api/bloggers/blogger-1/reanalyze")
+    assert response.status_code == 200
+    assert response.json()["message"] == "已开始重新采集，请稍后查看进度"
+    assert captured["reset_analysis_id"] == "blogger-1"
+    assert captured["task"]["status"] == "queued"
+    assert captured["task"]["progress_step"] == "queued"
+    assert captured["progress"] == {
+        "task_id": "blogger-1",
+        "step": "queued",
+        "message": "重采集任务已提交",
+    }
+    assert captured["enqueue"]["kwargs"]["job_id"] == "blogger:blogger-1:reanalyze"

@@ -511,6 +511,7 @@ async def reanalyze_blogger(
         progress_step="queued",
         message="重采集任务已提交",
     )
+    progress_registry.set(blogger_id, "queued", "重采集任务已提交")
     await db.commit()
 
     try:
