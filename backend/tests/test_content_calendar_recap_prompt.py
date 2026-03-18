@@ -20,7 +20,8 @@ async def test_generate_content_calendar_includes_performance_recap_context(monk
             {},
         )
 
-    async def fake_call_ai(_system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    async def fake_call_ai(_system_prompt: str, user_prompt: str, scene_key: str | None = None) -> dict[str, Any]:
+        assert scene_key == "content_calendar"
         captured["user_prompt"] = user_prompt
         return {"content_calendar": []}
 
@@ -66,7 +67,8 @@ async def test_generate_content_calendar_handles_missing_performance_recap(monke
     async def fake_resolve_prompt(**_kwargs: Any) -> tuple[str, dict[str, Any]]:
         return ("复盘:{performance_recap_summary}", {})
 
-    async def fake_call_ai(_system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    async def fake_call_ai(_system_prompt: str, user_prompt: str, scene_key: str | None = None) -> dict[str, Any]:
+        assert scene_key == "content_calendar"
         captured["user_prompt"] = user_prompt
         return {"content_calendar": []}
 

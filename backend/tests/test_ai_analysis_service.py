@@ -76,7 +76,8 @@ async def test_generate_blogger_viral_profile_sorts_videos_by_published_at(monke
     async def fake_resolve_prompt(**_kwargs: Any) -> tuple[str, dict[str, Any]]:
         return ("数据:{text_data_json}", {})
 
-    async def fake_call_ai(_system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    async def fake_call_ai(_system_prompt: str, user_prompt: str, scene_key: str | None = None) -> dict[str, Any]:
+        assert scene_key == "blogger_viral_profile"
         captured["user_prompt"] = user_prompt
         return {"timeline_entries": []}
 
@@ -115,7 +116,8 @@ async def test_generate_account_plan_includes_timeline_fields_from_viral_profile
     async def fake_resolve_prompt(**_kwargs: Any) -> tuple[str, dict[str, Any]]:
         return ("参考:{bloggers_text}", {})
 
-    async def fake_call_ai(_system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    async def fake_call_ai(_system_prompt: str, user_prompt: str, scene_key: str | None = None) -> dict[str, Any]:
+        assert scene_key == "account_plan"
         captured["user_prompt"] = user_prompt
         return {"account_positioning": {}, "content_strategy": {}, "content_calendar": []}
 
@@ -173,7 +175,8 @@ async def test_generate_blogger_report_without_representative_analysis_degrades_
     async def fake_resolve_prompt(**_kwargs: Any) -> tuple[str, dict[str, Any]]:
         return ("约束:{analysis_constraints}", {})
 
-    async def fake_call_ai(_system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    async def fake_call_ai(_system_prompt: str, user_prompt: str, scene_key: str | None = None) -> dict[str, Any]:
+        assert scene_key == "blogger_report"
         captured["user_prompt"] = user_prompt
         return {
             "filming_signature": {
@@ -222,7 +225,8 @@ async def test_generate_blogger_report_with_representative_analysis_keeps_origin
     async def fake_resolve_prompt(**_kwargs: Any) -> tuple[str, dict[str, Any]]:
         return ("约束:{analysis_constraints}", {})
 
-    async def fake_call_ai(_system_prompt: str, _user_prompt: str) -> dict[str, Any]:
+    async def fake_call_ai(_system_prompt: str, _user_prompt: str, scene_key: str | None = None) -> dict[str, Any]:
+        assert scene_key == "blogger_report"
         return {
             "filming_signature": {
                 "visual_style": "手持探店",
@@ -271,3 +275,21 @@ def test_blogger_viral_profile_prompt_template_can_be_formatted_with_timeline_fi
     assert '"timeline_entries"' in rendered
     assert '"date"' in rendered
     assert "{nickname}" not in rendered
+
+
+def test_scene_result_validator_rejects_empty_account_plan() -> None:
+    service = AIAnalysisService()
+
+    assert service._is_scene_result_acceptable(
+        "account_plan",
+        {"account_positioning": {}, "content_strategy": {}, "content_calendar": []},
+    ) is False
+
+
+def test_scene_result_validator_accepts_nonempty_account_plan() -> None:
+    service = AIAnalysisService()
+
+    assert service._is_scene_result_acceptable(
+        "account_plan",
+        {"account_positioning": {"core_identity": "同城探店账号"}, "content_strategy": {}, "content_calendar": []},
+    ) is True

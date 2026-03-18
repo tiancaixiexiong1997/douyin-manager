@@ -143,6 +143,59 @@ class AIAnalysisService:
         # 给低配 VPS 更宽松一点，避免 5-10 分钟素材在压缩阶段误判失败。
         estimated = int(math.ceil(duration_seconds * 0.75)) + 120
         return max(minimum, min(estimated, 900))
+
+    def _has_meaningful_value(self, value: Any) -> bool:
+        if value is None:
+            return False
+        if isinstance(value, str):
+            return bool(value.strip())
+        if isinstance(value, (int, float, bool)):
+            return True
+        if isinstance(value, list):
+            return any(self._has_meaningful_value(item) for item in value)
+        if isinstance(value, dict):
+            return any(self._has_meaningful_value(item) for item in value.values())
+        return True
+
+    def _is_scene_result_acceptable(self, scene_key: Optional[str], result: dict[str, Any]) -> bool:
+        if not scene_key:
+            return True
+        if not isinstance(result, dict):
+            return False
+
+        if scene_key == "account_plan":
+            return any(
+                self._has_meaningful_value(result.get(key))
+                for key in ("account_positioning", "content_strategy", "content_calendar")
+            )
+        if scene_key == "content_calendar":
+            return self._has_meaningful_value(result.get("content_calendar"))
+        if scene_key == "performance_recap":
+            return any(
+                self._has_meaningful_value(result.get(key))
+                for key in ("overall_summary", "winning_patterns", "optimization_focus", "next_actions", "next_topic_angles")
+            )
+        if scene_key == "next_topic_batch":
+            return any(
+                self._has_meaningful_value(result.get(key))
+                for key in ("overall_strategy", "items")
+            )
+        if scene_key == "planning_intake":
+            return any(
+                self._has_meaningful_value(result.get(key))
+                for key in ("execution_preview", "missing_fields", "draft", "next_question")
+            )
+        if scene_key == "blogger_report":
+            return any(
+                self._has_meaningful_value(result.get(key))
+                for key in ("ip_positioning", "content_strategy", "copywriting_dna", "filming_signature", "reference_value")
+            )
+        if scene_key == "blogger_viral_profile":
+            return any(
+                self._has_meaningful_value(result.get(key))
+                for key in ("account_planning_logic", "why_it_went_viral", "content_playbook", "timeline_overview", "timeline_entries")
+            )
+        return True
         
     async def reload_settings(self, db=None):
         """重新加载设置缓存"""
@@ -656,7 +709,7 @@ class AIAnalysisService:
                 {"type": "text", "text": prompt_text},
                 {"type": "image_url", "image_url": {"url": f"data:video/mp4;base64,{video_b64}"}}
             ]
-            result = await self._call_ai(system_prompt, content)
+            result = await self._call_ai(system_prompt, content, scene_key="script_remake")
             await self._record_prompt_run(
                 scene_key="script_remake",
                 result=result,
@@ -730,9 +783,9 @@ class AIAnalysisService:
             }
         ]
 
-        return await self._call_ai(system_prompt, content)
+        return await self._call_ai(system_prompt, content, scene_key="video_analysis")
 
-    async def _call_ai(self, system_prompt: str, user_content) -> dict:
+    async def _call_ai(self, system_prompt: str, user_content, scene_key: Optional[str] = None) -> dict:
         """通用 AI API 调用"""
         try:
             import json
@@ -799,114 +852,157 @@ class AIAnalysisService:
             loop = asyncio.get_running_loop()
             deadline = loop.time() + max(1, overall_timeout_seconds)
             errors: list[str] = []
+            allow_raw_fallback = scene_key not in {
+                "account_plan",
+                "content_calendar",
+                "performance_recap",
+                "next_topic_batch",
+                "planning_intake",
+                "blogger_report",
+                "blogger_viral_profile",
+            }
 
             for index, provider in enumerate(providers):
-                remaining_seconds = max(0.0, deadline - loop.time())
-                if remaining_seconds <= 1:
-                    errors.append("总超时预算耗尽")
-                    break
+                provider_attempts = 1 if is_multimodal_video else 2
+                for attempt in range(provider_attempts):
+                    remaining_seconds = max(0.0, deadline - loop.time())
+                    if remaining_seconds <= 1:
+                        errors.append("总超时预算耗尽")
+                        break
 
-                # 给备用线路留出时间，避免主线路耗尽全部预算。
-                if index < len(providers) - 1:
-                    per_provider_timeout = min(
-                        remaining_seconds,
-                        max(20.0, overall_timeout_seconds / max(1, len(providers))),
-                    )
-                else:
-                    per_provider_timeout = remaining_seconds
-                per_phase_timeout = int(min(max(15, per_provider_timeout), 180))
-                request_timeout = httpx.Timeout(
-                    connect=min(20, per_phase_timeout),
-                    read=per_phase_timeout,
-                    write=per_phase_timeout,
-                    pool=30.0,
-                )
-                logger.info(
-                    "开始调用 AI API provider=%s model=%s multimodal=%s timeout=%ss",
-                    provider["name"],
-                    provider["model"],
-                    is_multimodal_video,
-                    int(per_provider_timeout),
-                )
-
-                try:
-                    async with httpx.AsyncClient(timeout=request_timeout) as client:
-                        response = await asyncio.wait_for(
-                            client.post(
-                                f"{provider['base_url']}/chat/completions",
-                                headers={
-                                    "Authorization": f"Bearer {provider['api_key']}",
-                                    "Content-Type": "application/json",
-                                },
-                                json={
-                                    "model": provider["model"],
-                                    "messages": [
-                                        {"role": "system", "content": system_prompt},
-                                        {"role": "user", "content": user_content},
-                                    ],
-                                    "max_tokens": self.max_tokens,
-                                    "temperature": self.temperature,
-                                    "response_format": {"type": "json_object"},
-                                },
-                            ),
-                            timeout=max(1.0, per_provider_timeout),
+                    if index < len(providers) - 1:
+                        per_provider_timeout = min(
+                            remaining_seconds,
+                            max(20.0, overall_timeout_seconds / max(1, len(providers))),
                         )
+                    else:
+                        per_provider_timeout = remaining_seconds
+                    per_phase_timeout = int(min(max(15, per_provider_timeout), 180))
+                    request_timeout = httpx.Timeout(
+                        connect=min(20, per_phase_timeout),
+                        read=per_phase_timeout,
+                        write=per_phase_timeout,
+                        pool=30.0,
+                    )
+                    logger.info(
+                        "开始调用 AI API provider=%s model=%s multimodal=%s timeout=%ss attempt=%s/%s scene=%s",
+                        provider["name"],
+                        provider["model"],
+                        is_multimodal_video,
+                        int(per_provider_timeout),
+                        attempt + 1,
+                        provider_attempts,
+                        scene_key or "generic",
+                    )
 
-                    if response.status_code == 200:
-                        result = response.json()
-                        content_str = result["choices"][0]["message"]["content"]
+                    try:
+                        async with httpx.AsyncClient(timeout=request_timeout) as client:
+                            response = await asyncio.wait_for(
+                                client.post(
+                                    f"{provider['base_url']}/chat/completions",
+                                    headers={
+                                        "Authorization": f"Bearer {provider['api_key']}",
+                                        "Content-Type": "application/json",
+                                    },
+                                    json={
+                                        "model": provider["model"],
+                                        "messages": [
+                                            {"role": "system", "content": system_prompt},
+                                            {"role": "user", "content": user_content},
+                                        ],
+                                        "max_tokens": self.max_tokens,
+                                        "temperature": self.temperature,
+                                        "response_format": {"type": "json_object"},
+                                    },
+                                ),
+                                timeout=max(1.0, per_provider_timeout),
+                            )
 
-                        # 容错：清理可能包含的 Markdown 代码块或 <think> 标签
-                        clean_str = content_str.strip()
-                        clean_str = re.sub(r'<think>.*?</think>', '', clean_str, flags=re.DOTALL).strip()
+                        if response.status_code == 200:
+                            result = response.json()
+                            content_str = result["choices"][0]["message"]["content"]
 
-                        # 提取 ```json ... ``` 中的内容
-                        json_match = re.search(r'```(?:json)?\s*(\{.*?\}|\[.*?\])\s*```', clean_str, re.DOTALL)
-                        if json_match:
-                            clean_str = json_match.group(1)
-                        else:
-                            json_match = re.search(r'(\{.*\}|\[.*\])', clean_str, re.DOTALL)
+                            clean_str = content_str.strip()
+                            clean_str = re.sub(r'<think>.*?</think>', '', clean_str, flags=re.DOTALL).strip()
+
+                            json_match = re.search(r'```(?:json)?\s*(\{.*?\}|\[.*?\])\s*```', clean_str, re.DOTALL)
                             if json_match:
                                 clean_str = json_match.group(1)
+                            else:
+                                json_match = re.search(r'(\{.*\}|\[.*\])', clean_str, re.DOTALL)
+                                if json_match:
+                                    clean_str = json_match.group(1)
 
-                        clean_str = clean_str.strip()
+                            clean_str = clean_str.strip()
 
-                        try:
-                            parsed = json.loads(clean_str)
+                            try:
+                                parsed = json.loads(clean_str)
+                            except json.JSONDecodeError as exc:
+                                logger.error(
+                                    "AI API JSON 解析失败(provider=%s attempt=%s): %s; 原始内容: %s",
+                                    provider["name"],
+                                    attempt + 1,
+                                    exc,
+                                    content_str[:500],
+                                )
+                                errors.append(f"{provider['name']} JSON 解析失败")
+                                if attempt < provider_attempts - 1:
+                                    logger.warning("AI 返回非 JSON，准备同线路重试(provider=%s)", provider["name"])
+                                    continue
+                                if allow_raw_fallback:
+                                    return {"raw_analysis": content_str}
+                                break
+
+                            if not self._is_scene_result_acceptable(scene_key, parsed):
+                                logger.warning(
+                                    "AI 返回结构化空结果(provider=%s scene=%s attempt=%s)",
+                                    provider["name"],
+                                    scene_key,
+                                    attempt + 1,
+                                )
+                                errors.append(f"{provider['name']} 空结果")
+                                if attempt < provider_attempts - 1:
+                                    logger.warning("AI 返回空结果，准备同线路重试(provider=%s)", provider["name"])
+                                    continue
+                                break
+
                             logger.info(
                                 "AI API 响应解析成功(provider=%s fields=%s)",
                                 provider["name"],
                                 list(parsed.keys()),
                             )
                             return parsed
-                        except json.JSONDecodeError as exc:
-                            logger.error(
-                                "AI API JSON 解析失败(provider=%s): %s; 原始内容: %s",
-                                provider["name"],
-                                exc,
-                                content_str[:500],
-                            )
-                            return {"raw_analysis": content_str}
 
-                    error_text = f"HTTP {response.status_code}"
-                    logger.error(
-                        "AI API 调用失败(provider=%s): %s %s",
-                        provider["name"],
-                        error_text,
-                        response.text[:200],
-                    )
-                    errors.append(f"{provider['name']} {error_text}")
-                except asyncio.TimeoutError:
-                    logger.error("AI API 调用超时(provider=%s)", provider["name"])
-                    errors.append(f"{provider['name']} 超时")
-                except Exception as exc:
-                    logger.error(
-                        "AI API 调用异常(provider=%s): %s: %s",
-                        provider["name"],
-                        exc.__class__.__name__,
-                        exc,
-                    )
-                    errors.append(f"{provider['name']} 异常")
+                        error_text = f"HTTP {response.status_code}"
+                        logger.error(
+                            "AI API 调用失败(provider=%s attempt=%s): %s %s",
+                            provider["name"],
+                            attempt + 1,
+                            error_text,
+                            response.text[:200],
+                        )
+                        if attempt < provider_attempts - 1:
+                            logger.warning("AI 调用失败，准备同线路重试(provider=%s)", provider["name"])
+                            continue
+                        errors.append(f"{provider['name']} {error_text}")
+                    except asyncio.TimeoutError:
+                        logger.error("AI API 调用超时(provider=%s attempt=%s)", provider["name"], attempt + 1)
+                        if attempt < provider_attempts - 1:
+                            logger.warning("AI 调用超时，准备同线路重试(provider=%s)", provider["name"])
+                            continue
+                        errors.append(f"{provider['name']} 超时")
+                    except Exception as exc:
+                        logger.error(
+                            "AI API 调用异常(provider=%s attempt=%s): %s: %s",
+                            provider["name"],
+                            attempt + 1,
+                            exc.__class__.__name__,
+                            exc,
+                        )
+                        if attempt < provider_attempts - 1:
+                            logger.warning("AI 调用异常，准备同线路重试(provider=%s)", provider["name"])
+                            continue
+                        errors.append(f"{provider['name']} 异常")
 
                 if index < len(providers) - 1:
                     logger.warning(
@@ -975,7 +1071,7 @@ class AIAnalysisService:
             analysis_constraints=analysis_constraints,
         )
 
-        result = await self._call_ai(system_prompt, user_prompt)
+        result = await self._call_ai(system_prompt, user_prompt, scene_key="blogger_report")
         if isinstance(result, dict) and not has_multimodal_reference:
             filming_signature = result.get("filming_signature")
             result["filming_signature"] = {
@@ -1060,7 +1156,7 @@ class AIAnalysisService:
             analyses_json=analyses_json[:5000],
         )
 
-        result = await self._call_ai(system_prompt, user_prompt)
+        result = await self._call_ai(system_prompt, user_prompt, scene_key="blogger_viral_profile")
         await self._record_prompt_run(
             scene_key="blogger_viral_profile",
             result=result,
@@ -1168,7 +1264,7 @@ class AIAnalysisService:
             bloggers_text=bloggers_text
         )
 
-        result = await self._call_ai(system_prompt, user_prompt)
+        result = await self._call_ai(system_prompt, user_prompt, scene_key="account_plan")
         await self._record_prompt_run(
             scene_key="account_plan",
             result=result,
@@ -1229,7 +1325,7 @@ class AIAnalysisService:
             next_topic_angles=next_topic_angles,
         )
 
-        result = await self._call_ai(system_prompt, user_prompt)
+        result = await self._call_ai(system_prompt, user_prompt, scene_key="content_calendar")
         await self._record_prompt_run(
             scene_key="content_calendar",
             result=result,
@@ -1271,7 +1367,7 @@ class AIAnalysisService:
             performance_rows_json=json.dumps(performance_rows, ensure_ascii=False, indent=2)[:10000],
         )
 
-        result = await self._call_ai(system_prompt, user_prompt)
+        result = await self._call_ai(system_prompt, user_prompt, scene_key="performance_recap")
         await self._record_prompt_run(
             scene_key="performance_recap",
             result=result,
@@ -1313,7 +1409,7 @@ class AIAnalysisService:
             existing_content_items_json=json.dumps(existing_content_items, ensure_ascii=False, indent=2)[:8000],
         )
 
-        result = await self._call_ai(system_prompt, user_prompt)
+        result = await self._call_ai(system_prompt, user_prompt, scene_key="next_topic_batch")
         await self._record_prompt_run(
             scene_key="next_topic_batch",
             result=result,
@@ -1357,7 +1453,7 @@ class AIAnalysisService:
             f"用户最新输入：\n{user_message}"
         )
 
-        result = await self._call_ai(system_prompt, user_prompt)
+        result = await self._call_ai(system_prompt, user_prompt, scene_key="planning_intake")
         await self._record_prompt_run(
             scene_key="planning_intake",
             result=result,
@@ -1402,7 +1498,7 @@ class AIAnalysisService:
             target_audience_detail=account_plan.get('account_positioning', {}).get('target_audience_detail', '')
         )
 
-        result = await self._call_ai(system_prompt, user_prompt)
+        result = await self._call_ai(system_prompt, user_prompt, scene_key="video_script")
         await self._record_prompt_run(
             scene_key="video_script",
             result=result,
