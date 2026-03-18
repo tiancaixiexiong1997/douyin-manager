@@ -311,6 +311,44 @@
 }
 
 /* 视频列表 */
+.analysis-video-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.analysis-video-head .report-section-title {
+  margin-bottom: 0;
+}
+
+.analysis-video-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.analysis-video-sort-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+.analysis-video-sort-select {
+  min-width: 190px;
+}
+
+.analysis-video-sort-trigger {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  font-size: 12px;
+}
+
 .video-list {
   display: flex;
   flex-direction: column;
@@ -1164,6 +1202,20 @@
   .viral-profile-head {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .analysis-video-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .analysis-video-sort {
+    justify-content: space-between;
+  }
+
+  .analysis-video-sort-select {
+    min-width: 0;
+    width: 100%;
   }
 }
 

@@ -25,6 +25,16 @@ const PLATFORM_FILTER_OPTIONS = [
   { value: 'all', label: '全部平台' },
   ...PLATFORM_OPTIONS.map((platform) => ({ value: platform, label: platform })),
 ];
+type AnalysisVideoSort = 'published_desc' | 'published_asc' | 'likes_desc' | 'likes_asc' | 'comments_desc' | 'comments_asc';
+
+const ANALYSIS_VIDEO_SORT_OPTIONS: Array<{ value: AnalysisVideoSort; label: string }> = [
+  { value: 'published_desc', label: '发布时间：最新优先' },
+  { value: 'published_asc', label: '发布时间：最早优先' },
+  { value: 'likes_desc', label: '点赞：高到低' },
+  { value: 'likes_asc', label: '点赞：低到高' },
+  { value: 'comments_desc', label: '评论：高到低' },
+  { value: 'comments_asc', label: '评论：低到高' },
+];
 const TERMINAL_PROGRESS_STEPS = new Set(['idle', 'done', 'failed']);
 
 function isActiveProgressStep(step?: string): boolean {
@@ -91,6 +101,12 @@ function normalizeTimelineEntries(profile: BloggerViralProfile | undefined) {
         ),
       ),
   );
+}
+
+function getPublishedAtTimestamp(value?: string): number {
+  if (!value) return 0;
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
 function AddBloggerModal({ onClose }: { onClose: () => void }) {
@@ -377,6 +393,7 @@ function BloggerDetailModal({ blogger, onClose }: { blogger: Blogger; onClose: (
   const [repTaskMessage, setRepTaskMessage] = useState('');
   const [repTaskElapsedSec, setRepTaskElapsedSec] = useState(0);
   const [repTaskStartedAtMs, setRepTaskStartedAtMs] = useState<number | null>(null);
+  const [analysisVideoSort, setAnalysisVideoSort] = useState<AnalysisVideoSort>('published_desc');
   const { data: detail, isLoading: detailLoading, refetch: refetchDetail } = useQuery({
     queryKey: ['blogger-detail', blogger.id],
     queryFn: () => bloggerApi.get(blogger.id),
@@ -392,6 +409,29 @@ function BloggerDetailModal({ blogger, onClose }: { blogger: Blogger; onClose: (
   const report = detail?.analysis_report;
   const viralProfile = report?.viral_profile;
   const timelineEntries = normalizeTimelineEntries(viralProfile);
+  const analysisVideos = useMemo(() => {
+    const videos = detail?.videos?.filter((video) => !video.video_id.startsWith('rep_')) ?? [];
+    const sortedVideos = [...videos];
+    sortedVideos.sort((left, right) => {
+      switch (analysisVideoSort) {
+        case 'published_asc':
+          return getPublishedAtTimestamp(left.published_at) - getPublishedAtTimestamp(right.published_at);
+        case 'published_desc':
+          return getPublishedAtTimestamp(right.published_at) - getPublishedAtTimestamp(left.published_at);
+        case 'likes_asc':
+          return left.like_count - right.like_count;
+        case 'likes_desc':
+          return right.like_count - left.like_count;
+        case 'comments_asc':
+          return left.comment_count - right.comment_count;
+        case 'comments_desc':
+          return right.comment_count - left.comment_count;
+        default:
+          return 0;
+      }
+    });
+    return sortedVideos;
+  }, [analysisVideoSort, detail?.videos]);
   const hasRepresentativeAnalysis = Boolean(
     detail?.videos?.some((video) => video.video_id.startsWith('rep_') && video.ai_analysis),
   );
@@ -1011,10 +1051,22 @@ function BloggerDetailModal({ blogger, onClose }: { blogger: Blogger; onClose: (
                   );
                 })()}
               </div>
-              {detail?.videos && detail.videos.filter(video => !video.video_id.startsWith('rep_')).length > 0 && (
+              {analysisVideos.length > 0 && (
                 <div className="report-section">
-                  <div className="report-section-title">
-                    参与分析的视频（{detail.videos.filter(video => !video.video_id.startsWith('rep_')).length} 条）
+                  <div className="analysis-video-head">
+                    <div className="report-section-title">
+                      参与分析的视频（{analysisVideos.length} 条）
+                    </div>
+                    <div className="analysis-video-sort">
+                      <span className="analysis-video-sort-label">排序</span>
+                      <CustomSelect
+                        className="analysis-video-sort-select"
+                        triggerClassName="analysis-video-sort-trigger"
+                        value={analysisVideoSort}
+                        options={ANALYSIS_VIDEO_SORT_OPTIONS}
+                        onChange={(value) => setAnalysisVideoSort(value as AnalysisVideoSort)}
+                      />
+                    </div>
                   </div>
                   {isRepTaskBusy && (
                     <div className="rep-task-status">
@@ -1026,9 +1078,7 @@ function BloggerDetailModal({ blogger, onClose }: { blogger: Blogger; onClose: (
                     </div>
                   )}
                   <div className="video-list">
-                    {detail.videos
-                      .filter(video => !video.video_id.startsWith('rep_'))
-                      .map(video => (
+                    {analysisVideos.map(video => (
                       <div key={video.id} className="video-item">
                         {video.cover_url && (
                           <img className="video-cover" src={video.cover_url} alt={video.title || ''} />
