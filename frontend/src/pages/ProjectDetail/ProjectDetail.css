@@ -441,6 +441,19 @@
   border: 1px solid rgba(148, 163, 184, 0.18);
   color: var(--text-secondary);
   font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.calendar-summary-pill:hover {
+  transform: translateY(-1px);
+  border-color: rgba(96, 165, 250, 0.28);
+}
+
+.calendar-summary-pill.is-active {
+  background: rgba(59, 130, 246, 0.16);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: var(--text-primary);
 }
 
 .calendar-summary-pill strong {
@@ -853,6 +866,11 @@
 [data-theme='light'] .calendar-summary-pill {
   background: #f8fafc;
   border-color: rgba(148, 163, 184, 0.2);
+}
+
+[data-theme='light'] .calendar-summary-pill.is-active {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.28);
 }
 
 [data-theme='light'] .scene-header {

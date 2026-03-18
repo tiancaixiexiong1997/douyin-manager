@@ -9,6 +9,7 @@ import './ProjectDetail.css';
 
 type ScriptTaskStatus = TaskCenterItem['status'] | null;
 type CalendarDisplayItem = ContentItem & { calendarMeta?: ContentCalendarItem | null };
+const BATCH_GROUP_FILTER_PREFIX = 'batch_group:';
 
 function formatMetricNumber(value?: number | null): string {
   return Number(value || 0).toLocaleString('zh-CN');
@@ -836,6 +837,7 @@ export default function ProjectDetail() {
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
   const [showPerformanceModal, setShowPerformanceModal] = useState(false);
   const [editingPerformance, setEditingPerformance] = useState<ContentPerformance | null>(null);
+  const [calendarFilter, setCalendarFilter] = useState<string>('all');
 
   const regenerateCalendarMutation = useMutation({
     mutationFn: () => planningApi.regenerateCalendar(id!),
@@ -966,11 +968,23 @@ export default function ProjectDetail() {
     .sort((a, b) => a.day_number - b.day_number);
   const mainValidationCount = calendarDisplayItems.filter((item) => item.calendarMeta?.is_main_validation).length;
   const batchShootableCount = calendarDisplayItems.filter((item) => item.calendarMeta?.is_batch_shootable).length;
-  const batchGroupCount = new Set(
-    calendarDisplayItems
-      .map((item) => item.calendarMeta?.batch_shoot_group?.trim())
-      .filter((value): value is string => Boolean(value)),
-  ).size;
+  const batchGroupEntries = Array.from(
+    calendarDisplayItems.reduce((map, item) => {
+      const group = item.calendarMeta?.batch_shoot_group?.trim();
+      if (!group) return map;
+      map.set(group, (map.get(group) || 0) + 1);
+      return map;
+    }, new Map<string, number>()),
+  );
+  const filteredCalendarItems = calendarDisplayItems.filter((item) => {
+    if (calendarFilter === 'all') return true;
+    if (calendarFilter === 'main_validation') return Boolean(item.calendarMeta?.is_main_validation);
+    if (calendarFilter === 'batch_shootable') return Boolean(item.calendarMeta?.is_batch_shootable);
+    if (calendarFilter.startsWith(BATCH_GROUP_FILTER_PREFIX)) {
+      return item.calendarMeta?.batch_shoot_group?.trim() === calendarFilter.slice(BATCH_GROUP_FILTER_PREFIX.length);
+    }
+    return true;
+  });
   const linkedContentItemIds = new Set(
     performanceList.map((row) => row.content_item_id).filter((value): value is string => Boolean(value))
   );
@@ -1165,6 +1179,9 @@ export default function ProjectDetail() {
               {calendarDisplayItems.length > 0 && (
                 <span className="badge badge-purple">{calendarDisplayItems.length} 条</span>
               )}
+              {calendarFilter !== 'all' && (
+                <span className="badge badge-blue">{filteredCalendarItems.length} 条已筛选</span>
+              )}
             </div>
             {project.status !== 'in_progress' && (
               <button
@@ -1185,22 +1202,49 @@ export default function ProjectDetail() {
             <>
             {calendarDisplayItems.length > 0 && (
               <div className="calendar-summary-row">
-                <div className="calendar-summary-pill">
+                <button
+                  type="button"
+                  className={`calendar-summary-pill ${calendarFilter === 'all' ? 'is-active' : ''}`}
+                  onClick={() => setCalendarFilter('all')}
+                >
+                  <span className="calendar-summary-label">全部</span>
+                  <strong>{calendarDisplayItems.length}</strong>
+                </button>
+                <button
+                  type="button"
+                  className={`calendar-summary-pill ${calendarFilter === 'main_validation' ? 'is-active' : ''}`}
+                  onClick={() => setCalendarFilter('main_validation')}
+                >
                   <span className="calendar-summary-label">主验证题</span>
                   <strong>{mainValidationCount}</strong>
-                </div>
-                <div className="calendar-summary-pill">
+                </button>
+                <button
+                  type="button"
+                  className={`calendar-summary-pill ${calendarFilter === 'batch_shootable' ? 'is-active' : ''}`}
+                  onClick={() => setCalendarFilter('batch_shootable')}
+                >
                   <span className="calendar-summary-label">可批量拍</span>
                   <strong>{batchShootableCount}</strong>
-                </div>
-                <div className="calendar-summary-pill">
-                  <span className="calendar-summary-label">拍摄分组</span>
-                  <strong>{batchGroupCount}</strong>
-                </div>
+                </button>
+                {batchGroupEntries.map(([group, count]) => {
+                  const filterKey = `${BATCH_GROUP_FILTER_PREFIX}${group}`;
+                  return (
+                    <button
+                      key={group}
+                      type="button"
+                      className={`calendar-summary-pill ${calendarFilter === filterKey ? 'is-active' : ''}`}
+                      onClick={() => setCalendarFilter(filterKey)}
+                    >
+                      <span className="calendar-summary-label">{group}</span>
+                      <strong>{count}</strong>
+                    </button>
+                  );
+                })}
               </div>
             )}
+            {filteredCalendarItems.length > 0 ? (
             <div className="calendar-grid">
-            {calendarDisplayItems.map(item => (
+            {filteredCalendarItems.map(item => (
                 <div
                   key={item.id}
                   className={`calendar-item ${item.is_script_generated ? 'calendar-item-done' : ''} ${editingId === item.id ? 'calendar-item-editing' : ''}`}
@@ -1292,6 +1336,14 @@ export default function ProjectDetail() {
                 </div>
               ))}
           </div>
+            ) : (
+              <div className="card detail-calendar-empty">
+                <div className="detail-calendar-empty-text">当前筛选条件下没有匹配的日期块</div>
+                <button className="btn btn-ghost btn-sm" onClick={() => setCalendarFilter('all')}>
+                  清除筛选
+                </button>
+              </div>
+            )}
           </>
           )}
         </div>
