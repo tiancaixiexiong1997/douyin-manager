@@ -4,7 +4,11 @@ from typing import Any
 import pytest
 
 from app.services.ai_analysis_service import AIAnalysisService
-from app.services.prompt_templates import BLOGGER_VIRAL_PROFILE_PROMPT_TEMPLATE
+from app.services.prompt_templates import (
+    ACCOUNT_PLAN_PROMPT_TEMPLATE,
+    BLOGGER_VIRAL_PROFILE_PROMPT_TEMPLATE,
+    CONTENT_CALENDAR_PROMPT_TEMPLATE,
+)
 
 
 def test_resolve_ffmpeg_timeout_uses_minimum_without_duration() -> None:
@@ -293,3 +297,19 @@ def test_scene_result_validator_accepts_nonempty_account_plan() -> None:
         "account_plan",
         {"account_positioning": {"core_identity": "同城探店账号"}, "content_strategy": {}, "content_calendar": []},
     ) is True
+
+
+def test_scene_result_validator_rejects_empty_calendar_gap_fill() -> None:
+    service = AIAnalysisService()
+
+    assert service._is_scene_result_acceptable(
+        "calendar_gap_fill",
+        {"items": []},
+    ) is False
+
+
+def test_account_and_calendar_prompts_require_backup_pool_and_anti_self_indulgent_rules() -> None:
+    assert "backup_topic_pool" in ACCOUNT_PLAN_PROMPT_TEMPLATE
+    assert "backup_topic_pool" in CONTENT_CALENDAR_PROMPT_TEMPLATE
+    assert "肉香盖过班味" in ACCOUNT_PLAN_PROMPT_TEMPLATE
+    assert "全是笑声" in CONTENT_CALENDAR_PROMPT_TEMPLATE

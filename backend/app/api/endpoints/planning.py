@@ -147,6 +147,297 @@ INDUSTRY_TOPIC_TITLES = {
     ],
 }
 
+LOW_QUALITY_THRESHOLD = 2
+POETIC_PHRASES = (
+    "烟火气", "治愈", "回血", "翻篇", "全是笑声", "肉香盖过", "城市夜晚",
+    "夜色里", "氛围感", "松弛感", "借着", "白噪音", "晚风", "情绪价值",
+)
+SELF_INDULGENT_PHRASES = (
+    "我的店", "我店里", "今晚的店里", "晚上7点的第一把火", "周五晚上的店里",
+    "借着肉香", "今天受的窝囊气", "肉香盖过班味", "全是笑声",
+)
+USER_VALUE_MARKERS = (
+    "价格", "分量", "值不值", "划算", "避坑", "怎么选", "为什么", "差别", "省钱",
+    "推荐", "适合", "攻略", "注意", "别点", "别踩", "真相", "内幕", "对比",
+    "哪个", "哪种", "谁更", "值", "便宜", "实在", "复购",
+)
+CONFLICT_MARKERS = (
+    "为什么", "结果", "居然", "到底", "差别", "别", "翻车", "踩雷", "对比",
+    "冲突", "吵", "排队", "加单", "退款", "后悔", "劝退", "值不值", "谁",
+    "怎么", "不是", "反而", "却", "但", "其实", "真相",
+)
+COMMENT_HOOK_MARKERS = (
+    "你们", "你会", "你更", "会选", "值不值", "到底", "为什么", "哪种", "谁",
+    "评论", "会不会", "是不是", "该不该", "有没有", "建议", "能不能",
+)
+USER_OBJECT_MARKERS = (
+    "顾客", "客人", "用户", "打工人", "学生", "情侣", "社恐", "老板", "上班族",
+    "回头客", "一个人", "女生", "男生", "本地人", "外地人", "新客", "老客",
+)
+
+
+def _normalize_topic_text(value: str | None) -> str:
+    return re.sub(r"\s+", "", _safe_text(value))
+
+
+def _topic_signature(value: str | None) -> set[str]:
+    text = re.sub(r"[^\w\u4e00-\u9fff]", "", _normalize_topic_text(value))
+    if not text:
+        return set()
+    if len(text) <= 2:
+        return {text}
+    return {text[index:index + 2] for index in range(len(text) - 1)}
+
+
+def _topic_similarity(left: str | None, right: str | None) -> float:
+    left_sig = _topic_signature(left)
+    right_sig = _topic_signature(right)
+    if not left_sig or not right_sig:
+        return 0.0
+    overlap = len(left_sig & right_sig)
+    base = len(left_sig | right_sig)
+    return overlap / base if base else 0.0
+
+
+def _contains_any(text: str, phrases: tuple[str, ...]) -> bool:
+    return any(phrase in text for phrase in phrases)
+
+
+def _collect_calendar_quality_flags(item: dict) -> list[str]:
+    title = _normalize_topic_text(item.get("title_direction"))
+    key_message = _normalize_topic_text(item.get("key_message"))
+    replacement_hint = _normalize_topic_text(item.get("replacement_hint"))
+    text = " ".join(filter(None, [title, key_message, replacement_hint]))
+
+    flags: list[str] = []
+
+    if _contains_any(text, SELF_INDULGENT_PHRASES) or (_contains_any(text, POETIC_PHRASES) and not _contains_any(text, USER_OBJECT_MARKERS)):
+        flags.append("self_indulgent")
+    if _contains_any(text, POETIC_PHRASES):
+        flags.append("too_poetic")
+    if not _contains_any(text, CONFLICT_MARKERS) and not re.search(r"[0-9一二三四五六七八九十]", text):
+        flags.append("no_conflict")
+    if not _contains_any(text, USER_VALUE_MARKERS):
+        flags.append("no_user_value")
+    if not _contains_any(text, COMMENT_HOOK_MARKERS):
+        flags.append("no_comment_hook")
+
+    deduped: list[str] = []
+    for flag in flags:
+        if flag not in deduped:
+            deduped.append(flag)
+    return deduped
+
+
+def _normalize_backup_topic_pool_item(raw: dict, *, fallback_index: int) -> dict:
+    content_type = _normalize_content_type(raw.get("content_type"))
+    return {
+        "title_direction": _safe_text(raw.get("title_direction")) or f"备用题 {fallback_index}",
+        "content_type": content_type,
+        "content_pillar": _safe_text(raw.get("content_pillar")) or None,
+        "key_message": _safe_text(raw.get("key_message")),
+        "tags": _normalize_text_list(raw.get("tags"), limit=6),
+        "batch_shoot_group": _safe_text(raw.get("batch_shoot_group")) or _derive_batch_group(content_type),
+        "replacement_hint": _safe_text(raw.get("replacement_hint")),
+    }
+
+
+def _normalize_backup_topic_pool(value) -> list[dict]:
+    if not isinstance(value, list):
+        return []
+    items: list[dict] = []
+    for index, raw in enumerate(value, start=1):
+        if not isinstance(raw, dict):
+            continue
+        items.append(_normalize_backup_topic_pool_item(raw, fallback_index=index))
+    return items
+
+
+def _normalize_calendar_generation_meta(value) -> dict:
+    raw = value if isinstance(value, dict) else {}
+    return {
+        "blocked_count": max(0, int(raw.get("blocked_count", 0) or 0)),
+        "backup_used_count": max(0, int(raw.get("backup_used_count", 0) or 0)),
+        "regeneration_count": max(0, int(raw.get("regeneration_count", 0) or 0)),
+    }
+
+
+def _calendar_titles_are_too_similar(candidate: dict, existing_items: list[dict]) -> bool:
+    title = candidate.get("title_direction")
+    for item in existing_items:
+        similarity = _topic_similarity(title, item.get("title_direction"))
+        if similarity >= 0.55:
+            return True
+    return False
+
+
+def _candidate_replacement_score(candidate: dict, target: dict) -> int:
+    score = 0
+    if candidate.get("content_type") == target.get("content_type"):
+        score += 3
+    if candidate.get("content_pillar") and candidate.get("content_pillar") == target.get("content_pillar"):
+        score += 2
+    if candidate.get("batch_shoot_group") == target.get("batch_shoot_group"):
+        score += 1
+    quality_flags = _collect_calendar_quality_flags(candidate)
+    score -= len(quality_flags) * 2
+    return score
+
+
+def _convert_backup_topic_to_calendar_item(backup_item: dict, target_item: dict) -> dict:
+    merged = {
+        **target_item,
+        "title_direction": backup_item.get("title_direction", ""),
+        "content_type": backup_item.get("content_type", target_item.get("content_type")),
+        "content_pillar": backup_item.get("content_pillar") or target_item.get("content_pillar"),
+        "key_message": backup_item.get("key_message") or target_item.get("key_message"),
+        "tags": backup_item.get("tags") or target_item.get("tags"),
+        "batch_shoot_group": backup_item.get("batch_shoot_group") or target_item.get("batch_shoot_group"),
+        "replacement_hint": backup_item.get("replacement_hint") or target_item.get("replacement_hint"),
+        "replaced_from_backup": True,
+        "quality_flags": [],
+    }
+    if "replacement_source_index" not in merged:
+        merged["replacement_source_index"] = None
+    return _normalize_content_calendar_item(merged, day_fallback=target_item.get("day", 1))
+
+
+def _pick_backup_replacement(
+    target_item: dict,
+    backup_pool: list[dict],
+    kept_items: list[dict],
+) -> tuple[dict | None, int | None]:
+    ranked: list[tuple[int, int, dict]] = []
+    for index, candidate in enumerate(backup_pool):
+        if len(_collect_calendar_quality_flags(candidate)) >= LOW_QUALITY_THRESHOLD:
+            continue
+        if _calendar_titles_are_too_similar(candidate, kept_items):
+            continue
+        ranked.append((_candidate_replacement_score(candidate, target_item), index, candidate))
+    if not ranked:
+        return None, None
+    ranked.sort(key=lambda item: item[0], reverse=True)
+    _, index, candidate = ranked[0]
+    return candidate, index
+
+
+def _finalize_calendar_days(items: list[dict]) -> list[dict]:
+    finalized: list[dict] = []
+    for day, item in enumerate(items, start=1):
+        normalized = _normalize_content_calendar_item({**item, "day": day}, day_fallback=day)
+        finalized.append(normalized)
+    return finalized
+
+
+async def _apply_calendar_quality_guardrails(
+    *,
+    raw_calendar: list[dict],
+    backup_pool: list[dict],
+    client_data: dict,
+    account_plan: dict,
+    project_id: str,
+    db: AsyncSession,
+) -> tuple[list[dict], list[dict], dict, str]:
+    kept_items: list[dict] = []
+    blocked_items: list[dict] = []
+    available_backup_pool = [dict(item) for item in backup_pool]
+    meta = _normalize_calendar_generation_meta({})
+    quality_notes_parts: list[str] = []
+
+    for raw_item in raw_calendar[:30]:
+        item = _normalize_content_calendar_item(raw_item, day_fallback=len(kept_items) + 1)
+        quality_flags = _collect_calendar_quality_flags(item)
+        is_duplicate_angle = _calendar_titles_are_too_similar(item, kept_items)
+        if len(quality_flags) < LOW_QUALITY_THRESHOLD and not is_duplicate_angle:
+            item["quality_flags"] = quality_flags
+            item["replaced_from_backup"] = False
+            item["replacement_source_index"] = None
+            kept_items.append(item)
+            continue
+        if is_duplicate_angle and "duplicate_angle" not in quality_flags:
+            quality_flags.append("duplicate_angle")
+
+        blocked_items.append(
+            {
+                "day": item.get("day"),
+                "title_direction": item.get("title_direction"),
+                "content_type": item.get("content_type"),
+                "content_pillar": item.get("content_pillar"),
+                "quality_flags": quality_flags,
+            }
+        )
+        meta["blocked_count"] += 1
+        replacement, replacement_index = _pick_backup_replacement(item, available_backup_pool, kept_items)
+        if replacement is None:
+            continue
+        chosen_replacement = available_backup_pool.pop(replacement_index)
+        normalized_replacement = _convert_backup_topic_to_calendar_item(
+            {**chosen_replacement, "replacement_source_index": replacement_index},
+            item,
+        )
+        normalized_replacement["replacement_source_index"] = replacement_index
+        normalized_replacement["quality_flags"] = _collect_calendar_quality_flags(normalized_replacement)
+        kept_items.append(normalized_replacement)
+        meta["backup_used_count"] += 1
+
+    missing_count = max(0, 30 - len(kept_items))
+    if missing_count > 0:
+        missing_days = list(range(len(kept_items) + 1, 31))
+        gap_fill_result = await ai_analysis_service.generate_calendar_gap_fill(
+            project_context={
+                "client_name": client_data.get("client_name"),
+                "industry": client_data.get("industry"),
+                "target_audience": client_data.get("target_audience"),
+                "ip_requirements": client_data.get("ip_requirements"),
+            },
+            account_plan=account_plan,
+            existing_calendar=kept_items,
+            blocked_topics=blocked_items[-10:],
+            missing_days=missing_days,
+            run_context={"entity_type": "planning_project", "entity_id": project_id},
+            db=db,
+        )
+        if isinstance(gap_fill_result, dict) and gap_fill_result.get("error"):
+            raise ValueError(gap_fill_result["error"])
+        refill_pool = _normalize_backup_topic_pool(gap_fill_result.get("items", []) if isinstance(gap_fill_result, dict) else [])
+        meta["regeneration_count"] += 1
+        available_backup_pool.extend(refill_pool)
+
+        while len(kept_items) < 30:
+            target_day = len(kept_items) + 1
+            placeholder = _normalize_content_calendar_item({"day": target_day}, day_fallback=target_day)
+            replacement, replacement_index = _pick_backup_replacement(placeholder, available_backup_pool, kept_items)
+            if replacement is None:
+                break
+            chosen_replacement = available_backup_pool.pop(replacement_index)
+            normalized_replacement = _convert_backup_topic_to_calendar_item(
+                {**chosen_replacement, "replacement_source_index": replacement_index},
+                placeholder,
+            )
+            normalized_replacement["replacement_source_index"] = replacement_index
+            normalized_replacement["quality_flags"] = _collect_calendar_quality_flags(normalized_replacement)
+            kept_items.append(normalized_replacement)
+            meta["backup_used_count"] += 1
+
+    finalized_items = _finalize_calendar_days(kept_items)
+    if len(finalized_items) != 30:
+        raise ValueError(f"内容日历质控补位后仍不足 30 条，当前仅 {len(finalized_items)} 条")
+
+    p0_count = sum(1 for item in finalized_items[:10] if item.get("is_main_validation"))
+    if p0_count < min(10, len(finalized_items[:10])):
+        raise ValueError("内容日历质控后前10条主验证题数量不足")
+    if any(not _safe_text(item.get("batch_shoot_group")) for item in finalized_items):
+        raise ValueError("内容日历存在缺失拍摄分组的条目")
+
+    if meta["blocked_count"] > 0:
+        quality_notes_parts.append(f"已拦截 {meta['blocked_count']} 条低传播选题")
+    if meta["backup_used_count"] > 0:
+        quality_notes_parts.append(f"已使用 {meta['backup_used_count']} 条备用题补位")
+    if meta["regeneration_count"] > 0:
+        quality_notes_parts.append("已触发小范围补写兜底")
+
+    return finalized_items, available_backup_pool, meta, "；".join(quality_notes_parts)
+
 
 def _safe_text(value) -> str:
     if value is None:
@@ -244,6 +535,9 @@ def _normalize_content_calendar_item(raw: dict, *, day_fallback: int) -> dict:
         "is_batch_shootable": is_batch_shootable,
         "batch_shoot_group": batch_group if is_batch_shootable else (batch_group or "混合拍摄"),
         "replacement_hint": _safe_text(raw.get("replacement_hint")),
+        "replaced_from_backup": bool(raw.get("replaced_from_backup", False)),
+        "replacement_source_index": raw.get("replacement_source_index"),
+        "quality_flags": _normalize_text_list(raw.get("quality_flags"), limit=8),
     }
 
 
@@ -1599,15 +1893,33 @@ async def _generate_plan_background(
             # 解析内容日历 (如果 key 不全，get() 返回默认空值，需要防止后续出错)
             account_positioning = result.get("account_positioning", {})
             content_strategy = result.get("content_strategy", {})
-            content_calendar = _normalize_content_calendar(result.get("content_calendar", []))
+            raw_content_calendar = _normalize_content_calendar(result.get("content_calendar", []))
+            backup_topic_pool = _normalize_backup_topic_pool(result.get("backup_topic_pool", []))
+            generated_quality_notes = _safe_text(result.get("quality_notes"))
 
-            if not _has_meaningful_plan_result(account_positioning, content_strategy, content_calendar):
+            if not _has_meaningful_plan_result(account_positioning, content_strategy, raw_content_calendar):
                 logger.error("项目 %s AI 返回空策划结果，拒绝覆盖原有内容", project_id)
                 raise ValueError("AI 返回的策划结果为空，未覆盖原有内容")
+
+            draft_account_plan = {
+                "account_positioning": account_positioning,
+                "content_strategy": content_strategy,
+            }
+            content_calendar, backup_topic_pool, calendar_generation_meta, guardrail_quality_notes = await _apply_calendar_quality_guardrails(
+                raw_calendar=raw_content_calendar,
+                backup_pool=backup_topic_pool,
+                client_data=client_data,
+                account_plan=draft_account_plan,
+                project_id=project_id,
+                db=db,
+            )
 
             account_plan = {
                 "account_positioning": account_positioning,
                 "content_strategy": content_strategy,
+                "backup_topic_pool": backup_topic_pool,
+                "calendar_generation_meta": calendar_generation_meta,
+                "quality_notes": "；".join(filter(None, [generated_quality_notes, guardrail_quality_notes])),
             }
 
             # 更新项目
@@ -1723,7 +2035,21 @@ async def _generate_calendar_only_background(
             if cancellation_registry.is_cancelled(project_id):
                 return
 
-            content_calendar = _normalize_content_calendar(result.get("content_calendar", []))
+            raw_content_calendar = _normalize_content_calendar(result.get("content_calendar", []))
+            backup_topic_pool = _normalize_backup_topic_pool(result.get("backup_topic_pool", []))
+            generated_quality_notes = _safe_text(result.get("quality_notes"))
+            content_calendar, backup_topic_pool, calendar_generation_meta, guardrail_quality_notes = await _apply_calendar_quality_guardrails(
+                raw_calendar=raw_content_calendar,
+                backup_pool=backup_topic_pool,
+                client_data=client_data,
+                account_plan=account_plan,
+                project_id=project_id,
+                db=db,
+            )
+            persisted_account_plan = dict(account_plan or {})
+            persisted_account_plan["backup_topic_pool"] = backup_topic_pool
+            persisted_account_plan["calendar_generation_meta"] = calendar_generation_meta
+            persisted_account_plan["quality_notes"] = "；".join(filter(None, [generated_quality_notes, guardrail_quality_notes]))
 
             # 更新项目的 content_calendar 和状态为 completed
             await task_center_repo.update_status(
@@ -1734,7 +2060,7 @@ async def _generate_calendar_only_background(
                 message="正在写入新日历内容",
             )
             await planning_repository.delete_content_items_by_project(db, project_id)
-            await planning_repository.update_plan_result(db, project_id, account_plan, content_calendar)
+            await planning_repository.update_plan_result(db, project_id, persisted_account_plan, content_calendar)
 
             # 批量创建新的内容条目
             for item_data in content_calendar:

@@ -17,6 +17,7 @@ from app.services.prompt_templates import (
     ACCOUNT_PLAN_PROMPT_TEMPLATE,
     BLOGGER_REPORT_PROMPT_TEMPLATE,
     BLOGGER_VIRAL_PROFILE_PROMPT_TEMPLATE,
+    CALENDAR_GAP_FILL_PROMPT_TEMPLATE,
     CONTENT_CALENDAR_PROMPT_TEMPLATE,
     GLOBAL_AI_FACT_RULES_TEMPLATE,
     GLOBAL_AI_WRITING_RULES_TEMPLATE,
@@ -38,6 +39,7 @@ class AIAnalysisService:
     DEFAULT_BLOGGER_VIRAL_PROFILE_PROMPT = BLOGGER_VIRAL_PROFILE_PROMPT_TEMPLATE
     DEFAULT_ACCOUNT_PLAN_PROMPT = ACCOUNT_PLAN_PROMPT_TEMPLATE
     DEFAULT_CONTENT_CALENDAR_PROMPT = CONTENT_CALENDAR_PROMPT_TEMPLATE
+    DEFAULT_CALENDAR_GAP_FILL_PROMPT = CALENDAR_GAP_FILL_PROMPT_TEMPLATE
     DEFAULT_NEXT_TOPIC_BATCH_PROMPT = NEXT_TOPIC_BATCH_PROMPT_TEMPLATE
     DEFAULT_PERFORMANCE_RECAP_PROMPT = PERFORMANCE_RECAP_PROMPT_TEMPLATE
     DEFAULT_PLANNING_INTAKE_PROMPT = PLANNING_INTAKE_PROMPT_TEMPLATE
@@ -58,6 +60,7 @@ class AIAnalysisService:
         "blogger_viral_profile",
         "account_plan",
         "content_calendar",
+        "calendar_gap_fill",
         "performance_recap",
         "next_topic_batch",
         "planning_intake",
@@ -170,6 +173,8 @@ class AIAnalysisService:
             )
         if scene_key == "content_calendar":
             return self._has_meaningful_value(result.get("content_calendar"))
+        if scene_key == "calendar_gap_fill":
+            return self._has_meaningful_value(result.get("items"))
         if scene_key == "performance_recap":
             return any(
                 self._has_meaningful_value(result.get(key))
@@ -1328,6 +1333,48 @@ class AIAnalysisService:
         result = await self._call_ai(system_prompt, user_prompt, scene_key="content_calendar")
         await self._record_prompt_run(
             scene_key="content_calendar",
+            result=result,
+            prompt_meta=prompt_meta,
+            run_context=run_context,
+            db=db,
+        )
+        return result
+
+    async def generate_calendar_gap_fill(
+        self,
+        *,
+        project_context: dict,
+        account_plan: dict,
+        existing_calendar: list[dict],
+        blocked_topics: list[dict],
+        missing_days: list[int],
+        run_context: Optional[dict] = None,
+        db: Optional[Any] = None,
+    ) -> dict:
+        """为被拦截后的日历缺口补写少量候选题。"""
+        import json
+
+        base_system_prompt = (
+            "你是一位短视频选题修复顾问。\n"
+            "你的任务是为已有日历补缺口，只输出能直接替换低质题的高传播候选，不要重写整批方案。"
+        )
+        system_prompt = await self._build_system_prompt(scene_key="calendar_gap_fill", base_prompt=base_system_prompt)
+        prompt_template, prompt_meta = await self._resolve_prompt(
+            scene_key="calendar_gap_fill",
+            default_prompt=self.DEFAULT_CALENDAR_GAP_FILL_PROMPT,
+            db=db,
+        )
+        user_prompt = prompt_template.format(
+            project_context=json.dumps(project_context, ensure_ascii=False, indent=2)[:3000],
+            account_plan_json=json.dumps(account_plan, ensure_ascii=False, indent=2)[:6000],
+            existing_calendar_json=json.dumps(existing_calendar, ensure_ascii=False, indent=2)[:7000],
+            blocked_topics_json=json.dumps(blocked_topics, ensure_ascii=False, indent=2)[:4000],
+            missing_days="、".join(str(day) for day in missing_days),
+        )
+
+        result = await self._call_ai(system_prompt, user_prompt, scene_key="calendar_gap_fill")
+        await self._record_prompt_run(
+            scene_key="calendar_gap_fill",
             result=result,
             prompt_meta=prompt_meta,
             run_context=run_context,

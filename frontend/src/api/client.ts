@@ -456,6 +456,21 @@ export interface AccountPlan {
     hook_template?: string;
     cta_template?: string;
   };
+  backup_topic_pool?: Array<{
+    title_direction: string;
+    content_type: string;
+    content_pillar?: string | null;
+    key_message?: string | null;
+    tags?: string[];
+    batch_shoot_group?: string | null;
+    replacement_hint?: string | null;
+  }>;
+  calendar_generation_meta?: {
+    blocked_count: number;
+    backup_used_count: number;
+    regeneration_count: number;
+  };
+  quality_notes?: string;
   performance_recap?: PerformanceRecap;
   next_topic_batch?: NextTopicBatch;
 }
