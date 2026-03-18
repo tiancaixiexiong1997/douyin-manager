@@ -67,6 +67,13 @@ class AIAnalysisService:
         "video_script",
         "script_remake",
     }
+    HEAVY_TEXT_SCENES = {
+        "account_plan",
+        "content_calendar",
+        "performance_recap",
+        "next_topic_batch",
+        "video_script",
+    }
 
     def __init__(self):
         # 默认回退配置
@@ -201,6 +208,40 @@ class AIAnalysisService:
                 for key in ("account_planning_logic", "why_it_went_viral", "content_playbook", "timeline_overview", "timeline_entries")
             )
         return True
+
+    def _resolve_ai_overall_timeout(self, *, scene_key: Optional[str], is_multimodal_video: bool) -> int:
+        if is_multimodal_video:
+            return int(os.getenv("AI_MULTIMODAL_CALL_OVERALL_TIMEOUT_SECONDS", "180"))
+
+        scene_defaults = {
+            "content_calendar": 240,
+            "account_plan": 180,
+            "video_script": 180,
+            "performance_recap": 180,
+            "next_topic_batch": 150,
+        }
+        default_timeout = scene_defaults.get(scene_key or "", 120)
+        return int(os.getenv("AI_TEXT_CALL_OVERALL_TIMEOUT_SECONDS", str(default_timeout)))
+
+    def _resolve_provider_timeout_budget(
+        self,
+        *,
+        scene_key: Optional[str],
+        overall_timeout_seconds: int,
+        remaining_seconds: float,
+        provider_index: int,
+        provider_count: int,
+    ) -> float:
+        if provider_index >= provider_count - 1:
+            return remaining_seconds
+
+        if scene_key in self.HEAVY_TEXT_SCENES and provider_index == 0:
+            reserved_for_backup = min(45.0, max(20.0, overall_timeout_seconds * 0.2))
+            preferred_primary_budget = max(90.0, overall_timeout_seconds * 0.75)
+            return max(20.0, min(remaining_seconds - reserved_for_backup, preferred_primary_budget))
+
+        fallback_budget = max(20.0, overall_timeout_seconds / max(1, provider_count))
+        return min(remaining_seconds, fallback_budget)
         
     async def reload_settings(self, db=None):
         """重新加载设置缓存"""
@@ -842,11 +883,9 @@ class AIAnalysisService:
                 return {"error": "AI 配置缺失：请检查主运营商或备用运营商配置"}
             
             is_multimodal_video = isinstance(user_content, list)
-            overall_timeout_seconds = int(
-                os.getenv(
-                    "AI_MULTIMODAL_CALL_OVERALL_TIMEOUT_SECONDS" if is_multimodal_video else "AI_TEXT_CALL_OVERALL_TIMEOUT_SECONDS",
-                    "180" if is_multimodal_video else "120",
-                )
+            overall_timeout_seconds = self._resolve_ai_overall_timeout(
+                scene_key=scene_key,
+                is_multimodal_video=is_multimodal_video,
             )
             logger.info(
                 "开始调用 AI API providers=%s multimodal=%s overall_timeout=%ss",
@@ -875,13 +914,13 @@ class AIAnalysisService:
                         errors.append("总超时预算耗尽")
                         break
 
-                    if index < len(providers) - 1:
-                        per_provider_timeout = min(
-                            remaining_seconds,
-                            max(20.0, overall_timeout_seconds / max(1, len(providers))),
-                        )
-                    else:
-                        per_provider_timeout = remaining_seconds
+                    per_provider_timeout = self._resolve_provider_timeout_budget(
+                        scene_key=scene_key,
+                        overall_timeout_seconds=overall_timeout_seconds,
+                        remaining_seconds=remaining_seconds,
+                        provider_index=index,
+                        provider_count=len(providers),
+                    )
                     per_phase_timeout = int(min(max(15, per_provider_timeout), 180))
                     request_timeout = httpx.Timeout(
                         connect=min(20, per_phase_timeout),
@@ -979,6 +1018,8 @@ class AIAnalysisService:
                             return parsed
 
                         error_text = f"HTTP {response.status_code}"
+                        if response.status_code in {401, 403}:
+                            error_text = f"{error_text}（请检查{provider['name']}线路密钥或模型权限）"
                         logger.error(
                             "AI API 调用失败(provider=%s attempt=%s): %s %s",
                             provider["name"],
