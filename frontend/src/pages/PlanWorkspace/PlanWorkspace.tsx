@@ -11,6 +11,7 @@ import {
 } from '../../api/client';
 import { CustomSelect } from '../../components/CustomSelect';
 import { Plus, X, Sparkles, ArrowRight, Clock, CheckCircle, Trash2, RefreshCw, Link as LinkIcon, Search, Filter } from '../../components/Icons';
+import { formatBackendDate } from '../../utils/datetime';
 import { notifyError } from '../../utils/notify';
 import './PlanWorkspace.css';
 
@@ -1054,7 +1055,7 @@ export default function PlanWorkspace() {
 
                 <div className="project-card-footer">
                   <span className="text-sm text-muted">
-                    {new Date(project.created_at).toLocaleDateString('zh-CN')}
+                    {formatBackendDate(project.created_at)}
                   </span>
                   <ArrowRight size={14} className="text-muted" />
                 </div>

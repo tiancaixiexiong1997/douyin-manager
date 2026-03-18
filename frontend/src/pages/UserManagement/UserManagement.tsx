@@ -5,6 +5,7 @@ import { Download, KeyRound, Plus, Shield, Trash2, UserCog, UserRoundCheck, User
 import { type UserCreateRequest, type UserItem, type UserRole, userApi } from '../../api/client';
 import { CustomSelect } from '../../components/CustomSelect';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { formatBackendDateTime } from '../../utils/datetime';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import './UserManagement.css';
 
@@ -358,7 +359,7 @@ export default function UserManagement() {
                   <div className="user-avatar">{u.username.slice(0, 1).toUpperCase()}</div>
                   <div className="user-meta">
                     <div className="user-name">{u.username}</div>
-                    <div className="user-created">{new Date(u.created_at).toLocaleString('zh-CN')}</div>
+                    <div className="user-created">{formatBackendDateTime(u.created_at)}</div>
                   </div>
                   <span className={`badge ${roleClassName(u.role)}`}>{roleLabelMap[u.role]}</span>
                 </div>

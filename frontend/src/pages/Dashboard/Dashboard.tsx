@@ -13,18 +13,15 @@ import {
   RefreshCw,
   Calendar,
 } from '../../components/Icons';
+import { formatBackendDate, toBackendTimestamp } from '../../utils/datetime';
 import './Dashboard.css';
 
 function toSafeTimestamp(value?: string | null): number {
-  if (!value) return 0;
-  const time = new Date(value).getTime();
-  return Number.isFinite(time) ? time : 0;
+  return toBackendTimestamp(value);
 }
 
 function formatDateLabel(value?: string | null): string {
-  const timestamp = toSafeTimestamp(value);
-  if (!timestamp) return '--';
-  return new Date(timestamp).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
+  return formatBackendDate(value, { month: '2-digit', day: '2-digit' }, '--');
 }
 
 export default function Dashboard() {

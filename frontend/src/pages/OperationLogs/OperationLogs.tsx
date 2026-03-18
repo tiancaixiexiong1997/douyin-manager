@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Activity, Filter, RefreshCw } from 'lucide-react';
 
 import { logApi } from '../../api/client';
+import { formatBackendDateTime } from '../../utils/datetime';
 import './OperationLogs.css';
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -197,7 +198,7 @@ export default function OperationLogs() {
               <tbody>
                 {logs.map((item) => (
                   <tr key={item.id}>
-                    <td>{new Date(item.created_at).toLocaleString('zh-CN')}</td>
+                    <td>{formatBackendDateTime(item.created_at)}</td>
                     <td>
                       <span className="logs-action" title={item.action}>{toActionLabel(item.action)}</span>
                       <div className="logs-subcode">{item.action}</div>

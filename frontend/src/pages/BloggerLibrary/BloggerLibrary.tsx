@@ -14,6 +14,7 @@ import {
 } from '../../api/client';
 import { CustomSelect } from '../../components/CustomSelect';
 import { Plus, X, Users, Trash2, RefreshCw, CheckCircle, Clock, Search, GitCompare, Filter, DouyinIcon, Sparkles } from '../../components/Icons';
+import { formatBackendDate, formatBackendDateTime, toBackendTimestamp } from '../../utils/datetime';
 import { notifyError, notifyInfo, notifySuccess } from '../../utils/notify';
 import './BloggerLibrary.css';
 
@@ -104,9 +105,7 @@ function normalizeTimelineEntries(profile: BloggerViralProfile | undefined) {
 }
 
 function getPublishedAtTimestamp(value?: string): number {
-  if (!value) return 0;
-  const timestamp = new Date(value).getTime();
-  return Number.isNaN(timestamp) ? 0 : timestamp;
+  return toBackendTimestamp(value);
 }
 
 function AddBloggerModal({ onClose }: { onClose: () => void }) {
@@ -440,15 +439,13 @@ function BloggerDetailModal({ blogger, onClose }: { blogger: Blogger; onClose: (
   const wasViralProfileBusyRef = useRef(false);
   const formatPublishDate = (value?: string) => {
     if (!value) return '发布未知';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return '发布未知';
-    return `发布 ${new Intl.DateTimeFormat('zh-CN', {
+    return `发布 ${formatBackendDateTime(value, {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
-    }).format(date)}`;
+    }, '发布未知')}`;
   };
   const formatElapsed = (seconds: number) => {
     if (seconds < 60) return `${seconds}秒`;
@@ -458,13 +455,11 @@ function BloggerDetailModal({ blogger, onClose }: { blogger: Blogger; onClose: (
   };
   const formatTimelineDate = (value?: string) => {
     if (!value) return '日期未知';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return new Intl.DateTimeFormat('zh-CN', {
+    return formatBackendDate(value, {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
-    }).format(date);
+    }, '日期未知');
   };
 
   const setRepMutation = useMutation({

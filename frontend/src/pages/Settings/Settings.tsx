@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { settingApi, type SettingsData } from '../../api/client';
 import { Save, Settings as SettingsIcon, Link2, Key, Cpu, User, FileText, LayoutTemplate, PenTool, Bot, Copy, QrCode, RotateCcw, RefreshCw } from 'lucide-react';
+import { formatBackendDateTime } from '../../utils/datetime';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import './Settings.css';
 
@@ -95,9 +96,7 @@ export default function Settings() {
 
   const formatExtractorTime = (value?: string | null) => {
     if (!value) return '尚未同步';
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return value;
-    return parsed.toLocaleString('zh-CN');
+    return formatBackendDateTime(value, {}, '尚未同步');
   };
 
   const tabs = [

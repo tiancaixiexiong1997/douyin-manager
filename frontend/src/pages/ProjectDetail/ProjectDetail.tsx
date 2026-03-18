@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { bloggerApi, downloadApi, planningApi, taskApi, type ContentCalendarItem, type ContentItem, type ContentPerformance, type ContentPerformanceCreateRequest, type VideoScript, type UpdatePlanningRequest, type TaskCenterItem } from '../../api/client';
 import { CustomSelect } from '../../components/CustomSelect';
 import { ArrowLeft, FileText, Loader2, ChevronDown, ChevronUp, Sparkles, Calendar, Pencil, Save, X, RefreshCw, Plus, Trash2, TrendingUp } from '../../components/Icons';
+import { formatBackendDateTime, toBackendTimestamp } from '../../utils/datetime';
 import './ProjectDetail.css';
 
 type ScriptTaskStatus = TaskCenterItem['status'] | null;
@@ -56,10 +57,7 @@ function formatMetricPercent(value?: number | null): string {
 }
 
 function formatDateTime(value?: string | null): string {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString('zh-CN', { hour12: false });
+  return formatBackendDateTime(value);
 }
 
 function getPerformanceEngagementRate(row: Pick<ContentPerformance, 'views' | 'likes' | 'comments' | 'shares'>): number | null {
@@ -920,7 +918,7 @@ export default function ProjectDetail() {
     const tasks = scriptTaskPage?.items || [];
     for (const task of tasks) {
       const prev = map.get(task.entity_id);
-      if (!prev || new Date(task.updated_at).getTime() >= new Date(prev.updated_at).getTime()) {
+      if (!prev || toBackendTimestamp(task.updated_at) >= toBackendTimestamp(prev.updated_at)) {
         map.set(task.entity_id, task);
       }
     }

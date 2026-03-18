@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { authApi, logApi, taskApi, type TaskCenterQueryParams } from '../../api/client';
 import { Clock, RefreshCw, CheckCircle, AlertTriangle, ArrowRight, FileText, X } from 'lucide-react';
+import { formatBackendDateTime } from '../../utils/datetime';
 import './TaskCenter.css';
 
 const STATUS_OPTIONS = [
@@ -144,7 +145,7 @@ export default function TaskCenter() {
   const failedCount = summary.failed || 0;
   const completedCount = summary.completed || 0;
   const latestUpdatedAt = items[0]?.updated_at
-    ? new Date(items[0].updated_at).toLocaleString('zh-CN')
+    ? formatBackendDateTime(items[0].updated_at)
     : '';
   const logItems = logsPage?.items ?? [];
   const logTotal = logsPage?.total ?? 0;
@@ -246,7 +247,7 @@ export default function TaskCenter() {
                     </div>
                   </div>
                   <div className="task-item-right">
-                    <div className="task-item-time">{new Date(item.updated_at).toLocaleString('zh-CN')}</div>
+                    <div className="task-item-time">{formatBackendDateTime(item.updated_at)}</div>
                     <Link to={link} className="task-item-link">
                       查看详情 <ArrowRight size={14} />
                     </Link>
@@ -348,7 +349,7 @@ export default function TaskCenter() {
                     <article className="task-log-item" key={item.id}>
                       <div className="task-log-item-head">
                         <span className="task-log-action">{toActionLabel(item.action)}</span>
-                        <span className="task-log-time">{new Date(item.created_at).toLocaleString('zh-CN')}</span>
+                        <span className="task-log-time">{formatBackendDateTime(item.created_at)}</span>
                       </div>
                       <div className="task-log-item-meta">
                         <span>{toEntityLabel(item.entity_type)}</span>
