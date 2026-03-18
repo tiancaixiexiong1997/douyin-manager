@@ -331,9 +331,9 @@ CALENDAR_GAP_FILL_PROMPT_TEMPLATE = (
     "【需要补写的天数】\n"
     "{missing_days}\n\n"
     "# 输出格式（严格 JSON）\n"
-    "{\n"
+    "{{\n"
     '  "items": [\n'
-    "    {\n"
+    "    {{\n"
     '      "day": 1,\n'
     '      "title_direction": "具体视频标题方向，25字以内",\n'
     '      "content_type": "口播+画中画/跟拍Vlog/教程/测评/探店实拍",\n'
@@ -342,9 +342,9 @@ CALENDAR_GAP_FILL_PROMPT_TEMPLATE = (
     '      "tags": ["话题标签1", "话题标签2", "话题标签3"],\n'
     '      "batch_shoot_group": "建议归属的拍摄分组",\n'
     '      "replacement_hint": "这条在替换时解决了哪类低质问题"\n'
-    "    }\n"
+    "    }}\n"
     "  ]\n"
-    "}\n"
+    "}}\n"
 )
 
 PERFORMANCE_RECAP_PROMPT_TEMPLATE = (

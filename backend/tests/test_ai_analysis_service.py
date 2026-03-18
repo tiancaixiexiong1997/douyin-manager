@@ -7,6 +7,7 @@ from app.services.ai_analysis_service import AIAnalysisService
 from app.services.prompt_templates import (
     ACCOUNT_PLAN_PROMPT_TEMPLATE,
     BLOGGER_VIRAL_PROFILE_PROMPT_TEMPLATE,
+    CALENDAR_GAP_FILL_PROMPT_TEMPLATE,
     CONTENT_CALENDAR_PROMPT_TEMPLATE,
 )
 
@@ -313,3 +314,16 @@ def test_account_and_calendar_prompts_require_backup_pool_and_anti_self_indulgen
     assert "backup_topic_pool" in CONTENT_CALENDAR_PROMPT_TEMPLATE
     assert "肉香盖过班味" in ACCOUNT_PLAN_PROMPT_TEMPLATE
     assert "全是笑声" in CONTENT_CALENDAR_PROMPT_TEMPLATE
+
+
+def test_calendar_gap_fill_prompt_template_can_be_formatted() -> None:
+    rendered = CALENDAR_GAP_FILL_PROMPT_TEMPLATE.format(
+        project_context="{}",
+        account_plan_json="{}",
+        existing_calendar_json="[]",
+        blocked_topics_json="[]",
+        missing_days="1、2",
+    )
+
+    assert '"items"' in rendered
+    assert "{missing_days}" not in rendered
