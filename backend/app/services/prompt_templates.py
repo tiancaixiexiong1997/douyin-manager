@@ -42,6 +42,8 @@ BLOGGER_REPORT_PROMPT_TEMPLATE = (
     "{text_data_json}\n\n"
     "【代表作深度多模态分析数据】\n"
     "{analyses_json}\n\n"
+    "【分析约束】\n"
+    "{analysis_constraints}\n\n"
     "# 输出要求\n"
     "严格以如下 JSON 格式返回，每个字段的值必须具体、可操作，不得出现模糊形容词：\n"
     "{{\n"
@@ -171,6 +173,11 @@ ACCOUNT_PLAN_PROMPT_TEMPLATE = (
     "- 若 viral_profile 中存在 timeline_overview、timeline_entries、post_fire_arrangement、planning_takeaways，请优先参考其起号路径、爆点前后选题变化、延续打法，但不要直接照搬具体日期或标题\n"
     "- 输出时不要照抄参考账号，要提炼可执行结构并结合客户条件重写\n"
     "- 若 viral_profile 与其他字段冲突，以更具体、证据更强的结论为准\n\n"
+    "# 日历排布要求（代运营友好）\n"
+    "- 30天日历既要能对客户交付整月规划，也要服务内部执行排产\n"
+    "- 必须在30条里明确本月前10条优先验证题，避免全部平均用力\n"
+    "- 对适合同天集中拍摄的内容（尤其口播、画中画、教程、测评），要尽量归成可批量拍摄的执行组\n"
+    "- replacement_hint 要告诉运营：如果前10条验证效果一般，这条可以往哪个方向替换或优化\n\n"
     "# 输出要求\n"
     "严格以如下 JSON 格式返回，禁止省略任何字段：\n"
     "{{\n"
@@ -201,7 +208,13 @@ ACCOUNT_PLAN_PROMPT_TEMPLATE = (
     '      "content_type": "口播+画中画/跟拍Vlog/教程/测评/探店实拍",\n'
     '      "content_pillar": "所属内容支柱名称",\n'
     '      "key_message": "这条视频要让观众记住的一句话核心信息",\n'
-    '      "tags": ["话题标签1", "话题标签2", "话题标签3"]\n'
+    '      "tags": ["话题标签1", "话题标签2", "话题标签3"],\n'
+    '      "priority": "P0-主验证/P1-稳定输出/P2-补充储备",\n'
+    '      "content_role": "主验证/稳定输出/流量放大/信任建立/承接转化/补充试错",\n'
+    '      "is_main_validation": true,\n'
+    '      "is_batch_shootable": true,\n'
+    '      "batch_shoot_group": "适合同天集中拍摄的分组名，如口播连拍-避坑清单",\n'
+    '      "replacement_hint": "如果前10条验证数据一般，这条优先替换成什么方向或怎么改"\n'
     '    }}\n'
     '  ]\n'
     "}}\n\n"
@@ -217,6 +230,11 @@ CONTENT_CALENDAR_PROMPT_TEMPLATE = (
     "- 禁止在缺乏具体场景的情况下给出空泛的标题（如'如何做时间管理'，必须细化到'每天通勤1小时，我如何学会3门语言'）\n"
     "- 禁止30天日历中出现同质化的高级复制，每一天的角度（痛点、场景、展现方式）必须具备差异性\n"
     "- content_calendar 必须从第1天到第30天，严格输出30条，不得截断\n\n"
+    "# 排布要求\n"
+    "- 这份30天日历既要能给客户交付整月方案，也要方便代运营团队做批量拍摄和内部排产\n"
+    "- 必须明确前10条优先验证题，并区分稳定输出、流量放大、信任建立、承接转化等内容角色\n"
+    "- 对适合同天集中拍摄的内容，优先归类到同一个 batch_shoot_group，尤其是口播、画中画、教程、测评\n"
+    "- replacement_hint 要告诉团队：如果前10条验证效果不理想，这条最优先替换成什么方向\n\n"
     "# 现状信息\n"
     "- 客户/品牌名称：{client_name}\n"
     "- 核心定位：{core_identity}\n"
@@ -240,7 +258,13 @@ CONTENT_CALENDAR_PROMPT_TEMPLATE = (
     '      "content_type": "口播+画中画/跟拍Vlog/教程/测评/探店实拍",\n'
     '      "content_pillar": "所属内容支柱名称",\n'
     '      "key_message": "这条视频要让观众记住的一句话核心信息",\n'
-    '      "tags": ["话题标签1", "话题标签2", "话题标签3"]\n'
+    '      "tags": ["话题标签1", "话题标签2", "话题标签3"],\n'
+    '      "priority": "P0-主验证/P1-稳定输出/P2-补充储备",\n'
+    '      "content_role": "主验证/稳定输出/流量放大/信任建立/承接转化/补充试错",\n'
+    '      "is_main_validation": true,\n'
+    '      "is_batch_shootable": true,\n'
+    '      "batch_shoot_group": "适合同天集中拍摄的分组名，如口播连拍-避坑清单",\n'
+    '      "replacement_hint": "如果前10条验证数据一般，这条优先替换成什么方向或怎么改"\n'
     '    }}\n'
     '  ]\n'
     "}}\n\n"

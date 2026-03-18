@@ -494,6 +494,12 @@ export interface ContentCalendarItem {
   content_pillar?: string;
   key_message?: string;
   tags?: string[];
+  priority?: string;
+  content_role?: string;
+  is_main_validation?: boolean;
+  is_batch_shootable?: boolean;
+  batch_shoot_group?: string;
+  replacement_hint?: string;
 }
 
 export interface ContentItem {

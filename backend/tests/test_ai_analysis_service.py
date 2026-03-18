@@ -165,6 +165,98 @@ async def test_generate_account_plan_includes_timeline_fields_from_viral_profile
     assert "先用单点痛点破圈，再做场景延伸" in user_prompt
 
 
+@pytest.mark.asyncio
+async def test_generate_blogger_report_without_representative_analysis_degrades_film_and_marks_copywriting(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = AIAnalysisService()
+    captured: dict[str, Any] = {}
+
+    async def fake_resolve_prompt(**_kwargs: Any) -> tuple[str, dict[str, Any]]:
+        return ("约束:{analysis_constraints}", {})
+
+    async def fake_call_ai(_system_prompt: str, user_prompt: str) -> dict[str, Any]:
+        captured["user_prompt"] = user_prompt
+        return {
+            "filming_signature": {
+                "visual_style": "固定机位室内口播",
+                "editing_signature": "快切",
+                "production_level": "半专业",
+                "unique_techniques": "字幕强调",
+            },
+            "copywriting_dna": {
+                "tone_of_voice": "直接、口语化",
+                "typical_hooks": ["先说一个扎心事实"],
+                "cta_patterns": "结尾追问一句",
+                "interaction_style": "会在评论区接话",
+            },
+        }
+
+    async def fake_record_prompt_run(**_kwargs: Any) -> None:
+        return None
+
+    async def fake_build_system_prompt(*, scene_key: str, base_prompt: str) -> str:
+        assert scene_key == "blogger_report"
+        return base_prompt
+
+    monkeypatch.setattr(service, "_resolve_prompt", fake_resolve_prompt)
+    monkeypatch.setattr(service, "_build_system_prompt", fake_build_system_prompt)
+    monkeypatch.setattr(service, "_call_ai", fake_call_ai)
+    monkeypatch.setattr(service, "_record_prompt_run", fake_record_prompt_run)
+
+    result = await service.generate_blogger_report(
+        blogger_info={"nickname": "测试博主"},
+        videos_text_data=[{"title": "标题样本", "description": "描述样本"}],
+        videos_analysis=[],
+    )
+
+    assert "当前没有代表作深度多模态分析数据" in captured["user_prompt"]
+    assert result["filming_signature"]["visual_style"] == "数据不足，无法判断"
+    assert result["filming_signature"]["editing_signature"] == "数据不足，无法判断"
+    assert result["copywriting_dna"]["tone_of_voice"].startswith("仅基于标题/描述样本推断：")
+    assert result["copywriting_dna"]["typical_hooks"][0].startswith("仅基于标题/描述样本推断：")
+
+
+@pytest.mark.asyncio
+async def test_generate_blogger_report_with_representative_analysis_keeps_original_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = AIAnalysisService()
+
+    async def fake_resolve_prompt(**_kwargs: Any) -> tuple[str, dict[str, Any]]:
+        return ("约束:{analysis_constraints}", {})
+
+    async def fake_call_ai(_system_prompt: str, _user_prompt: str) -> dict[str, Any]:
+        return {
+            "filming_signature": {
+                "visual_style": "手持探店",
+                "editing_signature": "高频快切",
+                "production_level": "专业团队",
+                "unique_techniques": "大广角运动镜头",
+            },
+            "copywriting_dna": {
+                "tone_of_voice": "短句压缩信息",
+            },
+        }
+
+    async def fake_record_prompt_run(**_kwargs: Any) -> None:
+        return None
+
+    async def fake_build_system_prompt(*, scene_key: str, base_prompt: str) -> str:
+        assert scene_key == "blogger_report"
+        return base_prompt
+
+    monkeypatch.setattr(service, "_resolve_prompt", fake_resolve_prompt)
+    monkeypatch.setattr(service, "_build_system_prompt", fake_build_system_prompt)
+    monkeypatch.setattr(service, "_call_ai", fake_call_ai)
+    monkeypatch.setattr(service, "_record_prompt_run", fake_record_prompt_run)
+
+    result = await service.generate_blogger_report(
+        blogger_info={"nickname": "测试博主"},
+        videos_text_data=[{"title": "标题样本"}],
+        videos_analysis=[{"content_summary": "真实代表作分析"}],
+    )
+
+    assert result["filming_signature"]["visual_style"] == "手持探店"
+    assert result["copywriting_dna"]["tone_of_voice"] == "短句压缩信息"
+
+
 def test_blogger_viral_profile_prompt_template_can_be_formatted_with_timeline_fields() -> None:
     rendered = BLOGGER_VIRAL_PROFILE_PROMPT_TEMPLATE.format(
         nickname="测试博主",

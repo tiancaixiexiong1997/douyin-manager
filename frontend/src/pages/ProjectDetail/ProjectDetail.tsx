@@ -2,12 +2,13 @@ import { useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { bloggerApi, downloadApi, planningApi, taskApi, type ContentItem, type ContentPerformance, type ContentPerformanceCreateRequest, type VideoScript, type UpdatePlanningRequest, type TaskCenterItem } from '../../api/client';
+import { bloggerApi, downloadApi, planningApi, taskApi, type ContentCalendarItem, type ContentItem, type ContentPerformance, type ContentPerformanceCreateRequest, type VideoScript, type UpdatePlanningRequest, type TaskCenterItem } from '../../api/client';
 import { CustomSelect } from '../../components/CustomSelect';
 import { ArrowLeft, FileText, Loader2, ChevronDown, ChevronUp, Sparkles, Calendar, Pencil, Save, X, RefreshCw, Plus, Trash2, TrendingUp } from '../../components/Icons';
 import './ProjectDetail.css';
 
 type ScriptTaskStatus = TaskCenterItem['status'] | null;
+type CalendarDisplayItem = ContentItem & { calendarMeta?: ContentCalendarItem | null };
 
 function formatMetricNumber(value?: number | null): string {
   return Number(value || 0).toLocaleString('zh-CN');
@@ -952,6 +953,24 @@ export default function ProjectDetail() {
   const performanceRecap = plan?.performance_recap;
   const nextTopicBatch = plan?.next_topic_batch;
   const contentItemMap = new Map((project.content_items || []).map((item) => [item.id, item]));
+  const calendarMetaByDay = new Map<number, ContentCalendarItem>(
+    (project.content_calendar || [])
+      .filter((item): item is ContentCalendarItem => Boolean(item && typeof item.day === 'number'))
+      .map((item) => [item.day, item]),
+  );
+  const calendarDisplayItems: CalendarDisplayItem[] = (project.content_items || [])
+    .map((item) => ({
+      ...item,
+      calendarMeta: calendarMetaByDay.get(item.day_number) || null,
+    }))
+    .sort((a, b) => a.day_number - b.day_number);
+  const mainValidationCount = calendarDisplayItems.filter((item) => item.calendarMeta?.is_main_validation).length;
+  const batchShootableCount = calendarDisplayItems.filter((item) => item.calendarMeta?.is_batch_shootable).length;
+  const batchGroupCount = new Set(
+    calendarDisplayItems
+      .map((item) => item.calendarMeta?.batch_shoot_group?.trim())
+      .filter((value): value is string => Boolean(value)),
+  ).size;
   const linkedContentItemIds = new Set(
     performanceList.map((row) => row.content_item_id).filter((value): value is string => Boolean(value))
   );
@@ -1143,8 +1162,8 @@ export default function ProjectDetail() {
             <div className="detail-calendar-title-wrap">
               <Calendar size={18} className="detail-calendar-icon" />
               <h2 className="detail-calendar-title">30天内容日历</h2>
-              {project.content_items && project.content_items.length > 0 && (
-                <span className="badge badge-purple">{project.content_items.length} 条</span>
+              {calendarDisplayItems.length > 0 && (
+                <span className="badge badge-purple">{calendarDisplayItems.length} 条</span>
               )}
             </div>
             {project.status !== 'in_progress' && (
@@ -1163,10 +1182,25 @@ export default function ProjectDetail() {
               <div className="detail-calendar-empty-text">正在为您深度规划每天的内容方向与形式...</div>
             </div>
           ) : (
+            <>
+            {calendarDisplayItems.length > 0 && (
+              <div className="calendar-summary-row">
+                <div className="calendar-summary-pill">
+                  <span className="calendar-summary-label">主验证题</span>
+                  <strong>{mainValidationCount}</strong>
+                </div>
+                <div className="calendar-summary-pill">
+                  <span className="calendar-summary-label">可批量拍</span>
+                  <strong>{batchShootableCount}</strong>
+                </div>
+                <div className="calendar-summary-pill">
+                  <span className="calendar-summary-label">拍摄分组</span>
+                  <strong>{batchGroupCount}</strong>
+                </div>
+              </div>
+            )}
             <div className="calendar-grid">
-            {(project.content_items || [])
-              .sort((a, b) => a.day_number - b.day_number)
-              .map(item => (
+            {calendarDisplayItems.map(item => (
                 <div
                   key={item.id}
                   className={`calendar-item ${item.is_script_generated ? 'calendar-item-done' : ''} ${editingId === item.id ? 'calendar-item-editing' : ''}`}
@@ -1216,6 +1250,19 @@ export default function ProjectDetail() {
                         </button>
                       </div>
                       <div className="calendar-title">{item.title_direction}</div>
+                      <div className="calendar-tags">
+                        {item.calendarMeta?.priority ? (
+                          <span className={`badge calendar-priority-badge ${item.calendarMeta.priority.startsWith('P0') ? 'badge-green' : item.calendarMeta.priority.startsWith('P2') ? 'badge-yellow' : 'badge-blue'}`}>
+                            {item.calendarMeta.priority}
+                          </span>
+                        ) : null}
+                        {item.calendarMeta?.content_role ? (
+                          <span className="badge badge-blue calendar-role-badge">{item.calendarMeta.content_role}</span>
+                        ) : null}
+                        {item.calendarMeta?.is_batch_shootable ? (
+                          <span className="badge badge-purple calendar-role-badge">可批量拍</span>
+                        ) : null}
+                      </div>
                       <div className="calendar-meta">
                         <span className="badge badge-purple calendar-type-badge">{item.content_type || '待定'}</span>
                         {item.is_script_generated ? (
@@ -1228,11 +1275,24 @@ export default function ProjectDetail() {
                           <span className="script-gen-label">待生成</span>
                         )}
                       </div>
+                      {item.calendarMeta?.batch_shoot_group ? (
+                        <div className="calendar-extra-line">
+                          <span className="calendar-extra-label">拍摄分组</span>
+                          <span className="calendar-extra-value">{item.calendarMeta.batch_shoot_group}</span>
+                        </div>
+                      ) : null}
+                      {item.calendarMeta?.replacement_hint ? (
+                        <div className="calendar-extra-line calendar-extra-note">
+                          <span className="calendar-extra-label">替换建议</span>
+                          <span className="calendar-extra-value">{item.calendarMeta.replacement_hint}</span>
+                        </div>
+                      ) : null}
                     </>
                   )}
                 </div>
               ))}
           </div>
+          </>
           )}
         </div>
       )}

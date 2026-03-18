@@ -176,6 +176,88 @@ def _normalize_content_type(value: str | None) -> str:
     return "口播+画中画"
 
 
+def _normalize_calendar_priority(value) -> str:
+    text = _safe_text(value)
+    if text.startswith("P0"):
+        return "P0-主验证"
+    if text.startswith("P2"):
+        return "P2-补充储备"
+    if text.startswith("P1"):
+        return "P1-稳定输出"
+    return "P1-稳定输出"
+
+
+def _normalize_calendar_role(value) -> str:
+    text = _safe_text(value)
+    allowed = {"主验证", "稳定输出", "流量放大", "信任建立", "承接转化", "补充试错"}
+    return text if text in allowed else "稳定输出"
+
+
+def _derive_batch_group(content_type: str) -> str:
+    text = _normalize_content_type(content_type)
+    if "口播" in text or "画中画" in text:
+        return "口播连拍"
+    if "教程" in text:
+        return "教程演示"
+    if "测评" in text:
+        return "测评连拍"
+    if "探店" in text or "实拍" in text:
+        return "外拍探店"
+    if "Vlog" in text or "跟拍" in text:
+        return "跟拍纪实"
+    return "混合拍摄"
+
+
+def _derive_batch_shootable(content_type: str) -> bool:
+    text = _normalize_content_type(content_type)
+    return any(keyword in text for keyword in ("口播", "画中画", "教程", "测评"))
+
+
+def _normalize_content_calendar_item(raw: dict, *, day_fallback: int) -> dict:
+    day = raw.get("day") if isinstance(raw.get("day"), int) else day_fallback
+    content_type = _normalize_content_type(raw.get("content_type"))
+    priority = _normalize_calendar_priority(raw.get("priority"))
+    is_main_validation_raw = raw.get("is_main_validation")
+    is_main_validation = (
+        bool(is_main_validation_raw)
+        if isinstance(is_main_validation_raw, bool)
+        else priority == "P0-主验证" or day <= 10
+    )
+    is_batch_shootable_raw = raw.get("is_batch_shootable")
+    is_batch_shootable = (
+        bool(is_batch_shootable_raw)
+        if isinstance(is_batch_shootable_raw, bool)
+        else _derive_batch_shootable(content_type)
+    )
+    batch_group = _safe_text(raw.get("batch_shoot_group")) or _derive_batch_group(content_type)
+
+    return {
+        "day": day,
+        "title_direction": _safe_text(raw.get("title_direction")) or f"Day {day} 内容方向",
+        "content_type": content_type,
+        "content_pillar": _safe_text(raw.get("content_pillar")) or None,
+        "key_message": _safe_text(raw.get("key_message")),
+        "tags": _normalize_text_list(raw.get("tags"), limit=6),
+        "priority": "P0-主验证" if is_main_validation else priority,
+        "content_role": _normalize_calendar_role(raw.get("content_role")),
+        "is_main_validation": is_main_validation,
+        "is_batch_shootable": is_batch_shootable,
+        "batch_shoot_group": batch_group if is_batch_shootable else (batch_group or "混合拍摄"),
+        "replacement_hint": _safe_text(raw.get("replacement_hint")),
+    }
+
+
+def _normalize_content_calendar(value) -> list[dict]:
+    if not isinstance(value, list):
+        return []
+    items: list[dict] = []
+    for index, raw in enumerate(value, start=1):
+        if not isinstance(raw, dict):
+            continue
+        items.append(_normalize_content_calendar_item(raw, day_fallback=index))
+    return items
+
+
 def _normalize_draft(raw: dict) -> dict[str, str]:
     return {key: _safe_text(raw.get(key)) for key in INTAKE_DRAFT_KEYS}
 
@@ -1369,14 +1451,23 @@ async def import_next_topic_batch_item(
 
     updated_calendar = list(project.content_calendar or [])
     updated_calendar.append(
-        {
-            "day": next_day_number,
-            "title_direction": batch_item.get("title_direction", ""),
-            "content_type": _normalize_content_type(batch_item.get("content_type")),
-            "content_pillar": batch_item.get("content_pillar"),
-            "key_message": batch_item.get("why_this_angle") or batch_item.get("hook_hint") or "",
-            "tags": [batch_item.get("content_pillar")] if batch_item.get("content_pillar") else [],
-        }
+        _normalize_content_calendar_item(
+            {
+                "day": next_day_number,
+                "title_direction": batch_item.get("title_direction", ""),
+                "content_type": _normalize_content_type(batch_item.get("content_type")),
+                "content_pillar": batch_item.get("content_pillar"),
+                "key_message": batch_item.get("why_this_angle") or batch_item.get("hook_hint") or "",
+                "tags": [batch_item.get("content_pillar")] if batch_item.get("content_pillar") else [],
+                "priority": "P2-补充储备",
+                "content_role": "补充试错",
+                "is_main_validation": False,
+                "is_batch_shootable": _derive_batch_shootable(_normalize_content_type(batch_item.get("content_type"))),
+                "batch_shoot_group": _derive_batch_group(_normalize_content_type(batch_item.get("content_type"))),
+                "replacement_hint": batch_item.get("why_this_angle") or "",
+            },
+            day_fallback=next_day_number,
+        )
     )
     project.content_calendar = updated_calendar
 
@@ -1496,7 +1587,7 @@ async def _generate_plan_background(
             # 解析内容日历 (如果 key 不全，get() 返回默认空值，需要防止后续出错)
             account_positioning = result.get("account_positioning", {})
             content_strategy = result.get("content_strategy", {})
-            content_calendar = result.get("content_calendar", [])
+            content_calendar = _normalize_content_calendar(result.get("content_calendar", []))
 
             if not account_positioning and not content_strategy and "raw_analysis" in result:
                 logger.error(f"严重解析失败，项目 {project_id} 无法获取账号定位与策略。原始结果已丢弃。")
@@ -1619,7 +1710,7 @@ async def _generate_calendar_only_background(
             if cancellation_registry.is_cancelled(project_id):
                 return
 
-            content_calendar = result.get("content_calendar", [])
+            content_calendar = _normalize_content_calendar(result.get("content_calendar", []))
 
             # 更新项目的 content_calendar 和状态为 completed
             await task_center_repo.update_status(

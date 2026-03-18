@@ -180,6 +180,21 @@
 .report-item-value { font-size: 12px; color: var(--text-secondary); }
 .report-score { font-size: 13px; color: var(--primary-500); font-weight: 600; margin-bottom: 8px; }
 .report-elements { padding-left: 16px; font-size: 12px; color: var(--text-secondary); line-height: 1.8; }
+.report-callout {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(245, 158, 11, 0.24);
+  background: rgba(245, 158, 11, 0.08);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.report-inline-note {
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
 .viral-timeline-card {
   margin-top: 12px;
   padding: 14px;
@@ -836,7 +851,9 @@
 [data-theme='light'] .blogger-detail-modal .video-item,
 [data-theme='light'] .blogger-detail-modal .rep-video-analysis,
 [data-theme='light'] .blogger-detail-modal .rep-box,
-[data-theme='light'] .viral-list-wrap {
+[data-theme='light'] .viral-list-wrap,
+[data-theme='light'] .viral-timeline-card,
+[data-theme='light'] .viral-timeline-item {
   background: #ffffff;
   border-color: rgba(148, 163, 184, 0.24);
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
@@ -845,6 +862,44 @@
 [data-theme='light'] .blogger-detail-modal .empty-hint {
   background: #f8fafc;
   border-color: rgba(148, 163, 184, 0.28);
+}
+
+[data-theme='light'] .report-callout {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.22);
+  color: #7c5a10;
+}
+
+[data-theme='light'] .report-inline-note {
+  color: #64748b;
+}
+
+[data-theme='light'] .viral-timeline-card {
+  background: linear-gradient(180deg, #f8fbff, #f1f6ff);
+  border-color: rgba(96, 165, 250, 0.2);
+}
+
+[data-theme='light'] .viral-timeline-item {
+  background: #ffffff;
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+[data-theme='light'] .viral-timeline-overview,
+[data-theme='light'] .viral-timeline-meta,
+[data-theme='light'] .viral-timeline-why {
+  color: #475569;
+}
+
+[data-theme='light'] .viral-timeline-date {
+  color: #64748b;
+}
+
+[data-theme='light'] .viral-timeline-title {
+  color: #0f172a;
+}
+
+[data-theme='light'] .viral-timeline-note {
+  border-top-color: rgba(148, 163, 184, 0.18);
 }
 
 

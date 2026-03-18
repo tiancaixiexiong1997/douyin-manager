@@ -362,6 +362,9 @@ function BloggerDetailModal({ blogger, onClose }: { blogger: Blogger; onClose: (
   const report = detail?.analysis_report;
   const viralProfile = report?.viral_profile;
   const timelineEntries = normalizeTimelineEntries(viralProfile);
+  const hasRepresentativeAnalysis = Boolean(
+    detail?.videos?.some((video) => video.video_id.startsWith('rep_') && video.ai_analysis),
+  );
   const viralProfileStep = repTaskProgress?.step;
   const isViralProfileBusy = viralProfileStep === 'viral_profile' || viralProfileStep === 'viral_profile_queued';
   const wasViralProfileBusyRef = useRef(false);
@@ -789,6 +792,11 @@ function BloggerDetailModal({ blogger, onClose }: { blogger: Blogger; onClose: (
               </div>
               {report && (
                 <>
+                  {!hasRepresentativeAnalysis && (
+                    <div className="report-callout">
+                      当前未设置代表作，文案风格主要基于标题和描述样本推断，拍摄风格暂无法可靠判断。可在下方视频列表点击“设为代表作”，补充深度多模态分析来提升准确度。
+                    </div>
+                  )}
                   {report.ip_positioning && (
                     <div className="report-section">
                       <div className="report-section-title">IP 定位</div>
@@ -825,6 +833,9 @@ function BloggerDetailModal({ blogger, onClose }: { blogger: Blogger; onClose: (
                   {report.copywriting_dna && (
                     <div className="report-section">
                       <div className="report-section-title">文案风格</div>
+                      {!hasRepresentativeAnalysis && (
+                        <div className="report-inline-note">当前为标题/描述样本推断，不等同于完整口播文案分析。</div>
+                      )}
                       {(() => {
                         const typicalHooks = normalizeTypicalHooks(report);
                         return (
@@ -853,6 +864,9 @@ function BloggerDetailModal({ blogger, onClose }: { blogger: Blogger; onClose: (
                   {report.filming_signature && (
                     <div className="report-section">
                       <div className="report-section-title">拍摄风格</div>
+                      {!hasRepresentativeAnalysis && (
+                        <div className="report-inline-note">当前未设定代表作，这一栏默认只保留“数据不足，无法判断”。</div>
+                      )}
                       <div className="report-grid">
                         <div className="report-item">
                           <div className="report-item-label">视觉风格</div>

@@ -935,6 +935,18 @@ class AIAnalysisService:
     ) -> dict:
         """综合双轨数据生成报告"""
         import json
+
+        has_multimodal_reference = bool(videos_analysis)
+        analysis_constraints = (
+            "当前已提供代表作深度多模态分析数据，可以结合标题样本和代表作画面/音频来判断拍摄风格、剪辑特征、文案风格。"
+            if has_multimodal_reference
+            else (
+                "当前没有代表作深度多模态分析数据，只能基于标题、描述和互动数据做文字层判断。"
+                "因此：filming_signature 下所有字段必须填写“数据不足，无法判断”；"
+                "copywriting_dna 下的结论必须明确属于“基于标题/描述样本推断”，不要写得像看过完整视频或听过口播。"
+            )
+        )
+
         base_system_prompt = (
             "你是一位顶级短视频 IP 拆解分析师，专注于从数据中提炼博主的底层内容基因。\n"
             "你的分析标准：每一个结论都必须能在数据中找到具体证据，"
@@ -959,10 +971,43 @@ class AIAnalysisService:
             signature=blogger_info.get('signature', ''),
             video_count=blogger_info.get('video_count', 0),
             text_data_json=text_data_json[:15000],
-            analyses_json=analyses_json[:5000]
+            analyses_json=analyses_json[:5000],
+            analysis_constraints=analysis_constraints,
         )
 
         result = await self._call_ai(system_prompt, user_prompt)
+        if isinstance(result, dict) and not has_multimodal_reference:
+            filming_signature = result.get("filming_signature")
+            result["filming_signature"] = {
+                "visual_style": "数据不足，无法判断",
+                "editing_signature": "数据不足，无法判断",
+                "production_level": "数据不足，无法判断",
+                "unique_techniques": "数据不足，无法判断",
+                **(filming_signature if isinstance(filming_signature, dict) else {}),
+            }
+            for key in ("visual_style", "editing_signature", "production_level", "unique_techniques"):
+                result["filming_signature"][key] = "数据不足，无法判断"
+
+            copywriting_dna = result.get("copywriting_dna")
+            if isinstance(copywriting_dna, dict):
+                prefix = "仅基于标题/描述样本推断："
+                for key in ("tone_of_voice", "cta_patterns", "interaction_style"):
+                    value = str(copywriting_dna.get(key, "") or "").strip()
+                    if value and value != "数据不足，无法判断" and "基于标题" not in value and "仅基于标题" not in value:
+                        copywriting_dna[key] = f"{prefix}{value}"
+                hooks = copywriting_dna.get("typical_hooks")
+                if isinstance(hooks, list):
+                    normalized_hooks = []
+                    for item in hooks:
+                        text = str(item or "").strip()
+                        if not text:
+                            continue
+                        if "基于标题" not in text and "仅基于标题" not in text:
+                            text = f"{prefix}{text}"
+                        normalized_hooks.append(text)
+                    copywriting_dna["typical_hooks"] = normalized_hooks
+                result["copywriting_dna"] = copywriting_dna
+
         await self._record_prompt_run(
             scene_key="blogger_report",
             result=result,
