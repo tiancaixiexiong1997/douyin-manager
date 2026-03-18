@@ -258,6 +258,15 @@ def _normalize_content_calendar(value) -> list[dict]:
     return items
 
 
+def _has_meaningful_plan_result(account_positioning: dict | None, content_strategy: dict | None, content_calendar: list | None) -> bool:
+    positioning = account_positioning if isinstance(account_positioning, dict) else {}
+    strategy = content_strategy if isinstance(content_strategy, dict) else {}
+    calendar = content_calendar if isinstance(content_calendar, list) else []
+    has_positioning = any(bool(_safe_text(value)) for value in positioning.values())
+    has_strategy = any(bool(_safe_text(value)) for value in strategy.values())
+    return has_positioning or has_strategy or bool(calendar)
+
+
 def _normalize_draft(raw: dict) -> dict[str, str]:
     return {key: _safe_text(raw.get(key)) for key in INTAKE_DRAFT_KEYS}
 
@@ -673,6 +682,7 @@ async def create_planning(
             request.model_dump(),
             request.reference_blogger_ids,
             task_key,
+            "draft",
             job_id=task_key,
             description=f"planning generate {project.id}",
         )
@@ -802,6 +812,7 @@ async def retry_project(
             client_data,
             project.reference_blogger_ids or [],
             task_key,
+            previous_status,
             job_id=task_key,
             description=f"planning retry {project.id}",
         )
@@ -1502,6 +1513,7 @@ async def _generate_plan_background(
     client_data: dict,
     blogger_ids: list,
     task_key: str | None = None,
+    fallback_status: str | None = None,
 ):
     """后台任务：生成账号定位和内容日历（关键步骤均检查取消）"""
     from app.models.db_session import AsyncSessionLocal
@@ -1589,8 +1601,9 @@ async def _generate_plan_background(
             content_strategy = result.get("content_strategy", {})
             content_calendar = _normalize_content_calendar(result.get("content_calendar", []))
 
-            if not account_positioning and not content_strategy and "raw_analysis" in result:
-                logger.error(f"严重解析失败，项目 {project_id} 无法获取账号定位与策略。原始结果已丢弃。")
+            if not _has_meaningful_plan_result(account_positioning, content_strategy, content_calendar):
+                logger.error("项目 %s AI 返回空策划结果，拒绝覆盖原有内容", project_id)
+                raise ValueError("AI 返回的策划结果为空，未覆盖原有内容")
 
             account_plan = {
                 "account_positioning": account_positioning,
@@ -1633,7 +1646,7 @@ async def _generate_plan_background(
             logger.error(f"项目 {project_id} 策划生成失败: {e}", exc_info=True)
             project = await planning_repository.get_by_id(db, project_id)
             if project:
-                project.status = "draft"
+                project.status = fallback_status or "draft"
                 await db.commit()
             await task_center_repo.update_status(
                 db,

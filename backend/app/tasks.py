@@ -56,8 +56,14 @@ def run_blogger_viral_profile_generate(blogger_uuid: str, task_key: str | None =
     asyncio.run(_generate_blogger_viral_profile_background(blogger_uuid, task_key))
 
 
-def run_planning_generate(project_id: str, client_data: dict, blogger_ids: list, task_key: str | None = None) -> None:
-    asyncio.run(_generate_plan_background(project_id, client_data, blogger_ids, task_key))
+def run_planning_generate(
+    project_id: str,
+    client_data: dict,
+    blogger_ids: list,
+    task_key: str | None = None,
+    fallback_status: str | None = None,
+) -> None:
+    asyncio.run(_generate_plan_background(project_id, client_data, blogger_ids, task_key, fallback_status))
 
 
 def run_planning_calendar_generate(
