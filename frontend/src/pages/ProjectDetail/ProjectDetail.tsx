@@ -11,6 +11,42 @@ type ScriptTaskStatus = TaskCenterItem['status'] | null;
 type CalendarDisplayItem = ContentItem & { calendarMeta?: ContentCalendarItem | null };
 const BATCH_GROUP_FILTER_PREFIX = 'batch_group:';
 
+function normalizeCalendarContentType(value?: string | null): string {
+  const raw = String(value || '').trim();
+  if (!raw) return '口播+画中画';
+  const compact = raw.toLowerCase().replace(/\s+/g, '');
+  if (compact.includes('口播') || compact.includes('画中画')) return '口播+画中画';
+  if (compact.includes('vlog') || raw.includes('跟拍') || raw.includes('记录')) return '跟拍Vlog';
+  if (raw.includes('评测') || raw.includes('测评')) return '测评';
+  if (raw.includes('教程') || raw.includes('教学')) return '教程';
+  if (raw.includes('探店')) return '探店实拍';
+  return raw;
+}
+
+function deriveCalendarBatchGroup(contentType?: string | null): string {
+  const text = normalizeCalendarContentType(contentType);
+  if (text.includes('口播') || text.includes('画中画')) return '口播连拍';
+  if (text.includes('教程')) return '教程演示';
+  if (text.includes('测评')) return '测评连拍';
+  if (text.includes('探店') || text.includes('实拍')) return '外拍探店';
+  if (text.includes('Vlog') || text.includes('跟拍')) return '跟拍纪实';
+  return '混合拍摄';
+}
+
+function isCalendarBatchShootable(item: CalendarDisplayItem): boolean {
+  if (typeof item.calendarMeta?.is_batch_shootable === 'boolean') {
+    return item.calendarMeta.is_batch_shootable;
+  }
+  const text = normalizeCalendarContentType(item.content_type);
+  return ['口播', '画中画', '教程', '测评'].some((keyword) => text.includes(keyword));
+}
+
+function getCalendarBatchGroup(item: CalendarDisplayItem): string {
+  const explicitGroup = item.calendarMeta?.batch_shoot_group?.trim();
+  if (explicitGroup) return explicitGroup;
+  return deriveCalendarBatchGroup(item.content_type);
+}
+
 function formatMetricNumber(value?: number | null): string {
   return Number(value || 0).toLocaleString('zh-CN');
 }
@@ -967,10 +1003,10 @@ export default function ProjectDetail() {
     }))
     .sort((a, b) => a.day_number - b.day_number);
   const mainValidationCount = calendarDisplayItems.filter((item) => item.calendarMeta?.is_main_validation).length;
-  const batchShootableCount = calendarDisplayItems.filter((item) => item.calendarMeta?.is_batch_shootable).length;
+  const batchShootableCount = calendarDisplayItems.filter((item) => isCalendarBatchShootable(item)).length;
   const batchGroupEntries = Array.from(
     calendarDisplayItems.reduce((map, item) => {
-      const group = item.calendarMeta?.batch_shoot_group?.trim();
+      const group = getCalendarBatchGroup(item);
       if (!group) return map;
       map.set(group, (map.get(group) || 0) + 1);
       return map;
@@ -979,9 +1015,9 @@ export default function ProjectDetail() {
   const filteredCalendarItems = calendarDisplayItems.filter((item) => {
     if (calendarFilter === 'all') return true;
     if (calendarFilter === 'main_validation') return Boolean(item.calendarMeta?.is_main_validation);
-    if (calendarFilter === 'batch_shootable') return Boolean(item.calendarMeta?.is_batch_shootable);
+    if (calendarFilter === 'batch_shootable') return isCalendarBatchShootable(item);
     if (calendarFilter.startsWith(BATCH_GROUP_FILTER_PREFIX)) {
-      return item.calendarMeta?.batch_shoot_group?.trim() === calendarFilter.slice(BATCH_GROUP_FILTER_PREFIX.length);
+      return getCalendarBatchGroup(item) === calendarFilter.slice(BATCH_GROUP_FILTER_PREFIX.length);
     }
     return true;
   });
@@ -1303,7 +1339,7 @@ export default function ProjectDetail() {
                         {item.calendarMeta?.content_role ? (
                           <span className="badge badge-blue calendar-role-badge">{item.calendarMeta.content_role}</span>
                         ) : null}
-                        {item.calendarMeta?.is_batch_shootable ? (
+                        {isCalendarBatchShootable(item) ? (
                           <span className="badge badge-purple calendar-role-badge">可批量拍</span>
                         ) : null}
                       </div>
@@ -1319,12 +1355,10 @@ export default function ProjectDetail() {
                           <span className="script-gen-label">待生成</span>
                         )}
                       </div>
-                      {item.calendarMeta?.batch_shoot_group ? (
-                        <div className="calendar-extra-line">
-                          <span className="calendar-extra-label">拍摄分组</span>
-                          <span className="calendar-extra-value">{item.calendarMeta.batch_shoot_group}</span>
-                        </div>
-                      ) : null}
+                      <div className="calendar-extra-line">
+                        <span className="calendar-extra-label">拍摄分组</span>
+                        <span className="calendar-extra-value">{getCalendarBatchGroup(item)}</span>
+                      </div>
                       {item.calendarMeta?.replacement_hint ? (
                         <div className="calendar-extra-line calendar-extra-note">
                           <span className="calendar-extra-label">替换建议</span>
