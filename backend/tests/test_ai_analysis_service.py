@@ -51,6 +51,115 @@ def test_content_calendar_prompt_uses_hard_structure_constraints() -> None:
     assert "坏题示例：她们在这里短暂逃离家庭" in CONTENT_CALENDAR_PROMPT_TEMPLATE
 
 
+@pytest.mark.asyncio
+async def test_call_ai_uses_text_provider_for_text_scenes(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = AIAnalysisService()
+    captured: dict[str, Any] = {}
+
+    values = {
+        "AI_TEXT_API_KEY": "sk-text",
+        "AI_TEXT_BASE_URL": "https://text.example.com/v1",
+        "AI_TEXT_MODEL": "text-model",
+    }
+
+    async def fake_get_current_setting(key: str, default_value: str) -> str:
+        return values.get(key, default_value)
+
+    class FakeResponse:
+        status_code = 200
+
+        @staticmethod
+        def json() -> dict[str, Any]:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": '{"account_positioning": {"core_identity": "测试定位"}, "content_strategy": {"content_tone": "直接"}}'
+                        }
+                    }
+                ]
+            }
+
+    class FakeAsyncClient:
+        def __init__(self, timeout: Any = None) -> None:
+            self.timeout = timeout
+
+        async def __aenter__(self) -> "FakeAsyncClient":
+            return self
+
+        async def __aexit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+            return None
+
+        async def post(self, url: str, headers: dict[str, str], json: dict[str, Any]) -> FakeResponse:
+            captured["url"] = url
+            captured["headers"] = headers
+            captured["json"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr(service, "_get_current_setting", fake_get_current_setting)
+    monkeypatch.setattr("httpx.AsyncClient", FakeAsyncClient)
+
+    result = await service._call_ai("system", "hello", scene_key="account_plan")
+
+    assert result["account_positioning"]["core_identity"] == "测试定位"
+    assert result["content_strategy"]["content_tone"] == "直接"
+    assert captured["url"] == "https://text.example.com/v1/chat/completions"
+    assert captured["headers"]["Authorization"] == "Bearer sk-text"
+    assert captured["json"]["model"] == "text-model"
+
+
+@pytest.mark.asyncio
+async def test_call_ai_uses_multimodal_provider_for_video_scenes(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = AIAnalysisService()
+    captured: dict[str, Any] = {}
+
+    values = {
+        "AI_MULTIMODAL_API_KEY": "sk-mm",
+        "AI_MULTIMODAL_BASE_URL": "https://mm.example.com/v1",
+        "AI_MULTIMODAL_MODEL": "mm-model",
+    }
+
+    async def fake_get_current_setting(key: str, default_value: str) -> str:
+        return values.get(key, default_value)
+
+    class FakeResponse:
+        status_code = 200
+
+        @staticmethod
+        def json() -> dict[str, Any]:
+            return {"choices": [{"message": {"content": "{}"}}]}
+
+    class FakeAsyncClient:
+        def __init__(self, timeout: Any = None) -> None:
+            self.timeout = timeout
+
+        async def __aenter__(self) -> "FakeAsyncClient":
+            return self
+
+        async def __aexit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+            return None
+
+        async def post(self, url: str, headers: dict[str, str], json: dict[str, Any]) -> FakeResponse:
+            captured["url"] = url
+            captured["headers"] = headers
+            captured["json"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr(service, "_get_current_setting", fake_get_current_setting)
+    monkeypatch.setattr("httpx.AsyncClient", FakeAsyncClient)
+
+    result = await service._call_ai(
+        "system",
+        [{"type": "text", "text": "hello"}, {"type": "image_url", "image_url": {"url": "data:video/mp4;base64,abc"}}],
+        scene_key="video_analysis",
+    )
+
+    assert result == {}
+    assert captured["url"] == "https://mm.example.com/v1/chat/completions"
+    assert captured["headers"]["Authorization"] == "Bearer sk-mm"
+    assert captured["json"]["model"] == "mm-model"
+
+
 def test_build_system_prompt_includes_fact_rules_for_all_scenes(monkeypatch) -> None:
     service = AIAnalysisService()
 

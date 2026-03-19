@@ -193,37 +193,78 @@ export default function Settings() {
               {activeTab === 'basic' && (
                 <div className="animate-fade-in settings-form-grid">
                   <div className="form-group">
-                    <label><Key size={16} className="text-primary-500"/> AI API Key</label>
+                    <label><Key size={16} className="text-primary-500"/> 文本模型 API Key</label>
                     <input 
                       type="password" 
-                      name="AI_API_KEY"
-                      value={formData.AI_API_KEY ?? ''}
+                      name="AI_TEXT_API_KEY"
+                      value={formData.AI_TEXT_API_KEY ?? ''}
                       onChange={handleChange}
                       placeholder="sk-..."
                     />
-                    <span className="help-text">填入你的大模型 API 密钥</span>
+                    <span className="help-text">用于账号定位、30天日历、单条脚本、复盘、下一批选题等文本生成场景。</span>
                   </div>
 
                   <div className="form-group">
-                    <label><Link2 size={16} className="text-primary-500"/> AI Base URL</label>
+                    <label><Link2 size={16} className="text-primary-500"/> 文本模型 Base URL</label>
                     <input 
                       type="text" 
-                      name="AI_BASE_URL"
-                      value={formData.AI_BASE_URL ?? ''}
+                      name="AI_TEXT_BASE_URL"
+                      value={formData.AI_TEXT_BASE_URL ?? ''}
                       onChange={handleChange}
                     />
-                    <span className="help-text">代理接口地址或官方接口地址，需带上 /v1 后缀</span>
+                    <span className="help-text">文本模型的代理接口地址或官方接口地址，通常需带上 /v1 后缀。</span>
                   </div>
 
                   <div className="form-group">
-                    <label><Bot size={16} className="text-primary-500"/> 模型名称 (Model)</label>
+                    <label><Bot size={16} className="text-primary-500"/> 文本模型名称</label>
                     <input 
                       type="text" 
-                      name="AI_MODEL"
-                      value={formData.AI_MODEL ?? ''}
+                      name="AI_TEXT_MODEL"
+                      value={formData.AI_TEXT_MODEL ?? ''}
                       onChange={handleChange}
                     />
-                    <span className="help-text">推荐使用性能较强的模型，例如 gemini-2.0-flash 或 gpt-4o</span>
+                    <span className="help-text">推荐放文本理解和结构化输出稳定的模型。</span>
+                  </div>
+
+                  <div className="ai-card">
+                    <div className="ai-card-title"><Cpu size={16} /> 多模态模型接入</div>
+                    <div className="text-sm text-secondary">
+                      这组配置只用于需要真正看视频、听音频的能力，比如博主代表作深度解析和视频拆解复刻。
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label><Key size={16} className="text-primary-500"/> 多模态模型 API Key</label>
+                    <input 
+                      type="password" 
+                      name="AI_MULTIMODAL_API_KEY"
+                      value={formData.AI_MULTIMODAL_API_KEY ?? ''}
+                      onChange={handleChange}
+                      placeholder="sk-..."
+                    />
+                    <span className="help-text">用于视频理解、音频分析、代表作深度解析、复刻脚本拆解。</span>
+                  </div>
+
+                  <div className="form-group">
+                    <label><Link2 size={16} className="text-primary-500"/> 多模态模型 Base URL</label>
+                    <input 
+                      type="text" 
+                      name="AI_MULTIMODAL_BASE_URL"
+                      value={formData.AI_MULTIMODAL_BASE_URL ?? ''}
+                      onChange={handleChange}
+                    />
+                    <span className="help-text">多模态模型的代理接口地址或官方接口地址，通常需带上 /v1 后缀。</span>
+                  </div>
+
+                  <div className="form-group">
+                    <label><Bot size={16} className="text-primary-500"/> 多模态模型名称</label>
+                    <input 
+                      type="text" 
+                      name="AI_MULTIMODAL_MODEL"
+                      value={formData.AI_MULTIMODAL_MODEL ?? ''}
+                      onChange={handleChange}
+                    />
+                    <span className="help-text">推荐使用支持视频/图像输入的多模态模型。</span>
                   </div>
 
                 </div>

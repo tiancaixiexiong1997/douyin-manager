@@ -70,9 +70,15 @@ class AIAnalysisService:
 
     def __init__(self):
         # 默认回退配置
-        self.default_api_key = settings.AI_API_KEY
-        self.default_base_url = settings.AI_BASE_URL
-        self.default_model = settings.AI_MODEL
+        self.default_text_api_key = settings.AI_TEXT_API_KEY
+        self.default_text_base_url = settings.AI_TEXT_BASE_URL
+        self.default_text_model = settings.AI_TEXT_MODEL
+        self.default_multimodal_api_key = settings.AI_MULTIMODAL_API_KEY
+        self.default_multimodal_base_url = settings.AI_MULTIMODAL_BASE_URL
+        self.default_multimodal_model = settings.AI_MULTIMODAL_MODEL
+        self.legacy_default_api_key = settings.AI_API_KEY
+        self.legacy_default_base_url = settings.AI_BASE_URL
+        self.legacy_default_model = settings.AI_MODEL
         self.max_tokens = settings.AI_MAX_TOKENS
         self.temperature = settings.AI_TEMPERATURE
         
@@ -806,9 +812,34 @@ class AIAnalysisService:
             import json
             import re
 
-            api_key = str(await self._get_current_setting("AI_API_KEY", self.default_api_key) or "").strip()
-            base_url = str(await self._get_current_setting("AI_BASE_URL", self.default_base_url) or "").strip().rstrip("/")
-            model = str(await self._get_current_setting("AI_MODEL", self.default_model) or "").strip()
+            is_multimodal_video = isinstance(user_content, list)
+
+            if is_multimodal_video:
+                api_key = str(
+                    await self._get_current_setting("AI_MULTIMODAL_API_KEY", self.default_multimodal_api_key) or ""
+                ).strip()
+                base_url = str(
+                    await self._get_current_setting("AI_MULTIMODAL_BASE_URL", self.default_multimodal_base_url) or ""
+                ).strip().rstrip("/")
+                model = str(
+                    await self._get_current_setting("AI_MULTIMODAL_MODEL", self.default_multimodal_model) or ""
+                ).strip()
+                if not api_key:
+                    api_key = str(await self._get_current_setting("AI_API_KEY", self.legacy_default_api_key) or "").strip()
+                if not base_url:
+                    base_url = str(await self._get_current_setting("AI_BASE_URL", self.legacy_default_base_url) or "").strip().rstrip("/")
+                if not model:
+                    model = str(await self._get_current_setting("AI_MODEL", self.legacy_default_model) or "").strip()
+            else:
+                api_key = str(await self._get_current_setting("AI_TEXT_API_KEY", self.default_text_api_key) or "").strip()
+                base_url = str(await self._get_current_setting("AI_TEXT_BASE_URL", self.default_text_base_url) or "").strip().rstrip("/")
+                model = str(await self._get_current_setting("AI_TEXT_MODEL", self.default_text_model) or "").strip()
+                if not api_key:
+                    api_key = str(await self._get_current_setting("AI_API_KEY", self.legacy_default_api_key) or "").strip()
+                if not base_url:
+                    base_url = str(await self._get_current_setting("AI_BASE_URL", self.legacy_default_base_url) or "").strip().rstrip("/")
+                if not model:
+                    model = str(await self._get_current_setting("AI_MODEL", self.legacy_default_model) or "").strip()
 
             providers: list[dict[str, str]] = []
             if api_key and base_url and model:
@@ -819,7 +850,6 @@ class AIAnalysisService:
             if not providers:
                 return {"error": "AI 配置缺失：请检查主模型配置"}
             
-            is_multimodal_video = isinstance(user_content, list)
             overall_timeout_seconds = self._resolve_ai_overall_timeout(
                 scene_key=scene_key,
                 is_multimodal_video=is_multimodal_video,

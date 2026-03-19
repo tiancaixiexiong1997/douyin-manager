@@ -47,8 +47,11 @@ async def test_get_settings_masks_sensitive_fields(client: AsyncClient, monkeypa
 
     settings = response.json()["settings"]
     assert settings["AI_API_KEY"] == "********"
+    assert settings["AI_TEXT_API_KEY"] == "********"
+    assert settings["AI_MULTIMODAL_API_KEY"] == "********"
     assert settings["DOUYIN_COOKIE"] == "********"
     assert settings["AI_BASE_URL"] == "https://example.com/v1"
+    assert response.json()["defaults"]["AI_TEXT_MODEL"]
 
 
 @pytest.mark.asyncio
@@ -111,6 +114,7 @@ async def test_update_settings_keeps_sensitive_value_when_mask_sent(client: Asyn
     async def fake_get_all(_db: Any) -> dict[str, str]:
         return {
             "AI_API_KEY": "sk-existing",
+            "AI_TEXT_API_KEY": "sk-text-existing",
             "DOUYIN_COOKIE": "cookie-existing",
         }
 
@@ -129,6 +133,7 @@ async def test_update_settings_keeps_sensitive_value_when_mask_sent(client: Asyn
         json={
             "settings": {
                 "AI_API_KEY": "********",
+                "AI_TEXT_API_KEY": "********",
                 "DOUYIN_COOKIE": "********",
                 "AI_MODEL": "new-model",
             }
@@ -137,6 +142,7 @@ async def test_update_settings_keeps_sensitive_value_when_mask_sent(client: Asyn
 
     assert response.status_code == 200
     assert captured["AI_API_KEY"] == "sk-existing"
+    assert captured["AI_TEXT_API_KEY"] == "sk-text-existing"
     assert captured["DOUYIN_COOKIE"] == "cookie-existing"
     assert captured["AI_MODEL"] == "new-model"
 
