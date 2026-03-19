@@ -1771,7 +1771,7 @@ export default function ProjectDetail() {
         />
       )}
 
-      {showRegenerateConfirm && (
+      {showRegenerateConfirm && createPortal(
         <div className="modal-overlay" onClick={() => !regenerateCalendarMutation.isPending && setShowRegenerateConfirm(false)}>
           <div className="modal regenerate-modal animate-scale-in" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
@@ -1821,7 +1821,8 @@ export default function ProjectDetail() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {showPerformanceModal && (
