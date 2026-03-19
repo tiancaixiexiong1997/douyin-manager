@@ -104,7 +104,7 @@ export default function Settings() {
     { id: 'crawler', label: '爬虫与认证', icon: Key, group: '通用' },
     { id: 'prompt_global', label: '全局写作规则', icon: Bot, group: '系统提示词' },
     { id: 'prompt_blogger', label: '博主 IP 分析', icon: User, group: '系统提示词' },
-    { id: 'prompt_plan', label: '账号策划方案', icon: LayoutTemplate, group: '系统提示词' },
+    { id: 'prompt_plan', label: '账号定位与日历', icon: LayoutTemplate, group: '系统提示词' },
     { id: 'prompt_script', label: '单条视频脚本', icon: FileText, group: '系统提示词' },
     { id: 'prompt_remake', label: '视频拆解复刻', icon: PenTool, group: '系统提示词' },
   ];
@@ -371,7 +371,7 @@ export default function Settings() {
               {activeTab === 'prompt_plan' && (
                 <div className="animate-fade-in prompt-full-height">
                   <div className="form-group">
-                    <label className="prompt-label"><LayoutTemplate size={16} className="text-primary-500"/> 账号策划方案提示词 <span className="label-badge">Prompt</span></label>
+                    <label className="prompt-label"><LayoutTemplate size={16} className="text-primary-500"/> 账号定位方案提示词 <span className="label-badge">Prompt</span></label>
                     <textarea 
                       name="ACCOUNT_PLAN_PROMPT"
                       value={formData.ACCOUNT_PLAN_PROMPT ?? ''}
@@ -381,6 +381,20 @@ export default function Settings() {
                     <div className="prompt-variables">
                       <strong>可用变量：</strong>
                       <code>{'{client_name}'}</code> <code>{'{industry}'}</code> <code>{'{target_audience}'}</code> <code>{'{unique_advantage}'}</code> <code>{'{ip_requirements}'}</code> <code>{'{style_preference}'}</code> <code>{'{business_goal}'}</code> <code>{'{blogger_count}'}</code> <code>{'{bloggers_text}'}</code>
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="prompt-label"><LayoutTemplate size={16} className="text-primary-500"/> 30天内容日历提示词 <span className="label-badge">Prompt</span></label>
+                    <textarea 
+                      name="CONTENT_CALENDAR_PROMPT"
+                      value={formData.CONTENT_CALENDAR_PROMPT ?? ''}
+                      onChange={handleChange}
+                      className="prompt-textarea"
+                    />
+                    <div className="prompt-variables">
+                      <strong>可用变量：</strong>
+                      <code>{'{client_name}'}</code> <code>{'{core_identity}'}</code> <code>{'{target_audience_detail}'}</code> <code>{'{personality_tags}'}</code> <code>{'{differentiation}'}</code> <code>{'{content_tone}'}</code> <code>{'{content_pillars}'}</code> <code>{'{performance_recap_summary}'}</code> <code>{'{winning_patterns}'}</code> <code>{'{optimization_focus}'}</code> <code>{'{next_topic_angles}'}</code>
                     </div>
                   </div>
                 </div>
