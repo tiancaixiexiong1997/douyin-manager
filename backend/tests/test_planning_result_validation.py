@@ -133,3 +133,38 @@ async def test_apply_calendar_quality_guardrails_uses_gap_fill_when_backup_is_in
     assert meta["regeneration_count"] == 1
     assert meta["backup_used_count"] == 1
     assert "已触发小范围补写兜底" in notes
+
+
+@pytest.mark.asyncio
+async def test_apply_calendar_quality_guardrails_uses_local_fallback_when_ai_gap_fill_still_insufficient(monkeypatch: pytest.MonkeyPatch) -> None:
+    raw_calendar = [
+        {"day": day, "title_direction": f"第{day}天顾客最常问的消费问题{day}", "content_type": "口播+画中画", "key_message": f"真实点单原因{day}"}
+        for day in range(1, 26)
+    ]
+
+    async def fake_gap_fill(**_kwargs):
+        return {"items": []}
+
+    monkeypatch.setattr(planning_endpoint.ai_analysis_service, "generate_calendar_gap_fill", fake_gap_fill)
+    monkeypatch.setattr(planning_endpoint, "_calendar_titles_are_too_similar", lambda *_args, **_kwargs: False)
+
+    calendar, _remaining_backup, meta, notes = await planning_endpoint._apply_calendar_quality_guardrails(
+        raw_calendar=raw_calendar,
+        backup_pool=[],
+        client_data={"client_name": "本地废旧回收账号", "industry": "本地生活", "target_audience": "同城家庭用户"},
+        account_plan={
+            "account_positioning": {
+                "core_identity": "同城废旧回收避坑指南",
+                "content_pillars": [{"name": "上门回收避坑", "description": "讲清流程", "ratio": "50%"}],
+                "target_audience_detail": "同城家庭用户",
+            },
+            "content_strategy": {"primary_format": "口播+画中画"},
+        },
+        project_id="project-3",
+        db=None,
+    )
+
+    assert len(calendar) == 30
+    assert meta["regeneration_count"] == 1
+    assert any("回收" in item["title_direction"] or "废品" in item["title_direction"] for item in calendar[-5:])
+    assert "已启用本地兜底补位，保证30天日历完整" in notes

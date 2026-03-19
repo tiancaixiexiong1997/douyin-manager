@@ -329,6 +329,112 @@ def _finalize_calendar_days(items: list[dict]) -> list[dict]:
     return finalized
 
 
+def _derive_local_topic_subject(client_data: dict, account_plan: dict) -> str:
+    text = " ".join(
+        filter(
+            None,
+            [
+                _safe_text(client_data.get("client_name")),
+                _safe_text(client_data.get("industry")),
+                _safe_text(client_data.get("ip_requirements")),
+                _safe_text((account_plan.get("account_positioning") or {}).get("core_identity") if isinstance(account_plan, dict) else ""),
+            ],
+        )
+    )
+    lowered = text.lower()
+    if "回收" in text or "废旧" in text or "废品" in text:
+        return "旧家电和废品处理"
+    if "烧烤" in text or "餐饮" in text or "美食" in text:
+        return "夜宵和点单选择"
+    if "健身" in text or "减脂" in text:
+        return "减脂训练和饮食执行"
+    if "护肤" in text or "美妆" in text:
+        return "护肤和选品决策"
+    if "本地" in text or "同城" in text or "门店" in text:
+        return "同城消费和到店决策"
+    if "education" in lowered or "学习" in text or "教育" in text:
+        return "学习选择和提分执行"
+    return _safe_text(client_data.get("industry")) or "同城真实需求"
+
+
+def _derive_local_audience_label(client_data: dict, account_plan: dict) -> str:
+    target = _safe_text((account_plan.get("account_positioning") or {}).get("target_audience_detail") if isinstance(account_plan, dict) else "")
+    if not target:
+        target = _safe_text(client_data.get("target_audience"))
+    if "上班" in target or "职场" in target or "打工" in target:
+        return "上班族"
+    if "学生" in target:
+        return "学生党"
+    if "老板" in target:
+        return "老板"
+    if "家庭" in target or "宝妈" in target or "父母" in target:
+        return "家庭用户"
+    return "同城用户"
+
+
+def _build_local_calendar_fallback_pool(
+    *,
+    client_data: dict,
+    account_plan: dict,
+    existing_items: list[dict],
+    missing_count: int,
+) -> list[dict]:
+    subject = _derive_local_topic_subject(client_data, account_plan)
+    audience = _derive_local_audience_label(client_data, account_plan)
+    positioning = account_plan.get("account_positioning", {}) if isinstance(account_plan, dict) else {}
+    strategy = account_plan.get("content_strategy", {}) if isinstance(account_plan, dict) else {}
+    content_type = _normalize_content_type(strategy.get("primary_format"))
+    pillars = positioning.get("content_pillars", []) if isinstance(positioning.get("content_pillars"), list) else []
+    pillar_names = [
+        _safe_text(item.get("name"))
+        for item in pillars
+        if isinstance(item, dict) and _safe_text(item.get("name"))
+    ] or ["真实问题", "避坑决策", "同城需求"]
+
+    title_templates = [
+        "{audience}处理{subject}时，最先问的不是价格，而是能不能今天上门",
+        "为什么很多人处理{subject}，最后卡在搬运费和楼层",
+        "{subject}到底先问价格，还是先问能不能当天拉走",
+        "同城做{subject}时，最容易被一句“马上到”拖住",
+        "{audience}第一次问{subject}，最容易漏掉哪3句关键信息",
+        "{subject}想少踩坑，提前确认哪一步最省时间",
+        "{subject}值不值当场定，关键看哪两个细节",
+        "同样是做{subject}，为什么有人半小时解决，有人拖两天",
+        "{audience}处理{subject}，最怕临时加价还是上门太慢",
+        "{subject}怎么问才不被来回拉扯，你会怎么选",
+    ]
+    key_templates = [
+        "这条围绕{pillar}，把真实决策点讲清楚，评论区也更容易接话：你会怎么选。",
+        "这条围绕{pillar}，直接回答用户最在意的时间、价格和执行成本。",
+        "这条围绕{pillar}，用具体问题替代空泛氛围，用户看完知道下一步该怎么问。",
+    ]
+
+    candidates: list[dict] = []
+    title_index = 0
+    while len(candidates) < max(12, missing_count * 4):
+        template = title_templates[title_index % len(title_templates)]
+        pillar = pillar_names[title_index % len(pillar_names)]
+        title = template.format(audience=audience, subject=subject, pillar=pillar)
+        if len(pillar_names) > 1:
+            title = f"{title}：{pillar}"
+        candidate = {
+            "title_direction": title,
+            "content_type": content_type,
+            "content_pillar": pillar,
+            "key_message": key_templates[title_index % len(key_templates)].format(pillar=pillar),
+            "tags": _normalize_text_list([_safe_text(client_data.get("industry")), pillar, audience], limit=6),
+            "batch_shoot_group": _derive_batch_group(content_type),
+            "replacement_hint": "如果前面验证效果一般，就优先换成这种具体问题题，而不是空泛感受题；你会怎么选？",
+        }
+        if not _calendar_titles_are_too_similar(candidate, existing_items + candidates):
+            candidates.append(candidate)
+        title_index += 1
+        if title_index > 60:
+            break
+
+    return candidates
+
+
 async def _apply_calendar_quality_guardrails(
     *,
     raw_calendar: list[dict],
@@ -343,6 +449,7 @@ async def _apply_calendar_quality_guardrails(
     available_backup_pool = [dict(item) for item in backup_pool]
     meta = _normalize_calendar_generation_meta({})
     quality_notes_parts: list[str] = []
+    local_fallback_used = False
 
     for raw_item in raw_calendar[:30]:
         item = _normalize_content_calendar_item(raw_item, day_fallback=len(kept_items) + 1)
@@ -419,6 +526,32 @@ async def _apply_calendar_quality_guardrails(
             kept_items.append(normalized_replacement)
             meta["backup_used_count"] += 1
 
+    if len(kept_items) < 30:
+        local_fallback_used = True
+        local_fallback_pool = _build_local_calendar_fallback_pool(
+            client_data=client_data,
+            account_plan=account_plan,
+            existing_items=kept_items,
+            missing_count=30 - len(kept_items),
+        )
+        available_backup_pool.extend(local_fallback_pool)
+
+        while len(kept_items) < 30:
+            target_day = len(kept_items) + 1
+            placeholder = _normalize_content_calendar_item({"day": target_day}, day_fallback=target_day)
+            replacement, replacement_index = _pick_backup_replacement(placeholder, available_backup_pool, kept_items)
+            if replacement is None:
+                break
+            chosen_replacement = available_backup_pool.pop(replacement_index)
+            normalized_replacement = _convert_backup_topic_to_calendar_item(
+                {**chosen_replacement, "replacement_source_index": replacement_index},
+                placeholder,
+            )
+            normalized_replacement["replacement_source_index"] = replacement_index
+            normalized_replacement["quality_flags"] = _collect_calendar_quality_flags(normalized_replacement)
+            kept_items.append(normalized_replacement)
+            meta["backup_used_count"] += 1
+
     finalized_items = _finalize_calendar_days(kept_items)
     if len(finalized_items) != 30:
         raise ValueError(f"内容日历质控补位后仍不足 30 条，当前仅 {len(finalized_items)} 条")
@@ -435,6 +568,8 @@ async def _apply_calendar_quality_guardrails(
         quality_notes_parts.append(f"已使用 {meta['backup_used_count']} 条备用题补位")
     if meta["regeneration_count"] > 0:
         quality_notes_parts.append("已触发小范围补写兜底")
+    if local_fallback_used:
+        quality_notes_parts.append("已启用本地兜底补位，保证30天日历完整")
 
     return finalized_items, available_backup_pool, meta, "；".join(quality_notes_parts)
 
