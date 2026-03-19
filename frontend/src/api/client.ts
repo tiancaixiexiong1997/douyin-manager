@@ -800,6 +800,11 @@ export interface SettingsData {
   DOUYIN_COOKIE?: string;
 }
 
+export interface SettingsPayload {
+  settings: SettingsData;
+  defaults: SettingsData;
+}
+
 export interface CookieExtractorStatus {
   token: string;
   login_url: string;
@@ -817,8 +822,8 @@ export interface CookieExtractorRotateResponse {
 
 export const settingApi = {
   /** 获取系统设置 */
-  getSettings: (): Promise<SettingsData> =>
-    api.get('/settings').then((res) => (res as unknown as { settings: SettingsData }).settings),
+  getSettings: (): Promise<SettingsPayload> =>
+    api.get('/settings').then((res) => res as unknown as SettingsPayload),
 
   /** 保存系统设置 */
   saveSettings: (data: SettingsData): Promise<{ message: string }> =>

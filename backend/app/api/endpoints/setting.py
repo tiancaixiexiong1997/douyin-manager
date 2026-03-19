@@ -114,31 +114,40 @@ async def get_settings(
 ):
     """获取所有系统设置"""
     settings_dict = await setting_repo.get_all(db)
-    # 填充默认值，如果数据库中没有，则优先从应用配置(环境变量/.env)中读取
-    default_settings = {
-        "AI_API_KEY": settings_dict.get("AI_API_KEY", app_settings.AI_API_KEY),
-        "AI_BASE_URL": settings_dict.get("AI_BASE_URL", app_settings.AI_BASE_URL),
-        "AI_MODEL": settings_dict.get("AI_MODEL", app_settings.AI_MODEL),
-        "GLOBAL_AI_FACT_RULES": settings_dict.get("GLOBAL_AI_FACT_RULES", ai_analysis_service.DEFAULT_GLOBAL_AI_FACT_RULES),
-        "GLOBAL_AI_WRITING_RULES": settings_dict.get("GLOBAL_AI_WRITING_RULES", ai_analysis_service.DEFAULT_GLOBAL_AI_WRITING_RULES),
-        "BLOGGER_REPORT_PROMPT": settings_dict.get("BLOGGER_REPORT_PROMPT", ai_analysis_service.DEFAULT_BLOGGER_REPORT_PROMPT),
-        "ACCOUNT_PLAN_PROMPT": settings_dict.get("ACCOUNT_PLAN_PROMPT", ai_analysis_service.DEFAULT_ACCOUNT_PLAN_PROMPT),
-        "CONTENT_CALENDAR_PROMPT": settings_dict.get("CONTENT_CALENDAR_PROMPT", ai_analysis_service.DEFAULT_CONTENT_CALENDAR_PROMPT),
-        "VIDEO_SCRIPT_PROMPT": settings_dict.get("VIDEO_SCRIPT_PROMPT", ai_analysis_service.DEFAULT_VIDEO_SCRIPT_PROMPT),
-        "SCRIPT_REMAKE_PROMPT": settings_dict.get("SCRIPT_REMAKE_PROMPT", ai_analysis_service.DEFAULT_SCRIPT_REMAKE_PROMPT),
-        "DOUYIN_COOKIE": settings_dict.get("DOUYIN_COOKIE", ""),
+    defaults = {
+        "AI_API_KEY": app_settings.AI_API_KEY,
+        "AI_BASE_URL": app_settings.AI_BASE_URL,
+        "AI_MODEL": app_settings.AI_MODEL,
+        "GLOBAL_AI_FACT_RULES": ai_analysis_service.DEFAULT_GLOBAL_AI_FACT_RULES,
+        "GLOBAL_AI_WRITING_RULES": ai_analysis_service.DEFAULT_GLOBAL_AI_WRITING_RULES,
+        "BLOGGER_REPORT_PROMPT": ai_analysis_service.DEFAULT_BLOGGER_REPORT_PROMPT,
+        "ACCOUNT_PLAN_PROMPT": ai_analysis_service.DEFAULT_ACCOUNT_PLAN_PROMPT,
+        "CONTENT_CALENDAR_PROMPT": ai_analysis_service.DEFAULT_CONTENT_CALENDAR_PROMPT,
+        "VIDEO_SCRIPT_PROMPT": ai_analysis_service.DEFAULT_VIDEO_SCRIPT_PROMPT,
+        "SCRIPT_REMAKE_PROMPT": ai_analysis_service.DEFAULT_SCRIPT_REMAKE_PROMPT,
+        "DOUYIN_COOKIE": "",
     }
-    if _is_placeholder_cookie(default_settings["DOUYIN_COOKIE"]):
-        default_settings["DOUYIN_COOKIE"] = ""
-    
-    if not default_settings["DOUYIN_COOKIE"]:
-        default_settings["DOUYIN_COOKIE"] = await _get_legacy_cookie_fallback()
 
-    masked_settings = {
-        k: _mask_sensitive(k, v) if isinstance(v, str) else v
-        for k, v in default_settings.items()
+    # 填充当前生效值，如果数据库中没有，则优先从默认配置中读取
+    current_settings = {
+        key: settings_dict.get(key, default_value)
+        for key, default_value in defaults.items()
     }
-    return {"settings": masked_settings}
+    if _is_placeholder_cookie(current_settings["DOUYIN_COOKIE"]):
+        current_settings["DOUYIN_COOKIE"] = ""
+    
+    if not current_settings["DOUYIN_COOKIE"]:
+        current_settings["DOUYIN_COOKIE"] = await _get_legacy_cookie_fallback()
+
+    masked_current_settings = {
+        k: _mask_sensitive(k, v) if isinstance(v, str) else v
+        for k, v in current_settings.items()
+    }
+    masked_defaults = {
+        k: _mask_sensitive(k, v) if isinstance(v, str) else v
+        for k, v in defaults.items()
+    }
+    return {"settings": masked_current_settings, "defaults": masked_defaults}
 
 
 @router.put("", summary="批量更新系统设置")

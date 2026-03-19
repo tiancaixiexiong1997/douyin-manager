@@ -28,9 +28,11 @@ export default function Settings() {
   });
 
   const formData = useMemo(
-    () => ({ ...(data || {}), ...draft }),
+    () => ({ ...(data?.settings || {}), ...draft }),
     [data, draft]
   );
+
+  const defaultSettings = data?.defaults || {};
 
   const webhookUrl = extractorStatus?.token
     ? `${window.location.origin}/api/settings/cookie-extractor/webhook?token=${extractorStatus.token}`
@@ -67,6 +69,16 @@ export default function Settings() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setDraft((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleResetPrompt = (key: keyof SettingsData, label: string) => {
+    const defaultValue = defaultSettings[key];
+    if (typeof defaultValue !== 'string') {
+      notifyError(`未找到${label}的默认提示词`);
+      return;
+    }
+    setDraft((prev) => ({ ...prev, [key]: defaultValue }));
+    notifySuccess(`${label}已恢复为默认提示词`);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -112,6 +124,18 @@ export default function Settings() {
 
   const getActiveTabInfo = () => tabs.find(t => t.id === activeTab);
   const ActiveTabIcon = getActiveTabInfo()?.icon || SettingsIcon;
+
+  const renderPromptActions = (key: keyof SettingsData, label: string) => (
+    <div className="prompt-actions">
+      <button
+        type="button"
+        className="btn btn-secondary btn-sm"
+        onClick={() => handleResetPrompt(key, label)}
+      >
+        <RotateCcw size={14} /> 恢复默认提示词
+      </button>
+    </div>
+  );
 
   return (
     <div className="settings-page">
@@ -317,6 +341,7 @@ export default function Settings() {
                 <div className="animate-fade-in prompt-full-height">
                   <div className="form-group">
                     <label className="prompt-label"><Bot size={16} className="text-primary-500"/> 全局事实底线 <span className="label-badge">Global</span></label>
+                    {renderPromptActions('GLOBAL_AI_FACT_RULES', '全局事实底线')}
                     <textarea
                       name="GLOBAL_AI_FACT_RULES"
                       value={formData.GLOBAL_AI_FACT_RULES ?? ''}
@@ -331,6 +356,7 @@ export default function Settings() {
 
                   <div className="form-group">
                     <label className="prompt-label"><PenTool size={16} className="text-primary-500"/> 全局去 AI 味规则 <span className="label-badge">Global</span></label>
+                    {renderPromptActions('GLOBAL_AI_WRITING_RULES', '全局去 AI 味规则')}
                     <textarea
                       name="GLOBAL_AI_WRITING_RULES"
                       value={formData.GLOBAL_AI_WRITING_RULES ?? ''}
@@ -355,6 +381,7 @@ export default function Settings() {
                   </div>
                   <div className="form-group">
                     <label className="prompt-label"><User size={16} className="text-primary-500"/> 博主 IP 分析提示词 <span className="label-badge">Prompt</span></label>
+                    {renderPromptActions('BLOGGER_REPORT_PROMPT', '博主 IP 分析提示词')}
                     <textarea 
                       name="BLOGGER_REPORT_PROMPT"
                       value={formData.BLOGGER_REPORT_PROMPT ?? ''}
@@ -373,6 +400,7 @@ export default function Settings() {
                 <div className="animate-fade-in prompt-full-height">
                   <div className="form-group">
                     <label className="prompt-label"><LayoutTemplate size={16} className="text-primary-500"/> 账号定位方案提示词 <span className="label-badge">Prompt</span></label>
+                    {renderPromptActions('ACCOUNT_PLAN_PROMPT', '账号定位方案提示词')}
                     <textarea 
                       name="ACCOUNT_PLAN_PROMPT"
                       value={formData.ACCOUNT_PLAN_PROMPT ?? ''}
@@ -391,6 +419,7 @@ export default function Settings() {
                 <div className="animate-fade-in prompt-full-height">
                   <div className="form-group">
                     <label className="prompt-label"><LayoutTemplate size={16} className="text-primary-500"/> 30天内容日历提示词 <span className="label-badge">Prompt</span></label>
+                    {renderPromptActions('CONTENT_CALENDAR_PROMPT', '30天内容日历提示词')}
                     <textarea 
                       name="CONTENT_CALENDAR_PROMPT"
                       value={formData.CONTENT_CALENDAR_PROMPT ?? ''}
@@ -409,6 +438,7 @@ export default function Settings() {
                 <div className="animate-fade-in prompt-full-height">
                   <div className="form-group">
                     <label className="prompt-label"><FileText size={16} className="text-primary-500"/> 单条视频脚本生成提示词 <span className="label-badge">Prompt</span></label>
+                    {renderPromptActions('VIDEO_SCRIPT_PROMPT', '单条视频脚本生成提示词')}
                     <textarea 
                       name="VIDEO_SCRIPT_PROMPT"
                       value={formData.VIDEO_SCRIPT_PROMPT ?? ''}
@@ -427,6 +457,7 @@ export default function Settings() {
                 <div className="animate-fade-in prompt-full-height">
                   <div className="form-group">
                     <label className="prompt-label"><PenTool size={16} className="text-primary-500"/> 视频脚本拆解复刻提示词 <span className="label-badge">Prompt</span></label>
+                    {renderPromptActions('SCRIPT_REMAKE_PROMPT', '视频脚本拆解复刻提示词')}
                     <textarea 
                       name="SCRIPT_REMAKE_PROMPT"
                       value={formData.SCRIPT_REMAKE_PROMPT ?? ''}

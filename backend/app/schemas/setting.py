@@ -24,6 +24,7 @@ class BatchSettingsUpdateRequest(BaseModel):
 
 class SettingsResponse(BaseModel):
     settings: dict[str, str]
+    defaults: dict[str, str]
 
 
 class CookieExtractorStatusResponse(BaseModel):

@@ -321,6 +321,12 @@
   resize: none;
 }
 
+.prompt-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
 .prompt-textarea:focus {
   border-color: rgba(139, 92, 246, 0.5);
   background: var(--bg-card);
