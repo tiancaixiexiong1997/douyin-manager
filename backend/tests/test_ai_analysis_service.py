@@ -321,7 +321,7 @@ def test_scene_result_validator_rejects_empty_calendar_gap_fill() -> None:
 def test_account_and_calendar_prompts_require_staged_output_and_anti_self_indulgent_rules() -> None:
     assert "当前阶段只做账号定位和内容策略" in ACCOUNT_PLAN_PROMPT_TEMPLATE
     assert "不要输出 30 天日历" in ACCOUNT_PLAN_PROMPT_TEMPLATE
-    assert "backup_topic_pool" in CONTENT_CALENDAR_PROMPT_TEMPLATE
+    assert "只做一次输出，不要补充备用题" in CONTENT_CALENDAR_PROMPT_TEMPLATE
     assert "肉香盖过班味" in ACCOUNT_PLAN_PROMPT_TEMPLATE
     assert "全是笑声" in CONTENT_CALENDAR_PROMPT_TEMPLATE
 

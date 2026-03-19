@@ -2159,21 +2159,17 @@ async def _generate_calendar_only_background(
             if cancellation_registry.is_cancelled(project_id):
                 return
 
-            raw_content_calendar = _normalize_content_calendar(result.get("content_calendar", []))
-            backup_topic_pool = _normalize_backup_topic_pool(result.get("backup_topic_pool", []))
-            generated_quality_notes = _safe_text(result.get("quality_notes"))
-            content_calendar, backup_topic_pool, calendar_generation_meta, guardrail_quality_notes = await _apply_calendar_quality_guardrails(
-                raw_calendar=raw_content_calendar,
-                backup_pool=backup_topic_pool,
-                client_data=client_data,
-                account_plan=account_plan,
-                project_id=project_id,
-                db=db,
-            )
+            content_calendar = _normalize_content_calendar(result.get("content_calendar", []))
+            if len(content_calendar) != 30:
+                raise ValueError(f"内容日历输出数量异常，应为30条，实际 {len(content_calendar)} 条")
             persisted_account_plan = dict(account_plan or {})
-            persisted_account_plan["backup_topic_pool"] = backup_topic_pool
-            persisted_account_plan["calendar_generation_meta"] = calendar_generation_meta
-            persisted_account_plan["quality_notes"] = "；".join(filter(None, [generated_quality_notes, guardrail_quality_notes]))
+            persisted_account_plan["backup_topic_pool"] = []
+            persisted_account_plan["calendar_generation_meta"] = {
+                "blocked_count": 0,
+                "backup_used_count": 0,
+                "regeneration_count": 0,
+            }
+            persisted_account_plan["quality_notes"] = ""
 
             # 更新项目的 content_calendar 和状态为 completed
             await task_center_repo.update_status(
