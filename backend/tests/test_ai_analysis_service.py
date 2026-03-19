@@ -44,6 +44,13 @@ def test_resolve_ai_overall_timeout_prefers_heavy_calendar_scene(monkeypatch: py
     assert timeout == 240
 
 
+def test_content_calendar_prompt_uses_hard_structure_constraints() -> None:
+    assert "每条必须同时包含：具体对象 + 具体场景 + 具体问题/动作/差异/结果 + 明确观看回报" in CONTENT_CALENDAR_PROMPT_TEMPLATE
+    assert "允许优先生成的题型" in CONTENT_CALENDAR_PROMPT_TEMPLATE
+    assert "好题示例：第一次卖旧空调，客户最容易误会的是哪一步" in CONTENT_CALENDAR_PROMPT_TEMPLATE
+    assert "坏题示例：她们在这里短暂逃离家庭" in CONTENT_CALENDAR_PROMPT_TEMPLATE
+
+
 def test_build_system_prompt_includes_fact_rules_for_all_scenes(monkeypatch) -> None:
     service = AIAnalysisService()
 
