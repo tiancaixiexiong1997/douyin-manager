@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -7,7 +7,6 @@ import {
   bloggerApi,
   type CreatePlanningRequest,
   type PlanningIntakeDraft,
-  type PlanningIntakeChatMessage,
 } from '../../api/client';
 import { CustomSelect } from '../../components/CustomSelect';
 import { Plus, X, Sparkles, ArrowRight, Clock, CheckCircle, Trash2, RefreshCw, Link as LinkIcon, Search, Filter } from '../../components/Icons';
@@ -102,6 +101,7 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
 function CreatePlanModal({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
+  const [briefInput, setBriefInput] = useState('');
   const [form, setForm] = useState<CreatePlanningRequest>({
     client_name: '',
     industry: '',
@@ -117,18 +117,10 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
   const [timeWindows, setTimeWindows] = useState('19:00、21:00');
   const [goalTarget, setGoalTarget] = useState('30天发布10条，至少跑出1-2条高潜内容');
   const [iterationRule, setIterationRule] = useState('每周复盘1次，每次只调整1-2个变量（开头/标题/结构）');
-  const [chatInput, setChatInput] = useState('');
-  const [chatHistory, setChatHistory] = useState<PlanningIntakeChatMessage[]>([
-    {
-      role: 'assistant',
-      content: '先告诉我你现在的账号情况吧。我会一步步梳理，确认无误后再进入参考博主和项目创建。',
-    },
-  ]);
   const [missingFields, setMissingFields] = useState<string[]>([...REQUIRED_INTAKE_FIELDS]);
   const [inferredFields, setInferredFields] = useState<string[]>([]);
   const [intakeSummary, setIntakeSummary] = useState('');
-  const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
-  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const [generatedDraftPreview, setGeneratedDraftPreview] = useState('');
   const qc = useQueryClient();
   const { data: bloggers = [] } = useQuery({ queryKey: ['bloggers'], queryFn: () => bloggerApi.list() });
   const selectedReferenceBloggers = useMemo(
@@ -138,22 +130,18 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
   const intakeMutation = useMutation({
     mutationFn: ({
       userMessage,
-      history,
       draft,
-      mode,
     }: {
       userMessage: string;
-      history: PlanningIntakeChatMessage[];
       draft: PlanningIntakeDraft;
-      mode: 'normal' | 'fast';
     }) => planningApi.intakeAssistant({
       user_message: userMessage,
-      chat_history: history,
+      chat_history: [],
       draft,
       auto_complete: true,
-      mode,
+      mode: 'fast',
     }),
-    onSuccess: (result, variables) => {
+    onSuccess: (result) => {
       setForm((prev) => ({
         ...prev,
         client_name: result.draft.client_name || prev.client_name,
@@ -171,24 +159,11 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
       setMissingFields(result.missing_fields || []);
       setInferredFields(result.inferred_fields || []);
       setIntakeSummary(result.confirmation_summary || '');
-      setSuggestedQuestions(result.suggested_questions || []);
-      setChatHistory((prev) => [
-        ...prev,
-        { role: 'assistant', content: result.assistant_reply || '我已更新草稿，你可以继续补充。' },
-      ]);
-      if (variables.mode === 'fast' && result.ready_for_generate) {
-        setStep(3);
-      } else if (step === 1 && result.ready_for_reference) {
-        setStep(2);
-      }
+      setGeneratedDraftPreview(result.assistant_reply || '');
     },
     onError: (err) => {
-      setSuggestedQuestions([]);
       setInferredFields([]);
-      setChatHistory((prev) => [
-        ...prev,
-        { role: 'assistant', content: `这次整理失败了：${err.message}。你可以重试，或先手动补齐右侧字段。` },
-      ]);
+      setGeneratedDraftPreview(`这次整理失败了：${err.message}。你可以重试，或先手动补齐右侧字段。`);
     },
   });
   const mutation = useMutation({
@@ -199,10 +174,6 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
       navigate(`/planning/${project.id}`);
     },
   });
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatHistory, intakeMutation.isPending]);
 
   const buildIntakeDraft = (): PlanningIntakeDraft => ({
     client_name: form.client_name || '',
@@ -222,24 +193,18 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
     iteration_rule: iterationRule,
   });
 
-  const sendIntakeMessage = (rawMessage?: string, mode: 'normal' | 'fast' = 'normal') => {
-    const message = (rawMessage ?? chatInput).trim();
+  const generateBriefDraft = (rawMessage?: string) => {
+    const message = (rawMessage ?? briefInput).trim();
     if (!message || intakeMutation.isPending) return;
-    const nextHistory: PlanningIntakeChatMessage[] = [...chatHistory, { role: 'user', content: message }];
-    setChatHistory(nextHistory);
-    setChatInput('');
-    setSuggestedQuestions([]);
     intakeMutation.mutate({
       userMessage: message,
-      history: nextHistory,
       draft: buildIntakeDraft(),
-      mode,
     });
   };
 
   const stepTitleMap = useMemo(
     () => ({
-      1: { title: '互动问诊', desc: '边聊边梳理定位，先补齐关键字段' },
+      1: { title: '极速生成', desc: '输入一段账号描述，先生成结构化策划草稿' },
       2: { title: '对标参考', desc: '选参考博主与主页，统一对标口径' },
       3: { title: '确认创建', desc: '确认信息后创建项目草稿，进入详情页继续生成定位' },
     }),
@@ -326,51 +291,19 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
         {step === 1 && (
           <div className="plan-intake-layout animate-fade-in">
             <section className="plan-intake-chat">
-              <div className="plan-intake-chat-title">互动问诊</div>
-              <div className="plan-intake-chat-desc">先聊清楚你的现状和目标，我会自动整理成可执行草稿。</div>
+              <div className="plan-intake-chat-title">一段话极速生成</div>
+              <div className="plan-intake-chat-desc">直接写清行业、目标人群、想做的内容和商业目标，AI 会先整理成结构化草稿。</div>
               <div className="plan-intake-overview">
                 <div className="plan-intake-overview-item">
                   <strong>{completedRequiredCount}/{REQUIRED_INTAKE_FIELDS.length}</strong>
                   <span>核心信息已补齐</span>
                 </div>
                 <div className="plan-intake-overview-item">
-                  <strong>{chatHistory.filter((item) => item.role === 'user').length}</strong>
-                  <span>本轮已输入</span>
+                  <strong>{generatedDraftPreview ? '已生成' : '待生成'}</strong>
+                  <span>草稿状态</span>
                 </div>
               </div>
-              <div className="plan-intake-fast-hint">一句话也可以直接出草稿，点“极速生成”。</div>
-              <div className="plan-intake-messages">
-                {chatHistory.map((message, idx) => (
-                  <div key={`${message.role}-${idx}`} className={`plan-intake-bubble ${message.role === 'assistant' ? 'assistant' : 'user'}`}>
-                    {message.content}
-                  </div>
-                ))}
-                {intakeMutation.isPending && (
-                  <div className="plan-intake-bubble assistant">
-                    <div className="spinner" style={{ width: 14, height: 14 }} />
-                    正在整理你的输入...
-                  </div>
-                )}
-                <div ref={chatEndRef} />
-              </div>
-              {suggestedQuestions.length > 0 && (
-                <div className="plan-intake-suggestion-block">
-                  <div className="plan-intake-suggestion-title">继续追问建议</div>
-                  <div className="plan-intake-suggestions">
-                  {suggestedQuestions.map((question, idx) => (
-                    <button
-                      key={`${question}-${idx}`}
-                      className="plan-intake-chip"
-                      type="button"
-                      onClick={() => sendIntakeMessage(question, 'normal')}
-                      disabled={intakeMutation.isPending}
-                    >
-                      {question}
-                    </button>
-                  ))}
-                </div>
-                </div>
-              )}
+              <div className="plan-intake-fast-hint">不用来回对话，一次写成一段就行，生成后你可以直接改右侧字段。</div>
               <div className="plan-intake-example-block">
                 <div className="plan-intake-example-title">快速示例</div>
                 <div className="plan-intake-example-desc">如果你还没想好怎么描述，可以直接点一个示例改着用。</div>
@@ -380,7 +313,7 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
                       key={`fast-example-${idx}-${example.title}`}
                       className="plan-intake-example-card"
                       type="button"
-                      onClick={() => setChatInput(example.prompt)}
+                      onClick={() => setBriefInput(example.prompt)}
                       disabled={intakeMutation.isPending}
                       title={example.prompt}
                     >
@@ -391,41 +324,39 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
                   ))}
                 </div>
               </div>
+              {generatedDraftPreview && (
+                <div className="plan-intake-preview">
+                  <div className="plan-intake-preview-title">AI 草稿预览</div>
+                  <div className="plan-intake-preview-body">{generatedDraftPreview}</div>
+                </div>
+              )}
               <div className="plan-intake-input-row">
                 <div className="plan-intake-composer">
                   <div className="plan-intake-composer-head">
-                    <span>告诉 AI 你的账号现状、行业、目标和想做的内容方向</span>
-                    <em>回车发送，Shift + 回车换行</em>
+                    <span>输入一段账号描述，尽量包含行业、人群、内容方向、差异点和目标</span>
+                    <em>Shift + 回车换行，Cmd/Ctrl + 回车生成</em>
                   </div>
                 <textarea
                   className="form-input plan-intake-input"
-                  placeholder="例如：我做本地餐饮探店，主打高性价比，目标是30天稳定起号..."
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="例如：我是杭州本地房产经纪人，想做刚需买房避坑账号，目标用户是预算300-500万的首次置业家庭，内容重点是板块分析、真实带看和贷款决策，目标是稳定获客。"
+                  value={briefInput}
+                  onChange={(e) => setBriefInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                       e.preventDefault();
-                      sendIntakeMessage(undefined, 'normal');
+                      generateBriefDraft();
                     }
                   }}
                 />
                 </div>
                 <div className="plan-intake-action-row">
                   <button
-                    className="btn btn-ghost"
-                    type="button"
-                    disabled={!chatInput.trim() || intakeMutation.isPending}
-                    onClick={() => sendIntakeMessage(undefined, 'normal')}
-                  >
-                    继续问诊
-                  </button>
-                  <button
                     className="btn btn-primary"
                     type="button"
-                    disabled={!chatInput.trim() || intakeMutation.isPending}
-                    onClick={() => sendIntakeMessage(undefined, 'fast')}
+                    disabled={!briefInput.trim() || intakeMutation.isPending}
+                    onClick={() => generateBriefDraft()}
                   >
-                    <Sparkles size={14} /> 极速生成
+                    {intakeMutation.isPending ? <><div className="spinner" style={{ width: 14, height: 14 }} /> 生成中...</> : <><Sparkles size={14} /> 极速生成草稿</>}
                   </button>
                 </div>
               </div>

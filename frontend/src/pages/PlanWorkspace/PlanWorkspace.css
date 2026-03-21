@@ -238,6 +238,28 @@
   padding: 8px 10px;
 }
 
+.plan-intake-preview {
+  margin-top: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(59, 130, 246, 0.22);
+  background: rgba(59, 130, 246, 0.08);
+  padding: 12px;
+}
+
+.plan-intake-preview-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.plan-intake-preview-body {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
 .plan-intake-messages {
   margin-top: 12px;
   flex: 0 1 auto;
@@ -1277,6 +1299,11 @@
 [data-theme='light'] .plan-intake-example-card {
   background: #ffffff;
   border-color: rgba(148, 163, 184, 0.22);
+}
+
+[data-theme='light'] .plan-intake-preview {
+  background: #eff6ff;
+  border-color: rgba(59, 130, 246, 0.2);
 }
 
 [data-theme='light'] .plan-intake-example-card-action {
