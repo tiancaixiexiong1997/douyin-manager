@@ -100,16 +100,10 @@ class Settings(BaseSettings):
     # douyin_api 路径（通过 Docker Volume 挂载或本地相对路径）
     DOUYIN_API_PATH: str = "/app/douyin_api"
 
-    # AI 配置（兼容旧版单模型配置 + 新版文本/多模态双模型配置）
+    # AI 配置（统一单模型）
     AI_API_KEY: str = os.getenv("AI_API_KEY", "")
     AI_BASE_URL: str = os.getenv("AI_BASE_URL", "https://api.openai-hub.com/v1")
     AI_MODEL: str = os.getenv("AI_MODEL", "gemini-2.0-flash")
-    AI_TEXT_API_KEY: str = os.getenv("AI_TEXT_API_KEY", os.getenv("AI_API_KEY", ""))
-    AI_TEXT_BASE_URL: str = os.getenv("AI_TEXT_BASE_URL", os.getenv("AI_BASE_URL", "https://api.openai-hub.com/v1"))
-    AI_TEXT_MODEL: str = os.getenv("AI_TEXT_MODEL", os.getenv("AI_MODEL", "gemini-2.0-flash"))
-    AI_MULTIMODAL_API_KEY: str = os.getenv("AI_MULTIMODAL_API_KEY", os.getenv("AI_API_KEY", ""))
-    AI_MULTIMODAL_BASE_URL: str = os.getenv("AI_MULTIMODAL_BASE_URL", os.getenv("AI_BASE_URL", "https://api.openai-hub.com/v1"))
-    AI_MULTIMODAL_MODEL: str = os.getenv("AI_MULTIMODAL_MODEL", os.getenv("AI_MODEL", "gemini-2.0-flash"))
     AI_FAILOVER_ENABLED: bool = os.getenv("AI_FAILOVER_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
     AI_API_KEY_BACKUP: str = os.getenv("AI_API_KEY_BACKUP", "")
     AI_BASE_URL_BACKUP: str = os.getenv("AI_BASE_URL_BACKUP", "")

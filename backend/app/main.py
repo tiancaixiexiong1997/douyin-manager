@@ -40,10 +40,8 @@ async def lifespan(_app: FastAPI):
         if settings.SECURITY_STRICT_MODE:
             raise RuntimeError("SECURITY_STRICT_MODE=true 且存在安全告警，请修复配置后再启动。")
 
-    if not (settings.AI_TEXT_API_KEY or settings.AI_API_KEY or "").strip():
-        logger.warning("⚙️ 启动告警: 文本模型未配置，账号策划、日历、脚本生成等文本 AI 功能将不可用。")
-    if not (settings.AI_MULTIMODAL_API_KEY or settings.AI_API_KEY or "").strip():
-        logger.warning("⚙️ 启动告警: 多模态模型未配置，代表作深度解析和视频拆解复刻将不可用。")
+    if not (settings.AI_API_KEY or "").strip():
+        logger.warning("⚙️ 启动告警: 大模型未配置，账号策划、日历、脚本、视频解析等 AI 功能将不可用。")
 
     # 确保数据目录存在
     os.makedirs("./data", exist_ok=True)

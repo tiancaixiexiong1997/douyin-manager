@@ -76,9 +76,9 @@ async def test_call_ai_uses_text_provider_for_text_scenes(monkeypatch: pytest.Mo
     captured: dict[str, Any] = {}
 
     values = {
-        "AI_TEXT_API_KEY": "sk-text",
-        "AI_TEXT_BASE_URL": "https://text.example.com/v1",
-        "AI_TEXT_MODEL": "text-model",
+        "AI_API_KEY": "sk-text",
+        "AI_BASE_URL": "https://text.example.com/v1",
+        "AI_MODEL": "text-model",
     }
 
     async def fake_get_current_setting(key: str, default_value: str) -> str:
@@ -133,9 +133,9 @@ async def test_call_ai_uses_multimodal_provider_for_video_scenes(monkeypatch: py
     captured: dict[str, Any] = {}
 
     values = {
-        "AI_MULTIMODAL_API_KEY": "sk-mm",
-        "AI_MULTIMODAL_BASE_URL": "https://mm.example.com/v1",
-        "AI_MULTIMODAL_MODEL": "mm-model",
+        "AI_API_KEY": "sk-mm",
+        "AI_BASE_URL": "https://mm.example.com/v1",
+        "AI_MODEL": "mm-model",
     }
 
     async def fake_get_current_setting(key: str, default_value: str) -> str:
@@ -184,9 +184,9 @@ async def test_call_ai_surfaces_http_400_detail(monkeypatch: pytest.MonkeyPatch)
     service = AIAnalysisService()
 
     values = {
-        "AI_MULTIMODAL_API_KEY": "sk-mm",
-        "AI_MULTIMODAL_BASE_URL": "https://mm.example.com/v1",
-        "AI_MULTIMODAL_MODEL": "mm-model",
+        "AI_API_KEY": "sk-mm",
+        "AI_BASE_URL": "https://mm.example.com/v1",
+        "AI_MODEL": "mm-model",
     }
 
     async def fake_get_current_setting(key: str, default_value: str) -> str:

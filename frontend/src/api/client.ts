@@ -794,12 +794,6 @@ export interface SettingsData {
   AI_API_KEY?: string;
   AI_BASE_URL?: string;
   AI_MODEL?: string;
-  AI_TEXT_API_KEY?: string;
-  AI_TEXT_BASE_URL?: string;
-  AI_TEXT_MODEL?: string;
-  AI_MULTIMODAL_API_KEY?: string;
-  AI_MULTIMODAL_BASE_URL?: string;
-  AI_MULTIMODAL_MODEL?: string;
   GLOBAL_AI_FACT_RULES?: string;
   GLOBAL_AI_WRITING_RULES?: string;
   BLOGGER_REPORT_PROMPT?: string;

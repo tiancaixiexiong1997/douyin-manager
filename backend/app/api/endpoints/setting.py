@@ -24,8 +24,6 @@ logger = logging.getLogger(__name__)
 
 SENSITIVE_SETTING_KEYS = {
     "AI_API_KEY",
-    "AI_TEXT_API_KEY",
-    "AI_MULTIMODAL_API_KEY",
     "DOUYIN_COOKIE",
 }
 SENSITIVE_MASK = "********"
@@ -123,12 +121,6 @@ async def get_settings(
         "AI_API_KEY": app_settings.AI_API_KEY,
         "AI_BASE_URL": app_settings.AI_BASE_URL,
         "AI_MODEL": app_settings.AI_MODEL,
-        "AI_TEXT_API_KEY": app_settings.AI_TEXT_API_KEY,
-        "AI_TEXT_BASE_URL": app_settings.AI_TEXT_BASE_URL,
-        "AI_TEXT_MODEL": app_settings.AI_TEXT_MODEL,
-        "AI_MULTIMODAL_API_KEY": app_settings.AI_MULTIMODAL_API_KEY,
-        "AI_MULTIMODAL_BASE_URL": app_settings.AI_MULTIMODAL_BASE_URL,
-        "AI_MULTIMODAL_MODEL": app_settings.AI_MULTIMODAL_MODEL,
         "GLOBAL_AI_FACT_RULES": ai_analysis_service.DEFAULT_GLOBAL_AI_FACT_RULES,
         "GLOBAL_AI_WRITING_RULES": ai_analysis_service.DEFAULT_GLOBAL_AI_WRITING_RULES,
         "BLOGGER_REPORT_PROMPT": ai_analysis_service.DEFAULT_BLOGGER_REPORT_PROMPT,
@@ -147,30 +139,6 @@ async def get_settings(
             for key, default_value in defaults.items()
         },
     }
-    current_settings["AI_TEXT_API_KEY"] = settings_dict.get(
-        "AI_TEXT_API_KEY",
-        settings_dict.get("AI_API_KEY", defaults["AI_TEXT_API_KEY"]),
-    )
-    current_settings["AI_TEXT_BASE_URL"] = settings_dict.get(
-        "AI_TEXT_BASE_URL",
-        settings_dict.get("AI_BASE_URL", defaults["AI_TEXT_BASE_URL"]),
-    )
-    current_settings["AI_TEXT_MODEL"] = settings_dict.get(
-        "AI_TEXT_MODEL",
-        settings_dict.get("AI_MODEL", defaults["AI_TEXT_MODEL"]),
-    )
-    current_settings["AI_MULTIMODAL_API_KEY"] = settings_dict.get(
-        "AI_MULTIMODAL_API_KEY",
-        settings_dict.get("AI_API_KEY", defaults["AI_MULTIMODAL_API_KEY"]),
-    )
-    current_settings["AI_MULTIMODAL_BASE_URL"] = settings_dict.get(
-        "AI_MULTIMODAL_BASE_URL",
-        settings_dict.get("AI_BASE_URL", defaults["AI_MULTIMODAL_BASE_URL"]),
-    )
-    current_settings["AI_MULTIMODAL_MODEL"] = settings_dict.get(
-        "AI_MULTIMODAL_MODEL",
-        settings_dict.get("AI_MODEL", defaults["AI_MULTIMODAL_MODEL"]),
-    )
     if _is_placeholder_cookie(current_settings["DOUYIN_COOKIE"]):
         current_settings["DOUYIN_COOKIE"] = ""
     
