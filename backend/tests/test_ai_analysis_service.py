@@ -169,7 +169,7 @@ async def test_call_ai_uses_multimodal_provider_for_video_scenes(monkeypatch: py
 
     result = await service._call_ai(
         "system",
-        [{"type": "text", "text": "hello"}, {"type": "image_url", "image_url": {"url": "data:video/mp4;base64,abc"}}],
+        [{"type": "text", "text": "hello"}, {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,abc"}}],
         scene_key="video_analysis",
     )
 
@@ -218,11 +218,48 @@ async def test_call_ai_surfaces_http_400_detail(monkeypatch: pytest.MonkeyPatch)
 
     result = await service._call_ai(
         "system",
-        [{"type": "text", "text": "hello"}, {"type": "image_url", "image_url": {"url": "data:video/mp4;base64,abc"}}],
+        [{"type": "text", "text": "hello"}, {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,abc"}}],
         scene_key="video_analysis",
     )
 
     assert result == {"error": 'AI 调用失败: primary HTTP 400（{"error":"payload too large"}）'}
+
+
+def test_build_keyframe_content_uses_image_payloads() -> None:
+    service = AIAnalysisService()
+
+    content = service._build_keyframe_content("分析这些画面", ["abc", "def"])
+
+    assert content[0] == {"type": "text", "text": "分析这些画面"}
+    assert content[1]["image_url"]["url"] == "data:image/jpeg;base64,abc"
+    assert content[2]["image_url"]["url"] == "data:image/jpeg;base64,def"
+
+
+@pytest.mark.asyncio
+async def test_call_ai_with_keyframes_marks_audio_as_uncertain(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = AIAnalysisService()
+    captured: dict[str, Any] = {}
+
+    async def fake_build_system_prompt(*, scene_key: str, base_prompt: str) -> str:
+        assert scene_key == "video_analysis"
+        captured["system_prompt"] = base_prompt
+        return base_prompt
+
+    async def fake_call_ai(system_prompt: str, user_content: list[dict[str, Any]], scene_key: str | None = None) -> dict[str, Any]:
+        captured["system_prompt"] = system_prompt
+        captured["user_content"] = user_content
+        captured["scene_key"] = scene_key
+        return {"ok": True}
+
+    monkeypatch.setattr(service, "_build_system_prompt", fake_build_system_prompt)
+    monkeypatch.setattr(service, "_call_ai", fake_call_ai)
+
+    result = await service._call_ai_with_keyframes(["abc"], "标题", "描述")
+
+    assert result == {"ok": True}
+    assert captured["scene_key"] == "video_analysis"
+    assert "数据不足，无法判断" in captured["system_prompt"]
+    assert captured["user_content"][1]["image_url"]["url"] == "data:image/jpeg;base64,abc"
 
 
 def test_build_system_prompt_includes_fact_rules_for_all_scenes(monkeypatch) -> None:

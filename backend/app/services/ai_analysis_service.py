@@ -32,7 +32,7 @@ from app.services.prompt_templates import (
 logger = logging.getLogger(__name__)
 
 class AIAnalysisService:
-    """AI 分析服务，下载并压缩视频后整体发送给多模态 AI（含音频）"""
+    """AI 分析服务，下载视频后提取关键帧或基于文本生成结构化分析。"""
 
     DEFAULT_GLOBAL_AI_FACT_RULES = GLOBAL_AI_FACT_RULES_TEMPLATE
     DEFAULT_GLOBAL_AI_WRITING_RULES = GLOBAL_AI_WRITING_RULES_TEMPLATE
@@ -266,6 +266,87 @@ class AIAnalysisService:
         except Exception:
             shutil.rmtree(temp_dir, ignore_errors=True)
             raise
+
+    def _resolve_keyframe_count(self, duration_seconds: Optional[float]) -> int:
+        """按视频长度动态决定关键帧数量，兼顾信息量和请求体大小。"""
+        if not duration_seconds or duration_seconds <= 0:
+            return 6
+        if duration_seconds <= 15:
+            return 4
+        if duration_seconds <= 45:
+            return 6
+        if duration_seconds <= 120:
+            return 8
+        return 10
+
+    def _extract_keyframes_for_multimodal(
+        self,
+        video_path: str,
+        *,
+        duration_seconds: Optional[float],
+    ) -> list[str]:
+        """从视频中抽取关键帧并编码为 JPEG base64，兼容 OpenAI 风格多模态接口。"""
+        frame_count = self._resolve_keyframe_count(duration_seconds)
+        if duration_seconds and duration_seconds > 1:
+            gap = duration_seconds / (frame_count + 1)
+            timestamps = [max(0.0, gap * index) for index in range(1, frame_count + 1)]
+        else:
+            timestamps = [0.0]
+
+        temp_dir = tempfile.mkdtemp(prefix="mm_frames_")
+        frames_b64: list[str] = []
+        errors: list[str] = []
+        try:
+            for index, timestamp in enumerate(timestamps, start=1):
+                frame_path = os.path.join(temp_dir, f"frame_{index:02d}.jpg")
+                result = subprocess.run(
+                    [
+                        "ffmpeg",
+                        "-hide_banner",
+                        "-loglevel",
+                        "error",
+                        "-ss",
+                        f"{timestamp:.2f}",
+                        "-i",
+                        video_path,
+                        "-frames:v",
+                        "1",
+                        "-vf",
+                        "scale=768:-2:force_original_aspect_ratio=decrease",
+                        "-q:v",
+                        "5",
+                        "-y",
+                        frame_path,
+                    ],
+                    capture_output=True,
+                    timeout=30,
+                )
+                if result.returncode != 0 or not os.path.exists(frame_path) or os.path.getsize(frame_path) <= 0:
+                    errors.append(self._format_ffmpeg_error(result.stderr, result.stdout))
+                    continue
+
+                with open(frame_path, "rb") as frame_file:
+                    frames_b64.append(base64.b64encode(frame_file.read()).decode("utf-8"))
+
+            if frames_b64:
+                logger.info("关键帧提取完成，数量=%s", len(frames_b64))
+                return frames_b64
+
+            error_message = " | ".join(error for error in errors if error)[:400] or "FFmpeg 未能产出有效关键帧"
+            raise RuntimeError(error_message)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def _build_keyframe_content(self, prompt_text: str, frames_b64: list[str]) -> list[dict[str, Any]]:
+        content: list[dict[str, Any]] = [{"type": "text", "text": prompt_text}]
+        for frame_b64 in frames_b64:
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{frame_b64}"},
+                }
+            )
+        return content
 
     def _has_meaningful_value(self, value: Any) -> bool:
         if value is None:
@@ -567,9 +648,8 @@ class AIAnalysisService:
         video_id: str = None,
         progress_task_id: str | None = None,
     ) -> dict:
-        """下载并压缩视频，整体发送给多模态 AI 分析（含音频）"""
+        """下载视频并提取关键帧，再发送给多模态 AI 分析。"""
         temp_original = None
-        encoded_video_path = None
 
         def _set_progress(step: str, message: str | None = None) -> None:
             if not progress_task_id:
@@ -618,22 +698,21 @@ class AIAnalysisService:
             if duration_seconds:
                 logger.info("代表作视频时长约 %.1f 秒", duration_seconds)
 
-            # 3. 压缩视频并控制请求体大小
-            _set_progress("compressing", "压缩代表作视频中...")
+            # 3. 提取关键帧，兼容 OpenAI 风格多模态接口
+            _set_progress("extracting_frames", "提取代表作关键画面中...")
             try:
-                video_b64, encoded_video_path = self._encode_video_for_multimodal(
+                frame_images_b64 = self._extract_keyframes_for_multimodal(
                     temp_original.name,
                     duration_seconds=duration_seconds,
-                    scene_key="video_analysis",
                 )
             except Exception as exc:
-                error_message = f"视频压缩失败: {exc}"
+                error_message = f"关键帧提取失败: {exc}"
                 _set_progress("failed", error_message)
                 return {"error": error_message}
 
             # 4. 调用 AI
             _set_progress("ai_video", "AI 视频深度分析中...")
-            return await self._call_ai_with_video(video_b64, title, description)
+            return await self._call_ai_with_keyframes(frame_images_b64, title, description)
 
         except Exception as e:
             logger.error(f"视频分析失败: {e}")
@@ -643,7 +722,6 @@ class AIAnalysisService:
         finally:
             for path in [
                 temp_original.name if temp_original else None,
-                encoded_video_path
             ]:
                 if path and os.path.exists(path):
                     try:
@@ -663,7 +741,7 @@ class AIAnalysisService:
         db: Optional[Any] = None,
     ) -> dict:
         """
-        根据原始视频的画面、音频和用户提供的提示词/思路，
+        根据原始视频的关键画面和用户提供的提示词/思路，
         多模态分析视频内容并提取亮点，进而生成对应风格的复刻脚本。
         """
         if not video_url:
@@ -690,9 +768,8 @@ class AIAnalysisService:
         run_context: Optional[dict] = None,
         db: Optional[Any] = None,
     ) -> dict:
-        """下载压缩视频，发送给 AI (携带特制提示词) 拆解并生成复刻脚本"""
+        """下载视频并提取关键帧，发送给 AI 拆解并生成复刻脚本。"""
         temp_original = None
-        encoded_video_path = None
         try:
             check = subprocess.run(["which", "ffmpeg"], capture_output=True)
             if check.returncode != 0:
@@ -714,15 +791,12 @@ class AIAnalysisService:
 
             duration_seconds = self._probe_video_duration(temp_original.name)
             try:
-                video_b64, encoded_video_path = self._encode_video_for_multimodal(
+                frame_images_b64 = self._extract_keyframes_for_multimodal(
                     temp_original.name,
                     duration_seconds=duration_seconds,
-                    scene_key="script_remake",
                 )
             except Exception as exc:
-                return {"error": f"视频压缩失败: {exc}"}
-
-            logger.info("复刻提取压缩完成，Base64大小约: %.1fMB", len(video_b64) / 1024 / 1024)
+                return {"error": f"关键帧提取失败: {exc}"}
 
             # 构建 system_prompt：有账号策划时注入人设约束，无时使用通用高标准角色
             if account_plan_data:
@@ -783,10 +857,7 @@ class AIAnalysisService:
                 description=description,
                 user_prompt=final_user_prompt
             )
-            content = [
-                {"type": "text", "text": prompt_text},
-                {"type": "image_url", "image_url": {"url": f"data:video/mp4;base64,{video_b64}"}}
-            ]
+            content = self._build_keyframe_content(prompt_text, frame_images_b64)
             result = await self._call_ai(system_prompt, content, scene_key="script_remake")
             await self._record_prompt_run(
                 scene_key="script_remake",
@@ -801,27 +872,29 @@ class AIAnalysisService:
             logger.error(f"拆解复刻生成失败: {e}")
             return {"error": f"分析异常: {str(e)}"}
         finally:
-            for path in [temp_original.name if temp_original else None, encoded_video_path]:
+            for path in [temp_original.name if temp_original else None]:
                 if path and os.path.exists(path):
                     try:
                         os.unlink(path)
                     except Exception:
                         pass
 
-    async def _call_ai_with_video(self, video_b64: str, title: str, description: str) -> dict:
-        """携带完整视频（含音频）调用 AI API 分析"""
+    async def _call_ai_with_keyframes(self, frame_images_b64: list[str], title: str, description: str) -> dict:
+        """携带关键帧调用 AI API 分析，兼容常见 OpenAI 风格多模态接口。"""
         base_system_prompt = (
-            "你是一位顶级短视频内容分析专家，专注于从视频的画面、音频和文案中提炼可复制的内容规律。\n"
-            "你的分析标准：每个结论都必须能在视频中找到具体的画面或声音证据；"
+            "你是一位顶级短视频内容分析专家，专注于从视频关键画面和文案信息中提炼可复制的内容规律。\n"
+            "你的分析标准：每个结论都必须能在关键帧或文字信息中找到具体证据；"
             "描述风格特征时必须具体到操作层面（如'每5秒一次跳切'而非'节奏快'）；"
             "分析爆款因素时必须指出它触动了观众的哪种具体情绪，而不是笼统说'有吸引力'。\n"
+            "如果关键帧无法支持对音频、配音、BGM 的确定判断，必须明确写“数据不足，无法判断”，禁止脑补。\n"
             "你的分析目标：让另一个创作者读完报告后，能直接提炼出可复用的拍摄和文案方法论。"
         )
         system_prompt = await self._build_system_prompt(scene_key="video_analysis", base_prompt=base_system_prompt)
         user_prompt = (
-            "请基于这段完整视频（含画面与音频），以及视频文字信息，对该视频进行深度分析：\n\n"
+            "请基于这组视频关键帧，以及视频文字信息，对该视频进行深度分析：\n\n"
             f"视频标题：{title}\n"
             f"视频描述：{description}\n\n"
+            "注意：你当前看到的是代表性关键画面，不是完整音频轨。如果关键帧无法支持对音频信息的准确判断，请在相关字段中明确填写“数据不足，无法判断”。\n\n"
             "请按以下结构输出分析（JSON格式）：\n"
             "{{\n"
             '  "content_summary": "视频内容概述（2-3句话）",\n'
@@ -853,13 +926,7 @@ class AIAnalysisService:
             "请严格返回 JSON 格式。"
         )
 
-        content = [
-            {"type": "text", "text": user_prompt},
-            {
-                "type": "image_url",
-                "image_url": {"url": f"data:video/mp4;base64,{video_b64}"}
-            }
-        ]
+        content = self._build_keyframe_content(user_prompt, frame_images_b64)
 
         return await self._call_ai(system_prompt, content, scene_key="video_analysis")
 

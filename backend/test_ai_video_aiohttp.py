@@ -10,13 +10,13 @@ async def main():
     base_url = "https://api.openai-hub.com/v1"
     model = "gemini-3.1-pro-preview"
     
-    dummy_b64 = "A" * (1 * 1024 * 1024) # reduce to 1MB
+    dummy_b64 = "A" * (128 * 1024)
     print(f"Testing with payload size: {len(dummy_b64) / 1024 / 1024:.2f} MB")
     
     system_prompt = "You are a helpful assistant."
     user_content = [
-        {"type": "text", "text": "Analyze this dummy video"},
-        {"type": "image_url", "image_url": {"url": f"data:video/mp4;base64,{dummy_b64}"}}
+        {"type": "text", "text": "Analyze these dummy keyframes"},
+        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{dummy_b64}"}}
     ]
     
     ssl_context = ssl.create_default_context(cafile=certifi.where())
