@@ -35,6 +35,25 @@ def test_resolve_ffmpeg_timeout_has_upper_bound() -> None:
     assert timeout == 900
 
 
+def test_resolve_multimodal_video_base64_limit_prefers_scene_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = AIAnalysisService()
+    monkeypatch.delenv("AI_MULTIMODAL_MAX_VIDEO_BASE64_MB", raising=False)
+
+    assert service._resolve_multimodal_video_base64_limit_mb("video_analysis") == 8.0
+    assert service._resolve_multimodal_video_base64_limit_mb("script_remake") == 10.0
+
+
+def test_build_video_compression_ladder_uses_more_aggressive_profiles_for_remake() -> None:
+    service = AIAnalysisService()
+
+    general = service._build_video_compression_ladder("video_analysis")
+    remake = service._build_video_compression_ladder("script_remake")
+
+    assert general[0]["scale"] == "480:-2"
+    assert remake[0]["scale"] == "360:-2"
+    assert remake[-1]["fps"] == "6"
+
+
 def test_resolve_ai_overall_timeout_prefers_heavy_calendar_scene(monkeypatch: pytest.MonkeyPatch) -> None:
     service = AIAnalysisService()
     monkeypatch.delenv("AI_TEXT_CALL_OVERALL_TIMEOUT_SECONDS", raising=False)
@@ -158,6 +177,52 @@ async def test_call_ai_uses_multimodal_provider_for_video_scenes(monkeypatch: py
     assert captured["url"] == "https://mm.example.com/v1/chat/completions"
     assert captured["headers"]["Authorization"] == "Bearer sk-mm"
     assert captured["json"]["model"] == "mm-model"
+
+
+@pytest.mark.asyncio
+async def test_call_ai_surfaces_http_400_detail(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = AIAnalysisService()
+
+    values = {
+        "AI_MULTIMODAL_API_KEY": "sk-mm",
+        "AI_MULTIMODAL_BASE_URL": "https://mm.example.com/v1",
+        "AI_MULTIMODAL_MODEL": "mm-model",
+    }
+
+    async def fake_get_current_setting(key: str, default_value: str) -> str:
+        return values.get(key, default_value)
+
+    class FakeResponse:
+        status_code = 400
+        text = '{"error":"payload too large"}'
+
+        @staticmethod
+        def json() -> dict[str, Any]:
+            return {}
+
+    class FakeAsyncClient:
+        def __init__(self, timeout: Any = None) -> None:
+            self.timeout = timeout
+
+        async def __aenter__(self) -> "FakeAsyncClient":
+            return self
+
+        async def __aexit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+            return None
+
+        async def post(self, url: str, headers: dict[str, str], json: dict[str, Any]) -> FakeResponse:
+            return FakeResponse()
+
+    monkeypatch.setattr(service, "_get_current_setting", fake_get_current_setting)
+    monkeypatch.setattr("httpx.AsyncClient", FakeAsyncClient)
+
+    result = await service._call_ai(
+        "system",
+        [{"type": "text", "text": "hello"}, {"type": "image_url", "image_url": {"url": "data:video/mp4;base64,abc"}}],
+        scene_key="video_analysis",
+    )
+
+    assert result == {"error": 'AI 调用失败: primary HTTP 400（{"error":"payload too large"}）'}
 
 
 def test_build_system_prompt_includes_fact_rules_for_all_scenes(monkeypatch) -> None:

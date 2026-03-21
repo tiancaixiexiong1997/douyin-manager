@@ -8,6 +8,7 @@ import logging
 import tempfile
 import subprocess
 import math
+import shutil
 from typing import Any, Optional
 
 import httpx
@@ -148,6 +149,123 @@ class AIAnalysisService:
         # 给低配 VPS 更宽松一点，避免 5-10 分钟素材在压缩阶段误判失败。
         estimated = int(math.ceil(duration_seconds * 0.75)) + 120
         return max(minimum, min(estimated, 900))
+
+    def _resolve_multimodal_video_base64_limit_mb(self, scene_key: str | None = None) -> float:
+        default_limit = 8.0
+        if scene_key == "script_remake":
+            default_limit = 10.0
+        raw = os.getenv("AI_MULTIMODAL_MAX_VIDEO_BASE64_MB", str(default_limit))
+        try:
+            return max(2.0, float(raw))
+        except Exception:
+            return default_limit
+
+    def _build_video_compression_ladder(self, scene_key: str | None = None) -> list[dict[str, str]]:
+        if scene_key == "script_remake":
+            return [
+                {"label": "r1", "scale": "360:-2", "fps": "10", "crf": "33", "audio_bitrate": "48k"},
+                {"label": "r2", "scale": "320:-2", "fps": "8", "crf": "35", "audio_bitrate": "32k"},
+                {"label": "r3", "scale": "256:-2", "fps": "6", "crf": "37", "audio_bitrate": "24k"},
+            ]
+        return [
+            {"label": "r1", "scale": "480:-2", "fps": "15", "crf": "30", "audio_bitrate": "64k"},
+            {"label": "r2", "scale": "360:-2", "fps": "12", "crf": "33", "audio_bitrate": "48k"},
+            {"label": "r3", "scale": "320:-2", "fps": "10", "crf": "35", "audio_bitrate": "32k"},
+            {"label": "r4", "scale": "256:-2", "fps": "8", "crf": "37", "audio_bitrate": "24k"},
+        ]
+
+    def _encode_video_for_multimodal(
+        self,
+        source_path: str,
+        *,
+        duration_seconds: Optional[float],
+        scene_key: str | None,
+    ) -> tuple[str, str]:
+        """
+        对完整视频进行分级压缩并转成 base64，尽量把请求体控制在兼容范围内。
+        返回 (video_b64, local_path)；local_path 用于后续清理。
+        """
+        ffmpeg_timeout = self._resolve_ffmpeg_timeout(duration_seconds)
+        size_limit_mb = self._resolve_multimodal_video_base64_limit_mb(scene_key)
+        ladder = self._build_video_compression_ladder(scene_key)
+        temp_dir = tempfile.mkdtemp(prefix="mm_video_")
+        smallest_candidate_path = ""
+        smallest_candidate_b64 = ""
+        smallest_candidate_mb: float | None = None
+        errors: list[str] = []
+
+        try:
+            for profile in ladder:
+                candidate_path = os.path.join(temp_dir, f"{profile['label']}.mp4")
+                ffmpeg_commands = [
+                    (
+                        "primary",
+                        [
+                            "ffmpeg", "-hide_banner", "-loglevel", "error",
+                            "-i", source_path,
+                            "-vf", f"scale={profile['scale']}",
+                            "-r", profile["fps"],
+                            "-c:v", "libx264", "-crf", profile["crf"], "-preset", "veryfast",
+                            "-c:a", "aac", "-b:a", profile["audio_bitrate"], "-ac", "1",
+                            "-movflags", "+faststart",
+                            "-y", candidate_path,
+                        ],
+                    ),
+                    (
+                        "fallback",
+                        [
+                            "ffmpeg", "-hide_banner", "-loglevel", "error",
+                            "-i", source_path,
+                            "-vf", f"scale={profile['scale']}",
+                            "-r", profile["fps"],
+                            "-c:v", "mpeg4", "-q:v", "9",
+                            "-c:a", "aac", "-b:a", profile["audio_bitrate"], "-ac", "1",
+                            "-movflags", "+faststart",
+                            "-y", candidate_path,
+                        ],
+                    ),
+                ]
+                success, ffmpeg_error = self._run_ffmpeg_with_fallback(ffmpeg_commands, timeout=ffmpeg_timeout)
+                if not success or not os.path.exists(candidate_path):
+                    errors.append(ffmpeg_error or f"{profile['label']} 压缩失败")
+                    continue
+
+                with open(candidate_path, "rb") as video_file:
+                    video_b64 = base64.b64encode(video_file.read()).decode("utf-8")
+
+                base64_size_mb = len(video_b64) / 1024 / 1024
+                file_size_mb = os.path.getsize(candidate_path) / 1024 / 1024
+                logger.info(
+                    "多模态视频压缩候选(scene=%s profile=%s file=%.2fMB base64=%.2fMB limit=%.2fMB)",
+                    scene_key or "generic",
+                    profile["label"],
+                    file_size_mb,
+                    base64_size_mb,
+                    size_limit_mb,
+                )
+
+                if smallest_candidate_mb is None or base64_size_mb < smallest_candidate_mb:
+                    smallest_candidate_mb = base64_size_mb
+                    smallest_candidate_b64 = video_b64
+                    smallest_candidate_path = candidate_path
+
+                if base64_size_mb <= size_limit_mb:
+                    return video_b64, candidate_path
+
+            if smallest_candidate_b64 and smallest_candidate_path:
+                logger.warning(
+                    "多模态视频压缩后仍超过目标大小(scene=%s smallest_base64=%.2fMB limit=%.2fMB)，继续尝试发送最小候选",
+                    scene_key or "generic",
+                    smallest_candidate_mb or 0.0,
+                    size_limit_mb,
+                )
+                return smallest_candidate_b64, smallest_candidate_path
+
+            error_message = " | ".join(error for error in errors if error)[:400] or "未能生成可发送的视频压缩包"
+            raise RuntimeError(error_message)
+        except Exception:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            raise
 
     def _has_meaningful_value(self, value: Any) -> bool:
         if value is None:
@@ -451,7 +569,7 @@ class AIAnalysisService:
     ) -> dict:
         """下载并压缩视频，整体发送给多模态 AI 分析（含音频）"""
         temp_original = None
-        compressed_path = None
+        encoded_video_path = None
 
         def _set_progress(step: str, message: str | None = None) -> None:
             if not progress_task_id:
@@ -497,59 +615,23 @@ class AIAnalysisService:
                 raise e
 
             duration_seconds = self._probe_video_duration(temp_original.name)
-            ffmpeg_timeout = self._resolve_ffmpeg_timeout(duration_seconds)
             if duration_seconds:
-                logger.info(
-                    "代表作视频时长约 %.1f 秒，FFmpeg 超时设置为 %s 秒",
-                    duration_seconds,
-                    ffmpeg_timeout,
-                )
+                logger.info("代表作视频时长约 %.1f 秒", duration_seconds)
 
-            # 3. 压缩视频：480p / 15fps / CRF28 / 64kbps 单声道
+            # 3. 压缩视频并控制请求体大小
             _set_progress("compressing", "压缩代表作视频中...")
-            compressed_path = temp_original.name.replace(".mp4", "_c.mp4")
-            ffmpeg_commands = [
-                (
-                    "primary",
-                    [
-                        "ffmpeg", "-hide_banner", "-loglevel", "error",
-                        "-i", temp_original.name,
-                        "-vf", "scale=480:-2",
-                        "-r", "15",
-                        "-c:v", "libx264", "-crf", "30", "-preset", "veryfast",
-                        "-c:a", "aac", "-b:a", "64k", "-ac", "1",
-                        "-movflags", "+faststart",
-                        "-y", compressed_path,
-                    ],
-                ),
-                (
-                    "fallback",
-                    [
-                        "ffmpeg", "-hide_banner", "-loglevel", "error",
-                        "-i", temp_original.name,
-                        "-vf", "scale=480:-2",
-                        "-r", "12",
-                        "-c:v", "mpeg4", "-q:v", "8",
-                        "-c:a", "aac", "-b:a", "64k", "-ac", "1",
-                        "-movflags", "+faststart",
-                        "-y", compressed_path,
-                    ],
-                ),
-            ]
-            success, ffmpeg_error = self._run_ffmpeg_with_fallback(ffmpeg_commands, timeout=ffmpeg_timeout)
-            if not success:
-                error_message = f"视频压缩失败: {ffmpeg_error}"
+            try:
+                video_b64, encoded_video_path = self._encode_video_for_multimodal(
+                    temp_original.name,
+                    duration_seconds=duration_seconds,
+                    scene_key="video_analysis",
+                )
+            except Exception as exc:
+                error_message = f"视频压缩失败: {exc}"
                 _set_progress("failed", error_message)
                 return {"error": error_message}
 
-            compressed_size = os.path.getsize(compressed_path)
-            logger.info(f"压缩完成，大小: {compressed_size / 1024 / 1024:.1f}MB")
-
-            # 4. 读取并 base64 编码
-            with open(compressed_path, "rb") as f:
-                video_b64 = base64.b64encode(f.read()).decode("utf-8")
-
-            # 5. 调用 AI
+            # 4. 调用 AI
             _set_progress("ai_video", "AI 视频深度分析中...")
             return await self._call_ai_with_video(video_b64, title, description)
 
@@ -561,7 +643,7 @@ class AIAnalysisService:
         finally:
             for path in [
                 temp_original.name if temp_original else None,
-                compressed_path
+                encoded_video_path
             ]:
                 if path and os.path.exists(path):
                     try:
@@ -610,7 +692,7 @@ class AIAnalysisService:
     ) -> dict:
         """下载压缩视频，发送给 AI (携带特制提示词) 拆解并生成复刻脚本"""
         temp_original = None
-        compressed_path = None
+        encoded_video_path = None
         try:
             check = subprocess.run(["which", "ffmpeg"], capture_output=True)
             if check.returncode != 0:
@@ -631,41 +713,16 @@ class AIAnalysisService:
                 raise e
 
             duration_seconds = self._probe_video_duration(temp_original.name)
-            ffmpeg_timeout = self._resolve_ffmpeg_timeout(duration_seconds)
+            try:
+                video_b64, encoded_video_path = self._encode_video_for_multimodal(
+                    temp_original.name,
+                    duration_seconds=duration_seconds,
+                    scene_key="script_remake",
+                )
+            except Exception as exc:
+                return {"error": f"视频压缩失败: {exc}"}
 
-            compressed_path = temp_original.name.replace(".mp4", "_c.mp4")
-            ffmpeg_commands = [
-                (
-                    "primary",
-                    [
-                        "ffmpeg", "-hide_banner", "-loglevel", "error",
-                        "-i", temp_original.name,
-                        "-vf", "scale=360:-2", "-r", "10",
-                        "-c:v", "libx264", "-crf", "33", "-preset", "veryfast",
-                        "-c:a", "aac", "-b:a", "48k", "-ac", "1",
-                        "-movflags", "+faststart", "-y", compressed_path,
-                    ],
-                ),
-                (
-                    "fallback",
-                    [
-                        "ffmpeg", "-hide_banner", "-loglevel", "error",
-                        "-i", temp_original.name,
-                        "-vf", "scale=360:-2", "-r", "8",
-                        "-c:v", "mpeg4", "-q:v", "9",
-                        "-c:a", "aac", "-b:a", "48k", "-ac", "1",
-                        "-movflags", "+faststart", "-y", compressed_path,
-                    ],
-                ),
-            ]
-            success, ffmpeg_error = self._run_ffmpeg_with_fallback(ffmpeg_commands, timeout=ffmpeg_timeout)
-            if not success:
-                return {"error": f"视频压缩失败: {ffmpeg_error}"}
-
-            with open(compressed_path, "rb") as f:
-                video_b64 = base64.b64encode(f.read()).decode("utf-8")
-                
-            logger.info(f"复刻提取压缩完成，Base64大小约: {len(video_b64) / 1024 / 1024:.1f}MB")
+            logger.info("复刻提取压缩完成，Base64大小约: %.1fMB", len(video_b64) / 1024 / 1024)
 
             # 构建 system_prompt：有账号策划时注入人设约束，无时使用通用高标准角色
             if account_plan_data:
@@ -744,7 +801,7 @@ class AIAnalysisService:
             logger.error(f"拆解复刻生成失败: {e}")
             return {"error": f"分析异常: {str(e)}"}
         finally:
-            for path in [temp_original.name if temp_original else None, compressed_path]:
+            for path in [temp_original.name if temp_original else None, encoded_video_path]:
                 if path and os.path.exists(path):
                     try:
                         os.unlink(path)
@@ -978,9 +1035,12 @@ class AIAnalysisService:
                             )
                             return parsed
 
+                        detail_snippet = (response.text or "").strip().replace("\n", " ")[:300]
                         error_text = f"HTTP {response.status_code}"
                         if response.status_code in {401, 403}:
                             error_text = f"{error_text}（请检查主模型密钥或模型权限）"
+                        elif response.status_code in {400, 413} and detail_snippet:
+                            error_text = f"{error_text}（{detail_snippet}）"
                         logger.error(
                             "AI API 调用失败(provider=%s attempt=%s): %s %s",
                             provider["name"],
