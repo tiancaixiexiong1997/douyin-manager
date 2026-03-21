@@ -6,6 +6,7 @@ import {
   planningApi,
   bloggerApi,
   type CreatePlanningRequest,
+  type PlanningIntakeDraft,
 } from '../../api/client';
 import { CustomSelect } from '../../components/CustomSelect';
 import { Plus, X, Sparkles, ArrowRight, Clock, CheckCircle, Trash2, RefreshCw, Link as LinkIcon, Search, Filter } from '../../components/Icons';
@@ -67,6 +68,14 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
 function CreatePlanModal({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
+  const [facts, setFacts] = useState({
+    client_name: '',
+    industry: '',
+    business_or_service: '',
+    presenter_profile: '',
+    resources_and_constraints: '',
+    desired_result: '',
+  });
   const [form, setForm] = useState<CreatePlanningRequest>({
     client_name: '',
     industry: '',
@@ -82,13 +91,35 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
   const [timeWindows, setTimeWindows] = useState('19:00、21:00');
   const [goalTarget, setGoalTarget] = useState('30天发布10条，至少跑出1-2条高潜内容');
   const [iterationRule, setIterationRule] = useState('每周复盘1次，每次只调整1-2个变量（开头/标题/结构）');
-  const [missingFields] = useState<string[]>([...REQUIRED_INTAKE_FIELDS]);
   const qc = useQueryClient();
   const { data: bloggers = [] } = useQuery({ queryKey: ['bloggers'], queryFn: () => bloggerApi.list() });
   const selectedReferenceBloggers = useMemo(
     () => bloggers.filter((blogger) => form.reference_blogger_ids.includes(blogger.id)),
     [bloggers, form.reference_blogger_ids]
   );
+  const intakeMutation = useMutation({
+    mutationFn: ({ userMessage, draft }: { userMessage: string; draft: PlanningIntakeDraft }) =>
+      planningApi.intakeAssistant({
+        user_message: userMessage,
+        draft,
+        chat_history: [],
+        auto_complete: true,
+        mode: 'fast',
+      }),
+    onSuccess: (result) => {
+      setForm((prev) => ({
+        ...prev,
+        client_name: result.draft.client_name || prev.client_name,
+        industry: result.draft.industry || prev.industry,
+        target_audience: result.draft.target_audience || prev.target_audience,
+        unique_advantage: result.draft.unique_advantage || prev.unique_advantage,
+        ip_requirements: result.draft.ip_requirements || prev.ip_requirements,
+        style_preference: result.draft.style_preference || prev.style_preference,
+        business_goal: result.draft.business_goal || prev.business_goal,
+      }));
+    },
+    onError: (err) => notifyError(`生成策划草案失败：${err.message}`),
+  });
   const mutation = useMutation({
     mutationFn: planningApi.create,
     onSuccess: (project) => {
@@ -100,7 +131,7 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
 
   const stepTitleMap = useMemo(
     () => ({
-      1: { title: '结构化填写', desc: '直接填写账号策划草稿，确保信息贴合真实 IP' },
+      1: { title: '事实输入', desc: '先提供你已知的业务事实，再由 AI 生成策划草案' },
       2: { title: '对标参考', desc: '选参考博主与主页，统一对标口径' },
       3: { title: '确认创建', desc: '确认信息后创建项目草稿，进入详情页继续生成定位' },
     }),
@@ -112,10 +143,42 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
     month15: '每月15条（2天1条）',
   }[rhythmPreset];
   const requiredMissingFields = REQUIRED_INTAKE_FIELDS.filter((key) => !(form[key] || '').trim());
-  const displayMissingFields = Array.from(new Set([...missingFields, ...requiredMissingFields]));
+  const displayMissingFields = requiredMissingFields;
   const canGoNextStep1 = requiredMissingFields.length === 0;
   const canSubmit = canGoNextStep1 && !!goalTarget.trim() && !!timeWindows.trim();
+  const canGenerateDraft = Boolean(
+    facts.client_name.trim() &&
+    facts.industry.trim() &&
+    (facts.business_or_service.trim() || facts.presenter_profile.trim() || facts.desired_result.trim())
+  );
   const nextStepLabel = step === 1 ? '进入参考 IP' : '进入生成确认';
+
+  const buildIntakeDraft = (): PlanningIntakeDraft => ({
+    client_name: form.client_name || facts.client_name || '',
+    industry: form.industry || facts.industry || '',
+    target_audience: form.target_audience || '',
+    unique_advantage: form.unique_advantage || '',
+    ip_requirements: form.ip_requirements || '',
+    style_preference: form.style_preference || '',
+    business_goal: form.business_goal || facts.desired_result || '',
+    publishing_rhythm: {
+      month10: '每月10条（推荐，3天1条）',
+      month12: '每月12条（2-3天1条）',
+      month15: '每月15条（2天1条）',
+    }[rhythmPreset],
+    time_windows: timeWindows,
+    goal_target: goalTarget,
+    iteration_rule: iterationRule,
+  });
+
+  const buildFactPrompt = () => ([
+    `客户/品牌名称：${facts.client_name.trim()}`,
+    `行业垂类：${facts.industry.trim()}`,
+    `主营业务/产品/服务：${facts.business_or_service.trim() || '未补充'}`,
+    `谁来出镜/账号身份：${facts.presenter_profile.trim() || '未补充'}`,
+    `现有资源与限制：${facts.resources_and_constraints.trim() || '未补充'}`,
+    `希望达到的结果：${facts.desired_result.trim() || '未补充'}`,
+  ].join('\n'));
   const buildPayload = (): CreatePlanningRequest => {
     const executionBlock = [
       '【执行策略】',
@@ -172,10 +235,102 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
         <div className="plan-modal-content">
 
         {step === 1 && (
-          <section className="plan-intake-form animate-fade-in">
-              <div className="plan-intake-form-title">结构化策划草稿</div>
+          <div className="plan-intake-layout animate-fade-in">
+            <section className="plan-intake-facts">
+              <div className="plan-intake-form-title">用户已知事实</div>
+              <div className="plan-intake-form-desc">只填你已经知道的事实信息，不用自己先写策划结果。</div>
+              <div className="plan-form-section">
+                <div className="plan-form-section-title">基础事实</div>
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">客户/品牌名称 *</label>
+                    <input
+                      className="form-input"
+                      placeholder="如：张三美妆工作室"
+                      value={facts.client_name}
+                      onChange={e => {
+                        const value = e.target.value;
+                        setFacts((prev) => ({ ...prev, client_name: value }));
+                        setForm((prev) => ({ ...prev, client_name: value }));
+                      }}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">行业垂类 *</label>
+                    <input
+                      className="form-input"
+                      placeholder="如：美妆、健身、美食..."
+                      value={facts.industry}
+                      onChange={e => {
+                        const value = e.target.value;
+                        setFacts((prev) => ({ ...prev, industry: value }));
+                        setForm((prev) => ({ ...prev, industry: value }));
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">主营业务 / 产品 / 服务</label>
+                  <textarea
+                    className="form-input form-textarea"
+                    placeholder="如：主要做敏感肌护肤咨询，卖自研精华，也提供一对一护肤方案。"
+                    value={facts.business_or_service}
+                    onChange={e => setFacts((prev) => ({ ...prev, business_or_service: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="plan-form-section">
+                <div className="plan-form-section-title">执行事实</div>
+                <div className="form-group">
+                  <label className="form-label">谁来出镜 / 账号身份</label>
+                  <textarea
+                    className="form-input form-textarea"
+                    placeholder="如：创始人本人出镜，8年护肤经验，口播没问题，但不擅长剧情演绎。"
+                    value={facts.presenter_profile}
+                    onChange={e => setFacts((prev) => ({ ...prev, presenter_profile: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">现有资源与限制</label>
+                  <textarea
+                    className="form-input form-textarea"
+                    placeholder="如：每周能拍2次，1人执行，可拍工作室场景，不能频繁外拍。"
+                    value={facts.resources_and_constraints}
+                    onChange={e => setFacts((prev) => ({ ...prev, resources_and_constraints: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">希望达到的结果</label>
+                  <textarea
+                    className="form-input form-textarea"
+                    placeholder="如：想先做出稳定咨询线索，30天内跑出2条高潜内容。"
+                    value={facts.desired_result}
+                    onChange={e => {
+                      const value = e.target.value;
+                      setFacts((prev) => ({ ...prev, desired_result: value }));
+                      setForm((prev) => ({ ...prev, business_goal: value }));
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="plan-intake-actions">
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  disabled={!canGenerateDraft || intakeMutation.isPending}
+                  onClick={() => intakeMutation.mutate({ userMessage: buildFactPrompt(), draft: buildIntakeDraft() })}
+                >
+                  {intakeMutation.isPending
+                    ? <><div className="spinner" style={{ width: 14, height: 14 }} /> 生成中...</>
+                    : <><Sparkles size={14} /> 生成策划草案</>}
+                </button>
+              </div>
+            </section>
+
+            <section className="plan-intake-form">
+              <div className="plan-intake-form-title">AI 自动生成的策划草案</div>
               <div className={`plan-intake-state ${canGoNextStep1 ? 'ready' : 'pending'}`}>
-                {canGoNextStep1 ? '关键信息已补齐，可进入下一步' : `还缺 ${displayMissingFields.length} 项必填信息`}
+                {canGoNextStep1 ? '草案已补齐，可进入下一步' : `还缺 ${displayMissingFields.length} 项关键策划字段`}
               </div>
               {!canGoNextStep1 && (
                 <div className="plan-intake-missing">
@@ -187,47 +342,37 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
                 </div>
               )}
               <div className="plan-form-section">
-                <div className="plan-form-section-title">基础信息</div>
-                <div className="grid-2">
-                  <div className="form-group">
-                    <label className="form-label">客户/品牌名称 *</label>
-                    <input className="form-input" placeholder="如：张三美妆工作室" value={form.client_name}
-                      onChange={e => setForm(f => ({ ...f, client_name: e.target.value }))} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">行业垂类 *</label>
-                    <input className="form-input" placeholder="如：美妆、健身、美食..." value={form.industry}
-                      onChange={e => setForm(f => ({ ...f, industry: e.target.value }))} />
-                  </div>
-                </div>
-              </div>
-              <div className="plan-form-section">
-                <div className="plan-form-section-title">定位草稿</div>
+                <div className="plan-form-section-title">策划草案</div>
                 <div className="form-group">
                   <label className="form-label">目标受众画像 *</label>
-                  <textarea className="form-input form-textarea" placeholder="描述目标用户：如 25-35岁 职场女性，关注护肤和精致生活..."
+                  <textarea
+                    className="form-input form-textarea"
+                    placeholder="点左侧“生成策划草案”后，AI 会先给出建议受众。"
                     value={form.target_audience}
-                    onChange={e => setForm(f => ({ ...f, target_audience: e.target.value }))} />
-                  <p className="form-hint">尽量写清年龄段、职业状态、现在最在意的问题，以及愿意为这类内容停留的原因。</p>
+                    onChange={e => setForm(f => ({ ...f, target_audience: e.target.value }))}
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">账号定位与内容支柱 *</label>
                   <textarea
                     className="form-input form-textarea"
-                    placeholder="如：专业测评+真实改造+避坑清单；内容支柱：测评/教程/答疑..."
+                    placeholder="AI 会基于左侧事实，生成账号定位、用户关注理由和主要内容支柱。"
                     value={form.ip_requirements}
                     onChange={e => setForm(f => ({ ...f, ip_requirements: e.target.value }))}
                   />
-                  <p className="form-hint">写明你要解决的用户问题、主要内容支柱，以及用户为什么会关注而不是看完就走。</p>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">独特优势/亮点</label>
-                  <input className="form-input" placeholder="如：有10年美妆师经验、自创护肤配方..." value={form.unique_advantage}
-                    onChange={e => setForm(f => ({ ...f, unique_advantage: e.target.value }))} />
-                  <p className="form-hint">这里优先写能形成信任和差异的事实，不写“真诚”“热爱”“会表达”这类空词。</p>
+                  <label className="form-label">独特优势 / 可信点</label>
+                  <input
+                    className="form-input"
+                    placeholder="AI 会提炼这个账号最能形成信任和差异的事实。"
+                    value={form.unique_advantage}
+                    onChange={e => setForm(f => ({ ...f, unique_advantage: e.target.value }))}
+                  />
                 </div>
               </div>
-          </section>
+            </section>
+          </div>
         )}
 
         {step === 2 && (

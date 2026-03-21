@@ -145,6 +145,7 @@
 }
 
 .plan-intake-chat,
+.plan-intake-facts,
 .plan-intake-form {
   border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 16px;
@@ -157,6 +158,13 @@
   min-height: fit-content;
   overflow: visible;
   flex: none;
+}
+
+.plan-intake-facts,
+.plan-intake-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .plan-intake-form-title {
@@ -208,6 +216,13 @@
   padding: 2px 8px;
   font-size: 11px;
   color: var(--text-muted);
+}
+
+.plan-intake-actions {
+  margin-top: auto;
+  padding-top: 8px;
+  display: flex;
+  justify-content: flex-start;
 }
 
 .plan-intake-inferred {
