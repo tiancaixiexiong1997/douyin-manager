@@ -797,9 +797,8 @@
   z-index: -1;
 }
 
-.script-export-page {
+.script-export-long {
   width: 1080px;
-  min-height: 1440px;
   padding: 72px;
   display: flex;
   flex-direction: column;
@@ -809,6 +808,16 @@
     radial-gradient(120% 120% at 100% 100%, rgba(16, 185, 129, 0.14), transparent 44%),
     linear-gradient(180deg, #f8fbff, #eef6ff 44%, #f8fafc 100%);
   color: #0f172a;
+}
+
+.script-export-scenes {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.script-export-scenes .script-export-scene-card {
+  overflow: hidden;
 }
 
 .script-export-topbar {
