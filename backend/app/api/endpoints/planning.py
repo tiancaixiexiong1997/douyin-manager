@@ -783,6 +783,24 @@ def _normalize_draft(raw: dict) -> dict[str, str]:
     return {key: _safe_text(raw.get(key)) for key in INTAKE_DRAFT_KEYS}
 
 
+PLACEHOLDER_PATTERNS = (
+    "信息不足",
+    "待确认",
+    "后补充",
+    "补齐",
+    "无法判断",
+    "暂无法",
+    "待补充",
+)
+
+
+def _is_placeholder_value(value: str) -> bool:
+    text = _safe_text(value)
+    if not text:
+        return True
+    return any(pattern in text for pattern in PLACEHOLDER_PATTERNS)
+
+
 def _detect_industry(user_message: str) -> str:
     text = user_message.lower()
     for industry, keywords in INDUSTRY_KEYWORDS.items():
@@ -1046,7 +1064,7 @@ async def planning_intake_assistant(
     if isinstance(ai_updated, dict):
         for key in INTAKE_DRAFT_KEYS:
             candidate = _safe_text(ai_updated.get(key))
-            if candidate:
+            if candidate and not _is_placeholder_value(candidate):
                 merged_draft[key] = candidate
 
     inferred_fields: list[str] = []
@@ -1062,7 +1080,7 @@ async def planning_intake_assistant(
             if key not in inferred_fields:
                 inferred_fields.append(key)
 
-    required_missing = [key for key in INTAKE_REQUIRED_KEYS if not merged_draft.get(key)]
+    required_missing = [key for key in INTAKE_REQUIRED_KEYS if _is_placeholder_value(merged_draft.get(key, ""))]
     reported_missing = []
     raw_missing = ai_result.get("missing_fields", []) if isinstance(ai_result, dict) else []
     if isinstance(raw_missing, list):

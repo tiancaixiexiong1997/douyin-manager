@@ -172,6 +172,10 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
   });
 
   const buildFactPrompt = () => ([
+    '请基于下面这些已知事实，直接推断一版可执行的账号策划草案。',
+    '重点补齐：目标受众画像、账号定位与内容支柱、独特优势/可信点。',
+    '除非完全没有线索，否则不要回写“信息不足”“待确认”“后补充”这类占位词，优先给出可修改的初稿。',
+    '',
     `客户/品牌名称：${facts.client_name.trim()}`,
     `行业垂类：${facts.industry.trim()}`,
     `主营业务/产品/服务：${facts.business_or_service.trim() || '未补充'}`,
