@@ -1104,6 +1104,7 @@
 }
 
 [data-theme='light'] .plan-intake-chat,
+[data-theme='light'] .plan-intake-facts,
 [data-theme='light'] .plan-intake-form {
   background: linear-gradient(180deg, #ffffff, #f8fbff);
   border-color: rgba(148, 163, 184, 0.26);
