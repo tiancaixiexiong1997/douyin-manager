@@ -169,17 +169,6 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
           ))}
         </div>
 
-        <div className="plan-modal-guide">
-          <div className="plan-modal-guide-item">
-            <strong>本次会生成</strong>
-            <span>先创建策划项目，下一步进入详情页生成账号定位方案</span>
-          </div>
-          <div className="plan-modal-guide-item">
-            <strong>当前重点</strong>
-            <span>{stepTitleMap[step as 1 | 2 | 3].desc}</span>
-          </div>
-        </div>
-
         <div className="plan-modal-content">
 
         {step === 1 && (
