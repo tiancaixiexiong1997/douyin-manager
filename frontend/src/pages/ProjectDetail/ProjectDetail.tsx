@@ -1,11 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toPng } from 'html-to-image';
 import { bloggerApi, downloadApi, planningApi, taskApi, type ContentCalendarItem, type ContentItem, type ContentPerformance, type ContentPerformanceCreateRequest, type VideoScript, type UpdatePlanningRequest, type TaskCenterItem } from '../../api/client';
 import { CustomSelect } from '../../components/CustomSelect';
-import { ArrowLeft, FileText, Loader2, ChevronDown, ChevronUp, Sparkles, Calendar, Pencil, Save, X, RefreshCw, Plus, Trash2, TrendingUp } from '../../components/Icons';
+import { ArrowLeft, FileText, Loader2, ChevronDown, ChevronUp, Sparkles, Calendar, Pencil, Save, X, RefreshCw, Plus, Trash2, TrendingUp, Download } from '../../components/Icons';
 import { formatBackendDateTime, toBackendTimestamp } from '../../utils/datetime';
+import { notifyError, notifyInfo, notifySuccess } from '../../utils/notify';
 import './ProjectDetail.css';
 
 type ScriptTaskStatus = TaskCenterItem['status'] | null;
@@ -109,6 +111,24 @@ function getPerformanceHighlightMeta(
   return '暂无转化';
 }
 
+type ScriptExportPage =
+  | { key: string; filename: string; type: 'cover'; titles: string[]; hook?: string; duration?: string; narration?: string }
+  | { key: string; filename: string; type: 'scene'; scene: NonNullable<VideoScript['storyboard']>[number] }
+  | { key: string; filename: string; type: 'summary'; caption?: string; hashtags: string[]; tips: string[] };
+
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function sanitizeFilename(value: string): string {
+  return value
+    .replace(/[\\/:*?"<>|]+/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80) || 'script';
+}
+
 function ScriptModal({
   item,
   projectId,
@@ -126,6 +146,8 @@ function ScriptModal({
   const [script, setScript] = useState<VideoScript | null>(item.full_script || null);
   const [isEditing, setIsEditing] = useState(false);
   const [editScript, setEditScript] = useState<VideoScript | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const exportPageRefs = useRef<Array<HTMLDivElement | null>>([]);
   const isTaskRunning = taskStatus === 'queued' || taskStatus === 'running';
 
   const generateMutation = useMutation({
@@ -150,6 +172,89 @@ function ScriptModal({
     setIsEditing(true);
   };
 
+  const exportPages = useMemo<ScriptExportPage[]>(() => {
+    if (!script) return [];
+
+    const pages: ScriptExportPage[] = [
+      {
+        key: 'cover',
+        filename: '00-封面总览',
+        type: 'cover',
+        titles: (script.title_options || []).filter(Boolean).slice(0, 5),
+        hook: script.hook_script?.trim(),
+        duration: script.estimated_duration?.trim(),
+        narration: script.full_narration?.trim(),
+      },
+    ];
+
+    (script.storyboard || []).forEach((scene, index) => {
+      pages.push({
+        key: `scene-${scene.scene}-${index}`,
+        filename: `${String(index + 1).padStart(2, '0')}-分镜${scene.scene}`,
+        type: 'scene',
+        scene,
+      });
+    });
+
+    pages.push({
+      key: 'summary',
+      filename: `${String(pages.length).padStart(2, '0')}-发布信息`,
+      type: 'summary',
+      caption: script.caption_template?.trim(),
+      hashtags: (script.hashtag_suggestions || []).filter(Boolean),
+      tips: (script.filming_tips || []).filter(Boolean),
+    });
+
+    return pages;
+  }, [script]);
+
+  const exportBaseName = useMemo(() => {
+    return sanitizeFilename(`第${item.day_number}天-${item.title_direction}`);
+  }, [item.day_number, item.title_direction]);
+
+  const handleExportImages = async () => {
+    if (!script || isEditing || isExporting) return;
+    if (!exportPages.length) {
+      notifyInfo('当前还没有可导出的脚本内容');
+      return;
+    }
+
+    try {
+      setIsExporting(true);
+      notifyInfo('正在生成脚本图片，请稍等');
+      if (typeof document !== 'undefined' && 'fonts' in document) {
+        await (document as Document & { fonts?: FontFaceSet }).fonts?.ready;
+      }
+      await sleep(80);
+
+      for (let index = 0; index < exportPages.length; index += 1) {
+        const page = exportPages[index];
+        const node = exportPageRefs.current[index];
+        if (!node) continue;
+
+        const dataUrl = await toPng(node, {
+          pixelRatio: 2,
+          cacheBust: true,
+          backgroundColor: '#f8fafc',
+        });
+
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = `${exportBaseName}-${page.filename}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        await sleep(120);
+      }
+
+      notifySuccess(`已导出 ${exportPages.length} 张脚本图片`);
+    } catch (error) {
+      notifyError(`导出脚本图片失败：${(error as Error).message || '请稍后再试'}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return createPortal(
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal script-modal animate-scale-in" onClick={e => e.stopPropagation()}>
@@ -159,6 +264,11 @@ function ScriptModal({
             <p className="page-subtitle" style={{ marginTop: 4 }}>{item.title_direction}</p>
           </div>
           <div className="flex items-center gap-2">
+            {script && !isEditing && (
+              <button className="btn btn-ghost btn-sm" onClick={handleExportImages} disabled={isExporting}>
+                <Download size={13} /> {isExporting ? '导出中...' : '导出脚本图片'}
+              </button>
+            )}
             {script && !isEditing && (
               <button className="btn btn-ghost btn-sm" onClick={startEdit}>
                 <Pencil size={13} /> 编辑
@@ -346,6 +456,116 @@ function ScriptModal({
                 placeholder="空格分隔，不需要加 #"
               />
             </div>
+          </div>
+        )}
+
+        {script && !isEditing && (
+          <div className="script-export-canvas" aria-hidden="true">
+            {exportPages.map((page, index) => (
+              <div
+                key={page.key}
+                ref={(node) => {
+                  exportPageRefs.current[index] = node;
+                }}
+                className="script-export-page"
+              >
+                <div className="script-export-topbar">
+                  <span className="script-export-topbar-badge">完整脚本</span>
+                  <span className="script-export-topbar-meta">第 {item.day_number} 天</span>
+                </div>
+                <div className="script-export-head">
+                  <div className="script-export-day">第 {item.day_number} 天内容策划</div>
+                  <h1 className="script-export-title">{item.title_direction}</h1>
+                </div>
+
+                {page.type === 'cover' && (
+                  <div className="script-export-main">
+                    <section className="script-export-card">
+                      <div className="script-export-card-label">标题备选</div>
+                      <div className="script-export-list">
+                        {(page.titles.length ? page.titles : ['待补充标题']).map((title, titleIndex) => (
+                          <div key={`${page.key}-${titleIndex}`} className="script-export-list-item">
+                            {title}
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                    <section className="script-export-card">
+                      <div className="script-export-card-label">黄金3秒开头</div>
+                      <div className="script-export-copy">{page.hook || '待补充开头钩子'}</div>
+                    </section>
+                    <div className="script-export-grid">
+                      <section className="script-export-card">
+                        <div className="script-export-card-label">建议时长</div>
+                        <div className="script-export-copy is-compact">{page.duration || '按分镜节奏执行'}</div>
+                      </section>
+                      <section className="script-export-card">
+                        <div className="script-export-card-label">完整口播思路</div>
+                        <div className="script-export-copy is-compact">
+                          {page.narration || '以分镜中的台词内容为主线推进'}
+                        </div>
+                      </section>
+                    </div>
+                  </div>
+                )}
+
+                {page.type === 'scene' && (
+                  <div className="script-export-main">
+                    <section className="script-export-scene-card">
+                      <div className="script-export-scene-head">
+                        <span className="script-export-scene-badge">Scene {page.scene.scene}</span>
+                        <span className="script-export-scene-duration">{page.scene.duration}</span>
+                      </div>
+                      <div className="script-export-scene-body">
+                        <div className="script-export-scene-row">
+                          <div className="script-export-scene-label">画面</div>
+                          <div className="script-export-scene-value">{page.scene.visual}</div>
+                        </div>
+                        <div className="script-export-scene-row">
+                          <div className="script-export-scene-label">台词</div>
+                          <div className="script-export-scene-value">{page.scene.script}</div>
+                        </div>
+                        <div className="script-export-scene-row">
+                          <div className="script-export-scene-label">拍摄</div>
+                          <div className="script-export-scene-value">{page.scene.camera}</div>
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+                )}
+
+                {page.type === 'summary' && (
+                  <div className="script-export-main">
+                    <section className="script-export-card">
+                      <div className="script-export-card-label">发布文案</div>
+                      <div className="script-export-copy">{page.caption || '待补充发布文案'}</div>
+                    </section>
+                    <div className="script-export-grid">
+                      <section className="script-export-card">
+                        <div className="script-export-card-label">话题标签</div>
+                        <div className="script-export-tags">
+                          {(page.hashtags.length ? page.hashtags : ['待补充标签']).map((tag, tagIndex) => (
+                            <span key={`${page.key}-tag-${tagIndex}`} className="script-export-tag">
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      </section>
+                      <section className="script-export-card">
+                        <div className="script-export-card-label">拍摄提醒</div>
+                        <div className="script-export-list is-compact">
+                          {(page.tips.length ? page.tips : ['按分镜顺序执行，注意节奏和停顿']).map((tip, tipIndex) => (
+                            <div key={`${page.key}-tip-${tipIndex}`} className="script-export-list-item is-compact">
+                              {tip}
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>

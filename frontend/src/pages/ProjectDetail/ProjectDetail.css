@@ -787,6 +787,216 @@
   gap: 6px;
 }
 
+.script-export-canvas {
+  position: fixed;
+  left: -200vw;
+  top: 0;
+  width: 1080px;
+  pointer-events: none;
+  opacity: 0;
+  z-index: -1;
+}
+
+.script-export-page {
+  width: 1080px;
+  min-height: 1440px;
+  padding: 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(14, 165, 233, 0.16), transparent 48%),
+    radial-gradient(120% 120% at 100% 100%, rgba(16, 185, 129, 0.14), transparent 44%),
+    linear-gradient(180deg, #f8fbff, #eef6ff 44%, #f8fafc 100%);
+  color: #0f172a;
+}
+
+.script-export-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.script-export-topbar-badge,
+.script-export-topbar-meta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.script-export-topbar-badge {
+  color: #2563eb;
+}
+
+.script-export-topbar-meta {
+  color: #475569;
+}
+
+.script-export-head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.script-export-day {
+  font-size: 20px;
+  font-weight: 700;
+  color: #2563eb;
+  letter-spacing: 0.04em;
+}
+
+.script-export-title {
+  margin: 0;
+  font-size: 54px;
+  line-height: 1.16;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.script-export-main {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  flex: 1;
+}
+
+.script-export-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+}
+
+.script-export-card,
+.script-export-scene-card {
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 32px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.08);
+}
+
+.script-export-card {
+  padding: 28px;
+}
+
+.script-export-card-label {
+  font-size: 18px;
+  font-weight: 700;
+  color: #475569;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  margin-bottom: 18px;
+}
+
+.script-export-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.script-export-list-item {
+  padding: 18px 20px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.08), rgba(255, 255, 255, 0.96));
+  border: 1px solid rgba(59, 130, 246, 0.14);
+  font-size: 28px;
+  line-height: 1.5;
+  font-weight: 700;
+}
+
+.script-export-list.is-compact .script-export-list-item,
+.script-export-list-item.is-compact {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.55;
+}
+
+.script-export-copy {
+  font-size: 30px;
+  line-height: 1.65;
+  color: #0f172a;
+  white-space: pre-wrap;
+}
+
+.script-export-copy.is-compact {
+  font-size: 24px;
+  line-height: 1.6;
+}
+
+.script-export-scene-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 28px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(14, 165, 233, 0.08));
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.script-export-scene-badge {
+  font-size: 26px;
+  font-weight: 800;
+  color: #2563eb;
+}
+
+.script-export-scene-duration {
+  font-size: 20px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.script-export-scene-body {
+  padding: 26px 28px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.script-export-scene-row {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.script-export-scene-label {
+  font-size: 20px;
+  font-weight: 800;
+  color: #64748b;
+  padding-top: 4px;
+}
+
+.script-export-scene-value {
+  font-size: 28px;
+  line-height: 1.65;
+  color: #0f172a;
+  white-space: pre-wrap;
+}
+
+.script-export-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.script-export-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 52px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  color: #1d4ed8;
+  font-size: 24px;
+  font-weight: 700;
+}
+
 .detail-section,
 .detail-calendar-wrap,
 .calendar-item,
