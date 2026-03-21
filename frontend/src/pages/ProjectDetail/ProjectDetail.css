@@ -799,21 +799,22 @@
 
 .script-export-long {
   width: 1080px;
-  padding: 72px;
+  padding: 60px 64px 72px;
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 24px;
   background:
-    radial-gradient(120% 120% at 0% 0%, rgba(14, 165, 233, 0.16), transparent 48%),
-    radial-gradient(120% 120% at 100% 100%, rgba(16, 185, 129, 0.14), transparent 44%),
-    linear-gradient(180deg, #f8fbff, #eef6ff 44%, #f8fafc 100%);
+    radial-gradient(120% 120% at 0% 0%, rgba(14, 165, 233, 0.18), transparent 46%),
+    radial-gradient(120% 120% at 100% 0%, rgba(99, 102, 241, 0.12), transparent 34%),
+    radial-gradient(120% 120% at 100% 100%, rgba(16, 185, 129, 0.14), transparent 42%),
+    linear-gradient(180deg, #f8fbff, #eef6ff 32%, #f8fafc 100%);
   color: #0f172a;
 }
 
 .script-export-scenes {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 20px;
 }
 
 .script-export-scenes .script-export-scene-card {
@@ -851,35 +852,76 @@
 .script-export-head {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  max-width: 860px;
 }
 
 .script-export-day {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   color: #2563eb;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .script-export-title {
   margin: 0;
-  font-size: 54px;
-  line-height: 1.16;
+  font-size: 62px;
+  line-height: 1.08;
   font-weight: 800;
   letter-spacing: -0.03em;
+}
+
+.script-export-subtitle {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.6;
+  color: #475569;
+}
+
+.script-export-hero-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.script-export-metric {
+  min-height: 120px;
+  padding: 22px 24px;
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(6px);
+}
+
+.script-export-metric-label {
+  font-size: 16px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.script-export-metric-value {
+  margin-top: 16px;
+  font-size: 28px;
+  line-height: 1.28;
+  font-weight: 800;
+  color: #0f172a;
 }
 
 .script-export-main {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 24px;
   flex: 1;
 }
 
 .script-export-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 22px;
+  gap: 18px;
 }
 
 .script-export-card,
@@ -891,16 +933,47 @@
 }
 
 .script-export-card {
-  padding: 28px;
+  padding: 30px 30px 32px;
+}
+
+.script-export-section-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.script-export-section-head.is-compact {
+  margin-bottom: 16px;
+}
+
+.script-export-section-index {
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 800;
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.2);
 }
 
 .script-export-card-label {
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 700;
   color: #475569;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  margin-bottom: 18px;
+}
+
+.script-export-section-subtitle {
+  margin-top: 6px;
+  font-size: 18px;
+  line-height: 1.55;
+  color: #64748b;
 }
 
 .script-export-list {
@@ -914,7 +987,7 @@
   border-radius: 22px;
   background: linear-gradient(180deg, rgba(59, 130, 246, 0.08), rgba(255, 255, 255, 0.96));
   border: 1px solid rgba(59, 130, 246, 0.14);
-  font-size: 28px;
+  font-size: 30px;
   line-height: 1.5;
   font-weight: 700;
 }
@@ -927,8 +1000,8 @@
 }
 
 .script-export-copy {
-  font-size: 30px;
-  line-height: 1.65;
+  font-size: 31px;
+  line-height: 1.7;
   color: #0f172a;
   white-space: pre-wrap;
 }
@@ -1004,6 +1077,28 @@
   color: #1d4ed8;
   font-size: 24px;
   font-weight: 700;
+}
+
+.script-export-footer {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 6px;
+}
+
+.script-export-footer-mark {
+  font-size: 18px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.script-export-footer-text {
+  font-size: 18px;
+  color: #64748b;
 }
 
 .detail-section,

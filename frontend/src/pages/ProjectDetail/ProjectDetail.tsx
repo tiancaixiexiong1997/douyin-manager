@@ -421,11 +421,37 @@ function ScriptModal({
               <div className="script-export-head">
                 <div className="script-export-day">第 {item.day_number} 天内容策划</div>
                 <h1 className="script-export-title">{item.title_direction}</h1>
+                <p className="script-export-subtitle">用于客户预览的完整脚本长图，包含标题策略、开头钩子、分镜节奏与发布信息。</p>
+              </div>
+
+              <div className="script-export-hero-grid">
+                <div className="script-export-metric">
+                  <div className="script-export-metric-label">建议时长</div>
+                  <div className="script-export-metric-value">{script.estimated_duration?.trim() || '按分镜节奏执行'}</div>
+                </div>
+                <div className="script-export-metric">
+                  <div className="script-export-metric-label">分镜数量</div>
+                  <div className="script-export-metric-value">{script.storyboard?.length || 0} 个场景</div>
+                </div>
+                <div className="script-export-metric">
+                  <div className="script-export-metric-label">标题备选</div>
+                  <div className="script-export-metric-value">{(script.title_options || []).filter(Boolean).length || 0} 条</div>
+                </div>
+                <div className="script-export-metric">
+                  <div className="script-export-metric-label">适用阶段</div>
+                  <div className="script-export-metric-value">客户确认版</div>
+                </div>
               </div>
 
               <div className="script-export-main">
                 <section className="script-export-card">
-                  <div className="script-export-card-label">标题备选</div>
+                  <div className="script-export-section-head">
+                    <div className="script-export-section-index">01</div>
+                    <div>
+                      <div className="script-export-card-label">标题备选</div>
+                      <div className="script-export-section-subtitle">先看传播入口，优先筛出最有点击欲望的一版标题。</div>
+                    </div>
+                  </div>
                   <div className="script-export-list">
                     {((script.title_options || []).filter(Boolean).length ? (script.title_options || []).filter(Boolean) : ['待补充标题']).map((title, titleIndex) => (
                       <div key={`title-${titleIndex}`} className="script-export-list-item">
@@ -436,17 +462,35 @@ function ScriptModal({
                 </section>
 
                 <section className="script-export-card">
-                  <div className="script-export-card-label">黄金3秒开头</div>
+                  <div className="script-export-section-head">
+                    <div className="script-export-section-index">02</div>
+                    <div>
+                      <div className="script-export-card-label">黄金3秒开头</div>
+                      <div className="script-export-section-subtitle">第一句就要抓人，避免平铺直叙地自我介绍。</div>
+                    </div>
+                  </div>
                   <div className="script-export-copy">{script.hook_script?.trim() || '待补充开头钩子'}</div>
                 </section>
 
                 <div className="script-export-grid">
                   <section className="script-export-card">
-                    <div className="script-export-card-label">建议时长</div>
+                    <div className="script-export-section-head is-compact">
+                      <div className="script-export-section-index">03</div>
+                      <div>
+                        <div className="script-export-card-label">建议时长</div>
+                        <div className="script-export-section-subtitle">方便客户快速判断拍摄密度。</div>
+                      </div>
+                    </div>
                     <div className="script-export-copy is-compact">{script.estimated_duration?.trim() || '按分镜节奏执行'}</div>
                   </section>
                   <section className="script-export-card">
-                    <div className="script-export-card-label">完整口播思路</div>
+                    <div className="script-export-section-head is-compact">
+                      <div className="script-export-section-index">04</div>
+                      <div>
+                        <div className="script-export-card-label">完整口播思路</div>
+                        <div className="script-export-section-subtitle">整体表达主线，帮助客户先抓核心感觉。</div>
+                      </div>
+                    </div>
                     <div className="script-export-copy is-compact">
                       {script.full_narration?.trim() || '以分镜中的台词内容为主线推进'}
                     </div>
@@ -454,7 +498,13 @@ function ScriptModal({
                 </div>
 
                 <section className="script-export-card">
-                  <div className="script-export-card-label">分镜脚本</div>
+                  <div className="script-export-section-head">
+                    <div className="script-export-section-index">05</div>
+                    <div>
+                      <div className="script-export-card-label">分镜脚本</div>
+                      <div className="script-export-section-subtitle">逐镜头拆清楚画面、台词和拍摄动作，方便直接进入执行。</div>
+                    </div>
+                  </div>
                   <div className="script-export-scenes">
                     {(script.storyboard?.length ? script.storyboard : [{
                       scene: 1,
@@ -488,13 +538,25 @@ function ScriptModal({
                 </section>
 
                 <section className="script-export-card">
-                  <div className="script-export-card-label">发布文案</div>
+                  <div className="script-export-section-head">
+                    <div className="script-export-section-index">06</div>
+                    <div>
+                      <div className="script-export-card-label">发布文案</div>
+                      <div className="script-export-section-subtitle">给客户直接看发布层表达，不只是拍摄层脚本。</div>
+                    </div>
+                  </div>
                   <div className="script-export-copy">{script.caption_template?.trim() || '待补充发布文案'}</div>
                 </section>
 
                 <div className="script-export-grid">
                   <section className="script-export-card">
-                    <div className="script-export-card-label">话题标签</div>
+                    <div className="script-export-section-head is-compact">
+                      <div className="script-export-section-index">07</div>
+                      <div>
+                        <div className="script-export-card-label">话题标签</div>
+                        <div className="script-export-section-subtitle">补足发布动作，方便直接带走使用。</div>
+                      </div>
+                    </div>
                     <div className="script-export-tags">
                       {((script.hashtag_suggestions || []).filter(Boolean).length ? (script.hashtag_suggestions || []).filter(Boolean) : ['待补充标签']).map((tag, tagIndex) => (
                         <span key={`tag-${tagIndex}`} className="script-export-tag">
@@ -504,7 +566,13 @@ function ScriptModal({
                     </div>
                   </section>
                   <section className="script-export-card">
-                    <div className="script-export-card-label">拍摄提醒</div>
+                    <div className="script-export-section-head is-compact">
+                      <div className="script-export-section-index">08</div>
+                      <div>
+                        <div className="script-export-card-label">拍摄提醒</div>
+                        <div className="script-export-section-subtitle">把执行注意点提前说透，减少反复确认。</div>
+                      </div>
+                    </div>
                     <div className="script-export-list is-compact">
                       {((script.filming_tips || []).filter(Boolean).length ? (script.filming_tips || []).filter(Boolean) : ['按分镜顺序执行，注意节奏和停顿']).map((tip, tipIndex) => (
                         <div key={`tip-${tipIndex}`} className="script-export-list-item is-compact">
@@ -514,6 +582,11 @@ function ScriptModal({
                     </div>
                   </section>
                 </div>
+              </div>
+
+              <div className="script-export-footer">
+                <span className="script-export-footer-mark">Douyin Manager</span>
+                <span className="script-export-footer-text">此长图用于客户确认脚本方向，不替代现场拍摄微调。</span>
               </div>
             </div>
           </div>
