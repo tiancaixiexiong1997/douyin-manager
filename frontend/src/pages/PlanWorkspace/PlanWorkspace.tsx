@@ -115,7 +115,6 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
   const displayMissingFields = Array.from(new Set([...missingFields, ...requiredMissingFields]));
   const canGoNextStep1 = requiredMissingFields.length === 0;
   const canSubmit = canGoNextStep1 && !!goalTarget.trim() && !!timeWindows.trim();
-  const completedRequiredCount = REQUIRED_INTAKE_FIELDS.length - requiredMissingFields.length;
   const nextStepLabel = step === 1 ? '进入参考 IP' : '进入生成确认';
   const buildPayload = (): CreatePlanningRequest => {
     const executionBlock = [
@@ -186,28 +185,6 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
         {step === 1 && (
           <section className="plan-intake-form animate-fade-in">
               <div className="plan-intake-form-title">结构化策划草稿</div>
-              <div className="plan-intake-form-desc">直接填写关键信息，先把账号到底服务谁、凭什么被关注、靠什么持续产出讲清楚。</div>
-              <div className="plan-intake-overview">
-                <div className="plan-intake-overview-item">
-                  <strong>{completedRequiredCount}/{REQUIRED_INTAKE_FIELDS.length}</strong>
-                  <span>核心信息已补齐</span>
-                </div>
-                <div className="plan-intake-overview-item">
-                  <strong>{canGoNextStep1 ? '可继续' : '待完善'}</strong>
-                  <span>当前草稿状态</span>
-                </div>
-              </div>
-              <div className="plan-intake-helper-grid">
-                <div className="plan-intake-helper-card">
-                  <strong>填写原则</strong>
-                  <span>优先写清具体用户、具体问题、具体价值，不要只写“涨粉”“做个人 IP”“输出干货”。</span>
-                </div>
-                <div className="plan-intake-helper-card">
-                  <strong>别写自嗨话术</strong>
-                  <span>定位不是“真实分享”“治愈陪伴”“记录生活”，而是用户为什么愿意持续看你。</span>
-                </div>
-              </div>
-              <div className="plan-intake-form-title">结构化草稿</div>
               <div className={`plan-intake-state ${canGoNextStep1 ? 'ready' : 'pending'}`}>
                 {canGoNextStep1 ? '关键信息已补齐，可进入下一步' : `还缺 ${displayMissingFields.length} 项必填信息`}
               </div>
