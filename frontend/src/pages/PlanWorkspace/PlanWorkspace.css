@@ -238,6 +238,35 @@
   padding: 8px 10px;
 }
 
+.plan-intake-helper-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.plan-intake-helper-card {
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.08);
+  padding: 12px;
+}
+
+.plan-intake-helper-card strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.plan-intake-helper-card span {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
 .plan-intake-preview {
   margin-top: 12px;
   border-radius: 14px;
@@ -1306,6 +1335,11 @@
   border-color: rgba(59, 130, 246, 0.2);
 }
 
+[data-theme='light'] .plan-intake-helper-card {
+  background: #ffffff;
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
 [data-theme='light'] .plan-intake-example-card-action {
   color: #2563eb;
 }
@@ -1478,6 +1512,10 @@
   }
 
   .plan-intake-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .plan-intake-helper-grid {
     grid-template-columns: 1fr;
   }
 

@@ -6,7 +6,6 @@ import {
   planningApi,
   bloggerApi,
   type CreatePlanningRequest,
-  type PlanningIntakeDraft,
 } from '../../api/client';
 import { CustomSelect } from '../../components/CustomSelect';
 import { Plus, X, Sparkles, ArrowRight, Clock, CheckCircle, Trash2, RefreshCw, Link as LinkIcon, Search, Filter } from '../../components/Icons';
@@ -25,33 +24,6 @@ const INTAKE_FIELD_LABELS: Record<typeof REQUIRED_INTAKE_FIELDS[number], string>
   target_audience: '目标受众',
   ip_requirements: '账号定位与内容支柱',
 };
-const INTAKE_DISPLAY_LABELS: Record<string, string> = {
-  client_name: '客户/品牌名称',
-  industry: '行业垂类',
-  target_audience: '目标受众',
-  ip_requirements: '账号定位与内容支柱',
-  unique_advantage: '独特优势',
-  style_preference: '对标风格',
-  business_goal: '商业目标',
-  publishing_rhythm: '发布节奏',
-  time_windows: '发布时间窗口',
-  goal_target: '阶段目标',
-  iteration_rule: '迭代规则',
-};
-const FAST_PROMPT_EXAMPLES = [
-  {
-    title: '本地探店起号',
-    prompt: '我做广州本地餐饮探店，目标客群是25-35岁上班族，想做“高性价比工作餐+周末聚餐”账号，30天起号。',
-  },
-  {
-    title: '教练转化咨询',
-    prompt: '我是瑜伽教练，想做30岁女性居家减脂账号，主打每天10分钟可坚持，目标是私教咨询转化。',
-  },
-  {
-    title: '护肤避坑科普',
-    prompt: '我做护肤，想帮敏感肌女生避坑，内容以产品测评+成分科普为主，一个月先稳定更新10条。',
-  },
-] as const;
 const STATUS_FILTER_OPTIONS = [
   { value: 'all', label: '全部状态' },
   { value: 'draft', label: '草稿/待开始' },
@@ -83,12 +55,6 @@ function inferProjectStage(project: {
   return hasStrategy ? (hasCalendar ? 'completed' : 'strategy_completed') : 'draft';
 }
 
-function mapRhythmTextToPreset(value: string): 'month10' | 'month12' | 'month15' {
-  if (value.includes('15')) return 'month15';
-  if (value.includes('12')) return 'month12';
-  return 'month10';
-}
-
 function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -101,7 +67,6 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
 function CreatePlanModal({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
-  const [briefInput, setBriefInput] = useState('');
   const [form, setForm] = useState<CreatePlanningRequest>({
     client_name: '',
     industry: '',
@@ -117,55 +82,13 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
   const [timeWindows, setTimeWindows] = useState('19:00、21:00');
   const [goalTarget, setGoalTarget] = useState('30天发布10条，至少跑出1-2条高潜内容');
   const [iterationRule, setIterationRule] = useState('每周复盘1次，每次只调整1-2个变量（开头/标题/结构）');
-  const [missingFields, setMissingFields] = useState<string[]>([...REQUIRED_INTAKE_FIELDS]);
-  const [inferredFields, setInferredFields] = useState<string[]>([]);
-  const [intakeSummary, setIntakeSummary] = useState('');
-  const [generatedDraftPreview, setGeneratedDraftPreview] = useState('');
+  const [missingFields] = useState<string[]>([...REQUIRED_INTAKE_FIELDS]);
   const qc = useQueryClient();
   const { data: bloggers = [] } = useQuery({ queryKey: ['bloggers'], queryFn: () => bloggerApi.list() });
   const selectedReferenceBloggers = useMemo(
     () => bloggers.filter((blogger) => form.reference_blogger_ids.includes(blogger.id)),
     [bloggers, form.reference_blogger_ids]
   );
-  const intakeMutation = useMutation({
-    mutationFn: ({
-      userMessage,
-      draft,
-    }: {
-      userMessage: string;
-      draft: PlanningIntakeDraft;
-    }) => planningApi.intakeAssistant({
-      user_message: userMessage,
-      chat_history: [],
-      draft,
-      auto_complete: true,
-      mode: 'fast',
-    }),
-    onSuccess: (result) => {
-      setForm((prev) => ({
-        ...prev,
-        client_name: result.draft.client_name || prev.client_name,
-        industry: result.draft.industry || prev.industry,
-        target_audience: result.draft.target_audience || prev.target_audience,
-        unique_advantage: result.draft.unique_advantage || prev.unique_advantage,
-        ip_requirements: result.draft.ip_requirements || prev.ip_requirements,
-        style_preference: result.draft.style_preference || prev.style_preference,
-        business_goal: result.draft.business_goal || prev.business_goal,
-      }));
-      if (result.draft.time_windows) setTimeWindows(result.draft.time_windows);
-      if (result.draft.goal_target) setGoalTarget(result.draft.goal_target);
-      if (result.draft.iteration_rule) setIterationRule(result.draft.iteration_rule);
-      if (result.draft.publishing_rhythm) setRhythmPreset(mapRhythmTextToPreset(result.draft.publishing_rhythm));
-      setMissingFields(result.missing_fields || []);
-      setInferredFields(result.inferred_fields || []);
-      setIntakeSummary(result.confirmation_summary || '');
-      setGeneratedDraftPreview(result.assistant_reply || '');
-    },
-    onError: (err) => {
-      setInferredFields([]);
-      setGeneratedDraftPreview(`这次整理失败了：${err.message}。你可以重试，或先手动补齐右侧字段。`);
-    },
-  });
   const mutation = useMutation({
     mutationFn: planningApi.create,
     onSuccess: (project) => {
@@ -175,36 +98,9 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
     },
   });
 
-  const buildIntakeDraft = (): PlanningIntakeDraft => ({
-    client_name: form.client_name || '',
-    industry: form.industry || '',
-    target_audience: form.target_audience || '',
-    unique_advantage: form.unique_advantage || '',
-    ip_requirements: form.ip_requirements || '',
-    style_preference: form.style_preference || '',
-    business_goal: form.business_goal || '',
-    publishing_rhythm: {
-      month10: '每月10条（推荐，3天1条）',
-      month12: '每月12条（2-3天1条）',
-      month15: '每月15条（2天1条）',
-    }[rhythmPreset],
-    time_windows: timeWindows,
-    goal_target: goalTarget,
-    iteration_rule: iterationRule,
-  });
-
-  const generateBriefDraft = (rawMessage?: string) => {
-    const message = (rawMessage ?? briefInput).trim();
-    if (!message || intakeMutation.isPending) return;
-    intakeMutation.mutate({
-      userMessage: message,
-      draft: buildIntakeDraft(),
-    });
-  };
-
   const stepTitleMap = useMemo(
     () => ({
-      1: { title: '极速生成', desc: '输入一段账号描述，先生成结构化策划草稿' },
+      1: { title: '结构化填写', desc: '直接填写账号策划草稿，确保信息贴合真实 IP' },
       2: { title: '对标参考', desc: '选参考博主与主页，统一对标口径' },
       3: { title: '确认创建', desc: '确认信息后创建项目草稿，进入详情页继续生成定位' },
     }),
@@ -217,7 +113,6 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
   }[rhythmPreset];
   const requiredMissingFields = REQUIRED_INTAKE_FIELDS.filter((key) => !(form[key] || '').trim());
   const displayMissingFields = Array.from(new Set([...missingFields, ...requiredMissingFields]));
-  const displayInferredFields = inferredFields.filter((field) => INTAKE_DISPLAY_LABELS[field]);
   const canGoNextStep1 = requiredMissingFields.length === 0;
   const canSubmit = canGoNextStep1 && !!goalTarget.trim() && !!timeWindows.trim();
   const completedRequiredCount = REQUIRED_INTAKE_FIELDS.length - requiredMissingFields.length;
@@ -289,82 +184,30 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
         <div className="plan-modal-content">
 
         {step === 1 && (
-          <div className="plan-intake-layout animate-fade-in">
-            <section className="plan-intake-chat">
-              <div className="plan-intake-chat-title">一段话极速生成</div>
-              <div className="plan-intake-chat-desc">直接写清行业、目标人群、想做的内容和商业目标，AI 会先整理成结构化草稿。</div>
+          <section className="plan-intake-form animate-fade-in">
+              <div className="plan-intake-form-title">结构化策划草稿</div>
+              <div className="plan-intake-form-desc">直接填写关键信息，先把账号到底服务谁、凭什么被关注、靠什么持续产出讲清楚。</div>
               <div className="plan-intake-overview">
                 <div className="plan-intake-overview-item">
                   <strong>{completedRequiredCount}/{REQUIRED_INTAKE_FIELDS.length}</strong>
                   <span>核心信息已补齐</span>
                 </div>
                 <div className="plan-intake-overview-item">
-                  <strong>{generatedDraftPreview ? '已生成' : '待生成'}</strong>
-                  <span>草稿状态</span>
+                  <strong>{canGoNextStep1 ? '可继续' : '待完善'}</strong>
+                  <span>当前草稿状态</span>
                 </div>
               </div>
-              <div className="plan-intake-fast-hint">不用来回对话，一次写成一段就行，生成后你可以直接改右侧字段。</div>
-              <div className="plan-intake-example-block">
-                <div className="plan-intake-example-title">快速示例</div>
-                <div className="plan-intake-example-desc">如果你还没想好怎么描述，可以直接点一个示例改着用。</div>
-                <div className="plan-intake-example-grid">
-                  {FAST_PROMPT_EXAMPLES.map((example, idx) => (
-                    <button
-                      key={`fast-example-${idx}-${example.title}`}
-                      className="plan-intake-example-card"
-                      type="button"
-                      onClick={() => setBriefInput(example.prompt)}
-                      disabled={intakeMutation.isPending}
-                      title={example.prompt}
-                    >
-                      <span className="plan-intake-example-card-title">{example.title}</span>
-                      <span className="plan-intake-example-card-text">{example.prompt}</span>
-                      <span className="plan-intake-example-card-action">填入输入框</span>
-                    </button>
-                  ))}
+              <div className="plan-intake-helper-grid">
+                <div className="plan-intake-helper-card">
+                  <strong>填写原则</strong>
+                  <span>优先写清具体用户、具体问题、具体价值，不要只写“涨粉”“做个人 IP”“输出干货”。</span>
+                </div>
+                <div className="plan-intake-helper-card">
+                  <strong>别写自嗨话术</strong>
+                  <span>定位不是“真实分享”“治愈陪伴”“记录生活”，而是用户为什么愿意持续看你。</span>
                 </div>
               </div>
-              {generatedDraftPreview && (
-                <div className="plan-intake-preview">
-                  <div className="plan-intake-preview-title">AI 草稿预览</div>
-                  <div className="plan-intake-preview-body">{generatedDraftPreview}</div>
-                </div>
-              )}
-              <div className="plan-intake-input-row">
-                <div className="plan-intake-composer">
-                  <div className="plan-intake-composer-head">
-                    <span>输入一段账号描述，尽量包含行业、人群、内容方向、差异点和目标</span>
-                    <em>Shift + 回车换行，Cmd/Ctrl + 回车生成</em>
-                  </div>
-                <textarea
-                  className="form-input plan-intake-input"
-                  placeholder="例如：我是杭州本地房产经纪人，想做刚需买房避坑账号，目标用户是预算300-500万的首次置业家庭，内容重点是板块分析、真实带看和贷款决策，目标是稳定获客。"
-                  value={briefInput}
-                  onChange={(e) => setBriefInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                      e.preventDefault();
-                      generateBriefDraft();
-                    }
-                  }}
-                />
-                </div>
-                <div className="plan-intake-action-row">
-                  <button
-                    className="btn btn-primary"
-                    type="button"
-                    disabled={!briefInput.trim() || intakeMutation.isPending}
-                    onClick={() => generateBriefDraft()}
-                  >
-                    {intakeMutation.isPending ? <><div className="spinner" style={{ width: 14, height: 14 }} /> 生成中...</> : <><Sparkles size={14} /> 极速生成草稿</>}
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            <section className="plan-intake-form">
               <div className="plan-intake-form-title">结构化草稿</div>
-              <div className="plan-intake-form-desc">右侧是 AI 帮你整理后的关键字段，你也可以直接手动改。</div>
               <div className={`plan-intake-state ${canGoNextStep1 ? 'ready' : 'pending'}`}>
                 {canGoNextStep1 ? '关键信息已补齐，可进入下一步' : `还缺 ${displayMissingFields.length} 项必填信息`}
               </div>
@@ -377,16 +220,6 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
                   ))}
                 </div>
               )}
-              {displayInferredFields.length > 0 && (
-                <div className="plan-intake-inferred">
-                  {displayInferredFields.map((field) => (
-                    <span key={field} className="plan-intake-inferred-tag">
-                      自动推断：{INTAKE_DISPLAY_LABELS[field]}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {intakeSummary && <div className="plan-intake-summary">{intakeSummary}</div>}
               <div className="plan-form-section">
                 <div className="plan-form-section-title">基础信息</div>
                 <div className="grid-2">
@@ -409,6 +242,7 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
                   <textarea className="form-input form-textarea" placeholder="描述目标用户：如 25-35岁 职场女性，关注护肤和精致生活..."
                     value={form.target_audience}
                     onChange={e => setForm(f => ({ ...f, target_audience: e.target.value }))} />
+                  <p className="form-hint">尽量写清年龄段、职业状态、现在最在意的问题，以及愿意为这类内容停留的原因。</p>
                 </div>
                 <div className="form-group">
                   <label className="form-label">账号定位与内容支柱 *</label>
@@ -418,15 +252,16 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
                     value={form.ip_requirements}
                     onChange={e => setForm(f => ({ ...f, ip_requirements: e.target.value }))}
                   />
+                  <p className="form-hint">写明你要解决的用户问题、主要内容支柱，以及用户为什么会关注而不是看完就走。</p>
                 </div>
                 <div className="form-group">
                   <label className="form-label">独特优势/亮点</label>
                   <input className="form-input" placeholder="如：有10年美妆师经验、自创护肤配方..." value={form.unique_advantage}
                     onChange={e => setForm(f => ({ ...f, unique_advantage: e.target.value }))} />
+                  <p className="form-hint">这里优先写能形成信任和差异的事实，不写“真诚”“热爱”“会表达”这类空词。</p>
                 </div>
               </div>
-            </section>
-          </div>
+          </section>
         )}
 
         {step === 2 && (
