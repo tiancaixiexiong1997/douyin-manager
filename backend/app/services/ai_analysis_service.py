@@ -1317,7 +1317,11 @@ class AIAnalysisService:
             target_audience_detail=pos.get("target_audience_detail", ""),
             personality_tags="、".join(pos.get("personality_tags", [])),
             differentiation=pos.get("differentiation", ""),
+            user_value=pos.get("user_value", ""),
+            follow_reason=pos.get("follow_reason", ""),
             content_tone=strat.get("content_tone", ""),
+            stop_scroll_reason=strat.get("stop_scroll_reason", ""),
+            interaction_trigger=strat.get("interaction_trigger", ""),
             content_pillars=json.dumps(pos.get("content_pillars", []), ensure_ascii=False),
             performance_recap_summary=recap_summary,
             winning_patterns=winning_patterns,
@@ -1537,7 +1541,11 @@ class AIAnalysisService:
             key_message=content_item.get('key_message', ''),
             core_identity=account_plan.get('account_positioning', {}).get('core_identity', ''),
             content_tone=account_plan.get('content_strategy', {}).get('content_tone', ''),
-            target_audience_detail=account_plan.get('account_positioning', {}).get('target_audience_detail', '')
+            target_audience_detail=account_plan.get('account_positioning', {}).get('target_audience_detail', ''),
+            user_value=account_plan.get('account_positioning', {}).get('user_value', ''),
+            follow_reason=account_plan.get('account_positioning', {}).get('follow_reason', ''),
+            stop_scroll_reason=account_plan.get('content_strategy', {}).get('stop_scroll_reason', ''),
+            interaction_trigger=account_plan.get('content_strategy', {}).get('interaction_trigger', '')
         )
 
         result = await self._call_ai(system_prompt, user_prompt, scene_key="video_script")

@@ -194,13 +194,17 @@ ACCOUNT_PLAN_PROMPT_TEMPLATE = (
     '    ],\n'
     '    "personality_tags": ["张力型人设标签（如：高冷外表/内心柔软）", "标签2", "标签3"],\n'
     '    "bio_suggestion": "主页简介（不超过80字，必须包含：我是谁+我能给你什么+关注理由）",\n'
-    '    "differentiation": "差异化支点（指出参考博主未覆盖的具体内容空白或人群空白）"\n'
+    '    "differentiation": "差异化支点（指出参考博主未覆盖的具体内容空白或人群空白）",\n'
+    '    "user_value": "用户持续关注后，稳定能得到什么具体收益或判断（避免空泛自嗨，60-100字）",\n'
+    '    "follow_reason": "用户为什么会关注你而不是看完就走（要写清持续关注理由，而不是泛泛共鸣，60-100字）"\n'
     '  }},\n'
     '  "content_strategy": {{\n'
     '    "primary_format": "主要内容形式（口播+画中画/跟拍Vlog/教程/测评/探店实拍等，说明选择理由）",\n'
     '    "posting_frequency": "发布频率建议（结合商业目标和团队规模给出合理频率）",\n'
     '    "best_posting_times": ["基于目标受众作息给出具体时段1", "时段2"],\n'
     '    "content_tone": "内容基调（描述语言风格+情绪浓度+与竞品的调性差异）",\n'
+    '    "stop_scroll_reason": "陌生用户为什么会停下来继续看（写清具体信息回报/冲突点/判断价值，60-100字）",\n'
+    '    "interaction_trigger": "用户为什么愿意评论/收藏/私信（写清触发互动的具体机制，60-100字）",\n'
     '    "hook_template": "开头钩子模板（给出2-3个可直接使用的开场句式）",\n'
     '    "cta_template": "结尾引导模板（给出1-2个可直接使用的结尾话术）"\n'
     '  }}\n'
@@ -255,7 +259,11 @@ CONTENT_CALENDAR_PROMPT_TEMPLATE = (
     "- 具体受众：{target_audience_detail}\n"
     "- 人设标签：{personality_tags}\n"
     "- 差异化优势：{differentiation}\n"
+    "- 用户持续获得：{user_value}\n"
+    "- 用户关注理由：{follow_reason}\n"
     "- 内容基调：{content_tone}\n"
+    "- 停留理由：{stop_scroll_reason}\n"
+    "- 互动触发点：{interaction_trigger}\n"
     "- 内容支柱：{content_pillars}\n\n"
     "# 最新复盘建议（如已有）\n"
     "- 复盘摘要：{performance_recap_summary}\n"
@@ -451,7 +459,11 @@ VIDEO_SCRIPT_PROMPT_TEMPLATE = (
     "# 账号定位\n"
     "- 核心定位：{core_identity}\n"
     "- 内容基调：{content_tone}\n"
-    "- 目标受众：{target_audience_detail}\n\n"
+    "- 目标受众：{target_audience_detail}\n"
+    "- 用户持续获得：{user_value}\n"
+    "- 用户关注理由：{follow_reason}\n"
+    "- 停留理由：{stop_scroll_reason}\n"
+    "- 互动触发点：{interaction_trigger}\n\n"
     "# 输出要求\n"
     "严格以如下 JSON 格式返回：\n"
     "{{\n"

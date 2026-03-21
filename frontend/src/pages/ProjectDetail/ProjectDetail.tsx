@@ -449,11 +449,15 @@ function EditPlanModal({ projectId, plan, onClose, onSaved }: {
     personality_tags: pos?.personality_tags?.join('、') || '',
     target_audience_detail: pos?.target_audience_detail || '',
     differentiation: pos?.differentiation || '',
+    user_value: pos?.user_value || '',
+    follow_reason: pos?.follow_reason || '',
     content_pillars: pos?.content_pillars ? JSON.stringify(pos.content_pillars, null, 2) : '[]',
     primary_format: strat?.primary_format || '',
     posting_frequency: strat?.posting_frequency || '',
     best_posting_times: strat?.best_posting_times?.join('、') || '',
     content_tone: strat?.content_tone || '',
+    stop_scroll_reason: strat?.stop_scroll_reason || '',
+    interaction_trigger: strat?.interaction_trigger || '',
     hook_template: strat?.hook_template || '',
     cta_template: strat?.cta_template || '',
   });
@@ -478,12 +482,16 @@ function EditPlanModal({ projectId, plan, onClose, onSaved }: {
           target_audience_detail: form.target_audience_detail,
           content_pillars,
           differentiation: form.differentiation,
+          user_value: form.user_value,
+          follow_reason: form.follow_reason,
         },
         content_strategy: {
           primary_format: form.primary_format,
           posting_frequency: form.posting_frequency,
           best_posting_times: form.best_posting_times.split(/[、,，\s]+/).filter(Boolean),
           content_tone: form.content_tone,
+          stop_scroll_reason: form.stop_scroll_reason,
+          interaction_trigger: form.interaction_trigger,
           hook_template: form.hook_template,
           cta_template: form.cta_template,
         },
@@ -526,6 +534,14 @@ function EditPlanModal({ projectId, plan, onClose, onSaved }: {
             <input className="form-input" value={form.differentiation} onChange={e => setForm(f => ({ ...f, differentiation: e.target.value }))} />
           </div>
           <div className="form-group">
+            <label className="form-label">用户持续获得什么</label>
+            <textarea className="form-input form-textarea" rows={3} value={form.user_value} onChange={e => setForm(f => ({ ...f, user_value: e.target.value }))} placeholder="用户持续看下去，能稳定获得什么具体判断、方法或避坑价值" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">用户为什么会关注</label>
+            <textarea className="form-input form-textarea" rows={3} value={form.follow_reason} onChange={e => setForm(f => ({ ...f, follow_reason: e.target.value }))} placeholder="为什么不是看完就走，而是愿意继续关注你后续内容" />
+          </div>
+          <div className="form-group">
             <label className="form-label">内容支柱 <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>（JSON 数组，每项含 name/ratio/description）</span></label>
             <textarea className="form-input form-textarea" rows={5} style={{ fontFamily: 'monospace', fontSize: 12 }}
               value={form.content_pillars}
@@ -554,6 +570,14 @@ function EditPlanModal({ projectId, plan, onClose, onSaved }: {
               <label className="form-label">内容基调</label>
               <input className="form-input" value={form.content_tone} onChange={e => setForm(f => ({ ...f, content_tone: e.target.value }))} />
             </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">用户为什么会停下来继续看</label>
+            <textarea className="form-input form-textarea" rows={3} value={form.stop_scroll_reason} onChange={e => setForm(f => ({ ...f, stop_scroll_reason: e.target.value }))} placeholder="陌生用户刷到时，具体会被什么信息回报、冲突或判断点留下来" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">互动触发点</label>
+            <textarea className="form-input form-textarea" rows={3} value={form.interaction_trigger} onChange={e => setForm(f => ({ ...f, interaction_trigger: e.target.value }))} placeholder="什么会让用户愿意评论、收藏、私信，而不是只看不动" />
           </div>
           <div className="form-group">
             <label className="form-label">钩子模板</label>
@@ -1213,6 +1237,35 @@ export default function ProjectDetail() {
                 </div>
               )}
 
+              {(positioning.target_audience_detail || positioning.differentiation || positioning.user_value || positioning.follow_reason) && (
+                <div className="strategy-grid">
+                  {positioning.target_audience_detail && (
+                    <div className="strategy-item">
+                      <div className="identity-label">受众细化</div>
+                      <div className="strategy-value">{positioning.target_audience_detail}</div>
+                    </div>
+                  )}
+                  {positioning.differentiation && (
+                    <div className="strategy-item">
+                      <div className="identity-label">差异化支点</div>
+                      <div className="strategy-value">{positioning.differentiation}</div>
+                    </div>
+                  )}
+                  {positioning.user_value && (
+                    <div className="strategy-item">
+                      <div className="identity-label">用户持续获得什么</div>
+                      <div className="strategy-value">{positioning.user_value}</div>
+                    </div>
+                  )}
+                  {positioning.follow_reason && (
+                    <div className="strategy-item">
+                      <div className="identity-label">用户为什么会关注</div>
+                      <div className="strategy-value">{positioning.follow_reason}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* 人设标签 */}
               {positioning.personality_tags && (
                 <div className="positioning-block">
@@ -1260,6 +1313,18 @@ export default function ProjectDetail() {
                     <div className="identity-label">内容基调</div>
                     <div className="strategy-value">{strategy.content_tone}</div>
                   </div>
+                  {strategy.stop_scroll_reason && (
+                    <div className="strategy-item">
+                      <div className="identity-label">用户为什么会停下来继续看</div>
+                      <div className="strategy-value">{strategy.stop_scroll_reason}</div>
+                    </div>
+                  )}
+                  {strategy.interaction_trigger && (
+                    <div className="strategy-item">
+                      <div className="identity-label">互动触发点</div>
+                      <div className="strategy-value">{strategy.interaction_trigger}</div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

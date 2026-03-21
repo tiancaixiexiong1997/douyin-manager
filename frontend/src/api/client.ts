@@ -447,12 +447,16 @@ export interface AccountPlan {
     personality_tags: string[];
     bio_suggestion: string;
     differentiation?: string;
+    user_value?: string;
+    follow_reason?: string;
   };
   content_strategy?: {
     primary_format: string;
     posting_frequency: string;
     best_posting_times: string[];
     content_tone: string;
+    stop_scroll_reason?: string;
+    interaction_trigger?: string;
     hook_template?: string;
     cta_template?: string;
   };
