@@ -253,7 +253,7 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="dash-list">
-              {sortedProjects.slice(0, 5).map((p) => {
+              {sortedProjects.slice(0, 3).map((p) => {
                 const stage = inferProjectStage(p);
                 return (
                 <Link to={`/planning/${p.id}`} key={p.id} className="dash-project-item">
@@ -306,7 +306,7 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="dash-list">
-              {sortedBloggers.slice(0, 6).map((b) => (
+              {sortedBloggers.slice(0, 3).map((b) => (
                 <div key={b.id} className="dash-blogger-item">
                   <div className="dash-blogger-avatar">
                     {b.avatar_url ? (
