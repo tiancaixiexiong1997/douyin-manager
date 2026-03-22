@@ -646,32 +646,10 @@
 
 .project-card-actions {
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
   gap: 4px;
   flex-shrink: 0;
 }
-
-.project-card-action-btn {
-  width: 40px;
-  min-width: 40px;
-  height: 40px;
-  border-radius: 12px;
-}
-
-.project-card-action-btn:hover {
-  transform: translateY(-1px);
-}
-
-.project-card-action-refresh {
-  color: var(--text-secondary);
-}
-
-.project-card-action-delete {
-  color: var(--error);
-}
-
-.project-card-detail-btn {
+.blogger-detail-btn {
   font-size: 12px;
   padding: 4px 10px;
   height: auto;

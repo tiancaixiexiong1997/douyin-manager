@@ -890,7 +890,7 @@ export default function PlanWorkspace() {
                   <div className="project-card-actions">
                     {stage !== 'strategy_generating' && stage !== 'calendar_generating' && (
                       <button
-                        className="btn btn-icon project-card-action-btn project-card-action-refresh"
+                        className="btn btn-icon btn-ghost"
                         title={project.account_plan ? '重新生成定位方案' : '生成定位方案'}
                         onClick={e => {
                           e.preventDefault();
@@ -909,7 +909,7 @@ export default function PlanWorkspace() {
                       </button>
                     )}
                     <button
-                      className="btn btn-icon project-card-action-btn project-card-action-delete"
+                      className="btn btn-icon btn-danger"
                       title={stage === 'strategy_generating' || stage === 'calendar_generating' ? '停止生成并删除' : '删除项目'}
                       onClick={e => {
                         e.preventDefault();
@@ -920,7 +920,7 @@ export default function PlanWorkspace() {
                       <Trash2 size={14} />
                     </button>
                     <button
-                      className="btn btn-ghost project-card-detail-btn"
+                      className="btn btn-ghost blogger-detail-btn"
                       onClick={e => {
                         e.preventDefault();
                         e.stopPropagation();
