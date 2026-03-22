@@ -9,8 +9,7 @@ import {
   type PlanningIntakeDraft,
 } from '../../api/client';
 import { CustomSelect } from '../../components/CustomSelect';
-import { Plus, X, Sparkles, ArrowRight, Clock, CheckCircle, Trash2, RefreshCw, Link as LinkIcon, Search, Filter } from '../../components/Icons';
-import { formatBackendDate } from '../../utils/datetime';
+import { Plus, X, Sparkles, ArrowRight, Clock, CheckCircle, Trash2, RefreshCw, Link as LinkIcon, Search, Filter, DouyinIcon } from '../../components/Icons';
 import { notifyError } from '../../utils/notify';
 import './PlanWorkspace.css';
 
@@ -840,6 +839,8 @@ export default function PlanWorkspace() {
               .filter((name): name is string => Boolean(name));
             const visibleReferenceNames = referenceNames.slice(0, 2);
             const extraReferenceCount = Math.max(referenceNames.length - visibleReferenceNames.length, 0);
+            const signature = project.account_signature || project.target_audience || '暂无简介';
+            const hasAccountData = Boolean(project.account_nickname);
 
             return (
             <div key={project.id} style={{ position: 'relative' }}>
@@ -848,7 +849,6 @@ export default function PlanWorkspace() {
                 style={{ cursor: 'pointer' }}
                 onClick={() => navigate(`/planning/${project.id}`)}
               >
-                {/* 卡片头部：和博主IP库一致的头像+信息布局 */}
                 <div className="project-card-header">
                   <div className="project-card-avatar">
                     {project.account_avatar_url ? (
@@ -856,6 +856,7 @@ export default function PlanWorkspace() {
                     ) : (
                       <span>{(project.account_nickname || project.client_name)[0]}</span>
                     )}
+                    <div className="project-card-platform-dot" />
                   </div>
 
                   <div className="project-card-info">
@@ -863,9 +864,6 @@ export default function PlanWorkspace() {
                       <h3 className="project-card-name" title={project.account_nickname || project.client_name}>
                         {project.account_nickname || project.client_name}
                       </h3>
-                    </div>
-                    <div className="project-card-meta-row">
-                      <span className="badge badge-purple project-card-industry-badge">{project.industry}</span>
                       <span className={`badge project-card-status-inline ${
                         stage === 'completed' ? 'badge-green' :
                         stage === 'strategy_completed' ? 'badge-blue' :
@@ -877,12 +875,29 @@ export default function PlanWorkspace() {
                          stage === 'calendar_generating' ? <><Clock size={10} /> 日历生成中...</> : '草稿'}
                       </span>
                     </div>
-                    <div className="project-card-sig">
-                      {project.account_signature || project.target_audience}
+                    <div className="project-card-sig">{signature}</div>
+                    <div className="project-card-stats">
+                      <span className="project-card-stats-industry">{project.industry}</span>
+                      {project.account_follower_count != null && (
+                        <>
+                          <span>·</span>
+                          <span>{project.account_follower_count >= 10000
+                            ? `${(project.account_follower_count / 10000).toFixed(1)}w`
+                            : project.account_follower_count} 粉丝</span>
+                        </>
+                      )}
+                      {project.account_video_count != null && (
+                        <>
+                          <span>·</span>
+                          <span>{project.account_video_count} 作品</span>
+                        </>
+                      )}
+                      <span>·</span>
+                      <DouyinIcon size={14} style={{ color: 'var(--text-primary)' }} />
                     </div>
-                    {referenceNames.length > 0 && (
-                      <div className="project-card-reference-row">
-                        <span className="project-card-reference-label">参考 IP</span>
+                    <div className="project-card-meta-row">
+                      <span className="project-card-client-name">客户：{project.client_name}</span>
+                      {referenceNames.length > 0 && (
                         <div className="project-card-reference-list">
                           {visibleReferenceNames.map((name) => (
                             <span key={name} className="project-card-reference-chip" title={name}>
@@ -893,53 +908,21 @@ export default function PlanWorkspace() {
                             <span className="project-card-reference-more">+{extraReferenceCount}</span>
                           )}
                         </div>
-                      </div>
-                    )}
-                    {(project.account_follower_count != null || project.account_video_count != null) && (
-                      <div className="project-card-stats">
-                        {project.account_follower_count != null && (
-                          <span>{project.account_follower_count >= 10000
-                            ? `${(project.account_follower_count / 10000).toFixed(1)}w`
-                            : project.account_follower_count} 粉丝</span>
-                        )}
-                        {project.account_video_count != null && (
-                          <span>{project.account_video_count} 作品</span>
-                        )}
-                      </div>
-                    )}
-                    {project.account_nickname && (
-                      <div className="project-card-client-row">
-                        <span className="project-card-client-name">客户：{project.client_name}</span>
-                        <button
-                          className="btn btn-ghost project-card-client-refresh"
-                          title="重新抓取账号数据"
-                          onClick={e => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setHomepageEditId({ id: project.id, name: project.client_name });
-                            setHomepageUrl(project.account_homepage_url || '');
-                          }}
-                        >
-                          <RefreshCw size={10} />
-                        </button>
-                      </div>
-                    )}
-                    {!project.account_nickname && (
-                      <button
-                        className="btn btn-ghost project-card-homepage-btn"
-                        onClick={e => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setHomepageEditId({ id: project.id, name: project.client_name });
-                          setHomepageUrl('');
-                        }}
-                      >
-                        <LinkIcon size={11} /> 补填账号主页
-                      </button>
-                    )}
+                      )}
+                    </div>
+                    <button
+                      className="btn btn-ghost project-card-homepage-btn"
+                      onClick={e => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setHomepageEditId({ id: project.id, name: project.client_name });
+                        setHomepageUrl(project.account_homepage_url || '');
+                      }}
+                    >
+                      <LinkIcon size={11} /> {hasAccountData ? '更新账号主页' : '补填账号主页'}
+                    </button>
                   </div>
 
-                  {/* 右侧：状态 + 操作按钮 */}
                   <div className="project-card-actions">
                     {stage !== 'strategy_generating' && stage !== 'calendar_generating' && (
                       <button
@@ -972,20 +955,17 @@ export default function PlanWorkspace() {
                     >
                       <Trash2 size={14} />
                     </button>
+                    <button
+                      className="btn btn-ghost project-card-detail-btn"
+                      onClick={e => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        navigate(`/planning/${project.id}`);
+                      }}
+                    >
+                      查看详情
+                    </button>
                   </div>
-                </div>
-
-                {project.account_plan?.account_positioning?.core_identity && (
-                  <div className="project-card-identity">
-                    💡 {project.account_plan.account_positioning.core_identity}
-                  </div>
-                )}
-
-                <div className="project-card-footer">
-                  <span className="text-sm text-muted">
-                    {formatBackendDate(project.created_at)}
-                  </span>
-                  <ArrowRight size={14} className="text-muted" />
                 </div>
               </div>
             </div>
