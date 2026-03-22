@@ -539,7 +539,12 @@
 }
 
 /* 项目卡片列表 */
-.projects-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
 .project-card {
   text-decoration: none;
   display: block;
@@ -584,7 +589,10 @@
   border: 2px solid var(--bg-card);
   background: #000;
 }
-.project-card-info { flex: 1; min-width: 0; }
+.project-card-info {
+  flex: 1;
+  min-width: 0;
+}
 .project-card-title-row {
   display: flex;
   align-items: center;
@@ -595,7 +603,7 @@
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
-  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -612,19 +620,25 @@
 .project-card-stats {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 6px;
   margin-top: 4px;
   font-size: 12px;
   color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
 }
-.project-card-stats span { display: flex; align-items: center; gap: 2px; }
+.project-card-stats span {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
 
 .project-card-homepage-btn {
   width: fit-content;
-  height: 28px;
+  height: auto;
   margin-top: 6px;
-  padding: 0 10px;
+  padding: 4px 10px;
   border-radius: 999px;
   font-size: 12px;
   color: var(--text-secondary);
@@ -658,11 +672,9 @@
 }
 
 .project-card-detail-btn {
-  height: 40px;
-  padding: 0 18px;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  padding: 4px 10px;
+  height: auto;
 }
 
 .plan-page {
