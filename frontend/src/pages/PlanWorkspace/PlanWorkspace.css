@@ -589,8 +589,6 @@
   display: flex;
   align-items: center;
   min-width: 0;
-  gap: 8px;
-  flex-wrap: wrap;
 }
 .project-card-name { 
   font-size: 15px;
@@ -602,18 +600,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.project-card-meta-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-}
-.project-card-status-inline {
-  white-space: nowrap;
-  flex-shrink: 0;
-  font-size: 11px;
-}
 .project-card-sig {
   font-size: 12px;
   color: var(--text-muted);
@@ -621,40 +607,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.project-card-reference-list {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-width: 0;
-}
-
-.project-card-reference-chip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 8px;
-  border-radius: 999px;
-  border: 1px solid rgba(139, 92, 246, 0.22);
-  background: rgba(139, 92, 246, 0.1);
-  color: #c4b5fd;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1;
-}
-
-.project-card-reference-more {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 7px;
-  border-radius: 999px;
-  background: rgba(148, 163, 184, 0.12);
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 600;
 }
 
 .project-card-stats {
@@ -667,13 +619,6 @@
   color: var(--text-secondary);
 }
 .project-card-stats span { display: flex; align-items: center; gap: 2px; }
-.project-card-stats-industry { text-transform: none; }
-
-.project-card-client-name {
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.4;
-}
 
 .project-card-homepage-btn {
   width: fit-content;
@@ -1038,20 +983,13 @@
 }
 
 [data-theme='light'] .plan-reference-preview-label,
-[data-theme='light'] .project-card-reference-label {
+[data-theme='light'] .plan-reference-preview-label {
   color: #64748b;
 }
 
 [data-theme='light'] .plan-reference-chip,
-[data-theme='light'] .project-card-reference-chip {
+[data-theme='light'] .plan-reference-chip {
   background: rgba(139, 92, 246, 0.12);
-  border-color: rgba(139, 92, 246, 0.24);
-  color: #6d28d9;
-}
-
-[data-theme='light'] .project-card-reference-more {
-  background: #f1f5f9;
-  color: #475569;
 }
 
 [data-theme='light'] .plan-modal {

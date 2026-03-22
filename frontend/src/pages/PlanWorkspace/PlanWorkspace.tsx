@@ -9,7 +9,7 @@ import {
   type PlanningIntakeDraft,
 } from '../../api/client';
 import { CustomSelect } from '../../components/CustomSelect';
-import { Plus, X, Sparkles, ArrowRight, Clock, CheckCircle, Trash2, RefreshCw, Link as LinkIcon, Search, Filter, DouyinIcon } from '../../components/Icons';
+import { Plus, X, Sparkles, ArrowRight, CheckCircle, Trash2, RefreshCw, Link as LinkIcon, Search, Filter, DouyinIcon } from '../../components/Icons';
 import { notifyError } from '../../utils/notify';
 import './PlanWorkspace.css';
 
@@ -623,18 +623,9 @@ export default function PlanWorkspace() {
   const [homepageUrl, setHomepageUrl] = useState('');
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const { data: bloggers = [] } = useQuery({
-    queryKey: ['bloggers'],
-    queryFn: () => bloggerApi.list(),
-  });
   const debouncedKeyword = useDebouncedValue(searchQuery.trim(), SEARCH_DEBOUNCE_MS);
   const selectedStatus = statusFilter === 'all' ? undefined : statusFilter;
   const hasActiveFilters = !!debouncedKeyword || statusFilter !== 'all';
-  const bloggerNameMap = useMemo(
-    () => new Map(bloggers.map((blogger) => [blogger.id, blogger.nickname])),
-    [bloggers]
-  );
-
   const { data: projectsPage, isLoading, isFetching } = useQuery({
     queryKey: ['planning-projects', page, pageSize, debouncedKeyword, selectedStatus],
     queryFn: () => planningApi.listPaged({
@@ -834,11 +825,6 @@ export default function PlanWorkspace() {
         <div className="projects-grid">
           {projects.map(project => {
             const stage = inferProjectStage(project);
-            const referenceNames = (project.reference_blogger_ids || [])
-              .map((bloggerId) => bloggerNameMap.get(bloggerId))
-              .filter((name): name is string => Boolean(name));
-            const visibleReferenceNames = referenceNames.slice(0, 2);
-            const extraReferenceCount = Math.max(referenceNames.length - visibleReferenceNames.length, 0);
             const signature = project.account_signature || project.target_audience || '暂无简介';
             const hasAccountData = Boolean(project.account_nickname);
 
@@ -864,65 +850,43 @@ export default function PlanWorkspace() {
                       <h3 className="project-card-name" title={project.account_nickname || project.client_name}>
                         {project.account_nickname || project.client_name}
                       </h3>
-                      <span className={`badge project-card-status-inline ${
-                        stage === 'completed' ? 'badge-green' :
-                        stage === 'strategy_completed' ? 'badge-blue' :
-                        stage === 'draft' ? 'badge-purple' : 'badge-yellow'
-                      }`}>
-                        {stage === 'completed' ? <><CheckCircle size={10} /> 已完成</> :
-                         stage === 'strategy_completed' ? '定位已完成' :
-                         stage === 'strategy_generating' ? <><Clock size={10} /> 定位生成中...</> :
-                         stage === 'calendar_generating' ? <><Clock size={10} /> 日历生成中...</> : '草稿'}
-                      </span>
                     </div>
-                    <div className="project-card-sig">{signature}</div>
-                    <div className="project-card-stats">
-                      <span className="project-card-stats-industry">{project.industry}</span>
-                      {project.account_follower_count != null && (
-                        <>
-                          <span>·</span>
-                          <span>{project.account_follower_count >= 10000
-                            ? `${(project.account_follower_count / 10000).toFixed(1)}w`
-                            : project.account_follower_count} 粉丝</span>
-                        </>
-                      )}
-                      {project.account_video_count != null && (
-                        <>
-                          <span>·</span>
-                          <span>{project.account_video_count} 作品</span>
-                        </>
-                      )}
-                      <span>·</span>
-                      <DouyinIcon size={14} style={{ color: 'var(--text-primary)' }} />
-                    </div>
-                    <div className="project-card-meta-row">
-                      <span className="project-card-client-name">客户：{project.client_name}</span>
-                      {referenceNames.length > 0 && (
-                        <div className="project-card-reference-list">
-                          {visibleReferenceNames.map((name) => (
-                            <span key={name} className="project-card-reference-chip" title={name}>
-                              {name}
-                            </span>
-                          ))}
-                          {extraReferenceCount > 0 && (
-                            <span className="project-card-reference-more">+{extraReferenceCount}</span>
+                    {hasAccountData && (
+                      <>
+                        <div className="project-card-sig">{signature}</div>
+                        <div className="project-card-stats">
+                          {project.account_follower_count != null && (
+                            <span>{project.account_follower_count >= 10000
+                              ? `${(project.account_follower_count / 10000).toFixed(1)}w`
+                              : project.account_follower_count} 粉丝</span>
                           )}
+                          {project.account_video_count != null && (
+                            <>
+                              <span>·</span>
+                              <span>{project.account_video_count} 作品</span>
+                            </>
+                          )}
+                          <span>·</span>
+                          <DouyinIcon size={14} style={{ color: 'var(--text-primary)' }} />
                         </div>
-                      )}
-                    </div>
-                    <button
-                      className="btn btn-ghost project-card-homepage-btn"
-                      onClick={e => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setHomepageEditId({ id: project.id, name: project.client_name });
-                        setHomepageUrl(project.account_homepage_url || '');
-                      }}
-                    >
-                      <LinkIcon size={11} /> {hasAccountData ? '更新账号主页' : '补填账号主页'}
-                    </button>
+                      </>
+                    )}
+                    {!hasAccountData && (
+                      <button
+                        className="btn btn-ghost project-card-homepage-btn"
+                        onClick={e => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setHomepageEditId({ id: project.id, name: project.client_name });
+                          setHomepageUrl('');
+                        }}
+                      >
+                        <LinkIcon size={11} /> 补填账号主页
+                      </button>
+                    )}
                   </div>
 
+                  {hasAccountData && (
                   <div className="project-card-actions">
                     {stage !== 'strategy_generating' && stage !== 'calendar_generating' && (
                       <button
@@ -966,6 +930,7 @@ export default function PlanWorkspace() {
                       查看详情
                     </button>
                   </div>
+                  )}
                 </div>
               </div>
             </div>
