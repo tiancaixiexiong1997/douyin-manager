@@ -224,6 +224,9 @@ CONTENT_CALENDAR_PROMPT_TEMPLATE = (
     "- 每条必须具体到一个可拍的选题，不要空泛方向词\n"
     "- 每条都要回答：陌生用户为什么会停下来继续看\n"
     "- 必须区分前10条主验证题，并给出批量拍摄分组\n"
+    "- 每条都要判断 production_mode；它不是在评估题目价值，而是在判断能否共用同一套拍摄条件\n"
+    "- production_mode 只能使用：批量A / 批量B / 半批量 / 单条拍 / 实时\n"
+    "- production_reason 必须写清依据，优先说明：是否同场景、同机位、同结构，是否依赖当天状态\n"
     "- 每条必须同时包含：具体对象 + 具体场景 + 具体问题/动作/差异/结果 + 明确观看回报\n"
     "- 不能只写“她们/大家/很多人”，必须尽量写清身份、人群、时段、地点、动作中的至少两个信息点\n\n"
     "# 明确禁止输出的内容\n"
@@ -282,6 +285,9 @@ CONTENT_CALENDAR_PROMPT_TEMPLATE = (
     '      "priority": "P0-主验证/P1-稳定输出/P2-补充储备",\n'
     '      "content_role": "主验证/稳定输出/流量放大/信任建立/承接转化/补充试错",\n'
     '      "is_main_validation": true,\n'
+    '      "production_mode": "批量A/批量B/半批量/单条拍/实时",\n'
+    '      "production_type": "批量-口播连拍/批量-教程演示/半批量-外拍探店/单条拍-定制执行/实时-跟拍记录",\n'
+    '      "production_reason": "判断依据，如同场景同机位同结构，可一次连拍5条以上",\n'
     '      "is_batch_shootable": true,\n'
     '      "batch_shoot_group": "适合同天集中拍摄的分组名，如口播连拍-避坑清单"\n'
     '    }}\n'
@@ -321,6 +327,9 @@ CALENDAR_GAP_FILL_PROMPT_TEMPLATE = (
     '      "content_pillar": "所属内容支柱名称",\n'
     '      "key_message": "这条视频要让观众记住的一句话核心信息",\n'
     '      "tags": ["话题标签1", "话题标签2", "话题标签3"],\n'
+    '      "production_mode": "批量A/批量B/半批量/单条拍/实时",\n'
+    '      "production_type": "批量-口播连拍/批量-教程演示/半批量-外拍探店/单条拍-定制执行/实时-跟拍记录",\n'
+    '      "production_reason": "判断依据，如同场景同机位同结构，可一次连拍5条以上",\n'
     '      "batch_shoot_group": "建议归属的拍摄分组",\n'
     '      "replacement_hint": "这条在替换时解决了哪类低质问题"\n'
     "    }}\n"

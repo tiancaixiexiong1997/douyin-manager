@@ -619,6 +619,30 @@ def _normalize_calendar_role(value) -> str:
     return text if text in allowed else "稳定输出"
 
 
+def _normalize_production_mode(value) -> str:
+    text = _safe_text(value)
+    if not text:
+        return ""
+    compact = text.lower().replace(" ", "")
+    aliases = {
+        "批量a": "批量A",
+        "a": "批量A",
+        "batcha": "批量A",
+        "批量b": "批量B",
+        "b": "批量B",
+        "batchb": "批量B",
+        "半批量": "半批量",
+        "semibatch": "半批量",
+        "single": "单条拍",
+        "单条拍": "单条拍",
+        "单条": "单条拍",
+        "实时": "实时",
+        "实时内容": "实时",
+        "realtime": "实时",
+    }
+    return aliases.get(compact, text if text in {"批量A", "批量B", "半批量", "单条拍", "实时"} else "")
+
+
 def _derive_batch_group(content_type: str) -> str:
     text = _normalize_content_type(content_type)
     if "口播" in text or "画中画" in text:
@@ -639,6 +663,79 @@ def _derive_batch_shootable(content_type: str) -> bool:
     return any(keyword in text for keyword in ("口播", "画中画", "教程", "测评"))
 
 
+def _derive_production_profile(content_type: str) -> dict[str, str]:
+    text = _normalize_content_type(content_type)
+    if "口播" in text or "画中画" in text:
+        return {
+            "mode": "批量A",
+            "type": "批量-口播连拍",
+            "reason": "同场景、同机位、同结构，可一次连拍 5 条以上",
+            "group": "口播连拍",
+        }
+    if "教程" in text:
+        return {
+            "mode": "批量B",
+            "type": "批量-教程演示",
+            "reason": "核心结构一致，少量换案例或道具，可一次连拍 3 条以上",
+            "group": "教程演示",
+        }
+    if "测评" in text:
+        return {
+            "mode": "批量B",
+            "type": "批量-测评对比",
+            "reason": "同机位同布光，可连续更换产品或案例集中拍摄",
+            "group": "测评连拍",
+        }
+    if "探店" in text or "实拍" in text:
+        return {
+            "mode": "半批量",
+            "type": "半批量-外拍探店",
+            "reason": "可以集中外拍，但需要切换点位、环境镜头或现场素材",
+            "group": "外拍探店",
+        }
+    if "Vlog" in text or "跟拍" in text:
+        return {
+            "mode": "实时",
+            "type": "实时-跟拍记录",
+            "reason": "依赖当天人物状态、事件进程或现场氛围，更适合当天现拍",
+            "group": "跟拍纪实",
+        }
+    return {
+        "mode": "单条拍",
+        "type": "单条拍-定制执行",
+        "reason": "拍摄条件切换较多，建议按单条脚本单独安排",
+        "group": "混合拍摄",
+    }
+
+
+def _derive_production_type(production_mode: str, content_type: str) -> str:
+    profile = _derive_production_profile(content_type)
+    if production_mode == profile["mode"]:
+        return profile["type"]
+    mapping = {
+        "批量A": "批量-高复用连拍",
+        "批量B": "批量-结构化拍摄",
+        "半批量": "半批量-换场景拍摄",
+        "单条拍": "单条拍-定制执行",
+        "实时": "实时-现场记录",
+    }
+    return mapping.get(production_mode, profile["type"])
+
+
+def _derive_production_reason(production_mode: str, content_type: str) -> str:
+    profile = _derive_production_profile(content_type)
+    if production_mode == profile["mode"]:
+        return profile["reason"]
+    mapping = {
+        "批量A": "同场景、同机位、同结构，可一次连拍 5 条以上",
+        "批量B": "核心结构一致，少量换案例或道具，可一次连拍 3 条以上",
+        "半批量": "可以集中拍，但需要切换场景、机位或补素材",
+        "单条拍": "依赖单独脚本或拍摄设置，切换成本高，建议单条安排",
+        "实时": "依赖当天事件、人物状态或现场进程，更适合当天现拍",
+    }
+    return mapping.get(production_mode, profile["reason"])
+
+
 def _normalize_content_calendar_item(raw: dict, *, day_fallback: int) -> dict:
     day = raw.get("day") if isinstance(raw.get("day"), int) else day_fallback
     content_type = _normalize_content_type(raw.get("content_type"))
@@ -649,13 +746,25 @@ def _normalize_content_calendar_item(raw: dict, *, day_fallback: int) -> dict:
         if isinstance(is_main_validation_raw, bool)
         else priority == "P0-主验证" or day <= 10
     )
+    profile = _derive_production_profile(content_type)
+    production_mode = _normalize_production_mode(raw.get("production_mode"))
     is_batch_shootable_raw = raw.get("is_batch_shootable")
+    if not production_mode:
+        if isinstance(is_batch_shootable_raw, bool):
+            if is_batch_shootable_raw:
+                production_mode = profile["mode"] if profile["mode"] in {"批量A", "批量B"} else "批量B"
+            else:
+                production_mode = profile["mode"] if profile["mode"] in {"半批量", "实时"} else "单条拍"
+        else:
+            production_mode = profile["mode"]
     is_batch_shootable = (
         bool(is_batch_shootable_raw)
         if isinstance(is_batch_shootable_raw, bool)
-        else _derive_batch_shootable(content_type)
+        else production_mode in {"批量A", "批量B"} or _derive_batch_shootable(content_type)
     )
-    batch_group = _safe_text(raw.get("batch_shoot_group")) or _derive_batch_group(content_type)
+    batch_group = _safe_text(raw.get("batch_shoot_group")) or profile["group"] or _derive_batch_group(content_type)
+    production_type = _safe_text(raw.get("production_type")) or _derive_production_type(production_mode, content_type)
+    production_reason = _safe_text(raw.get("production_reason")) or _derive_production_reason(production_mode, content_type)
 
     return {
         "day": day,
@@ -667,6 +776,9 @@ def _normalize_content_calendar_item(raw: dict, *, day_fallback: int) -> dict:
         "priority": "P0-主验证" if is_main_validation else priority,
         "content_role": _normalize_calendar_role(raw.get("content_role")),
         "is_main_validation": is_main_validation,
+        "production_mode": production_mode,
+        "production_type": production_type,
+        "production_reason": production_reason,
         "is_batch_shootable": is_batch_shootable,
         "batch_shoot_group": batch_group if is_batch_shootable else (batch_group or "混合拍摄"),
         "replacement_hint": _safe_text(raw.get("replacement_hint")),

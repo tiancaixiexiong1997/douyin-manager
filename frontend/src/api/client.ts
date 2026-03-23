@@ -516,6 +516,9 @@ export interface ContentCalendarItem {
   priority?: string;
   content_role?: string;
   is_main_validation?: boolean;
+  production_mode?: string;
+  production_type?: string;
+  production_reason?: string;
   is_batch_shootable?: boolean;
   batch_shoot_group?: string;
   replacement_hint?: string;

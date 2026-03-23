@@ -34,6 +34,23 @@ def test_collect_calendar_quality_flags_detects_low_quality_self_indulgent_topic
     assert "too_poetic" in flags
 
 
+def test_normalize_content_calendar_item_derives_production_labels_for_legacy_data() -> None:
+    item = planning_endpoint._normalize_content_calendar_item(
+        {
+            "day": 1,
+            "title_direction": "第一次来做体态的人，最容易紧张的是哪一步",
+            "content_type": "口播+画中画",
+        },
+        day_fallback=1,
+    )
+
+    assert item["production_mode"] == "批量A"
+    assert item["production_type"] == "批量-口播连拍"
+    assert "同场景" in item["production_reason"]
+    assert item["is_batch_shootable"] is True
+    assert item["batch_shoot_group"] == "口播连拍"
+
+
 @pytest.mark.asyncio
 async def test_apply_calendar_quality_guardrails_uses_backup_pool_to_keep_30(monkeypatch: pytest.MonkeyPatch) -> None:
     raw_calendar = [

@@ -65,6 +65,7 @@ def test_resolve_ai_overall_timeout_prefers_heavy_calendar_scene(monkeypatch: py
 
 def test_content_calendar_prompt_uses_hard_structure_constraints() -> None:
     assert "每条必须同时包含：具体对象 + 具体场景 + 具体问题/动作/差异/结果 + 明确观看回报" in CONTENT_CALENDAR_PROMPT_TEMPLATE
+    assert "production_mode 只能使用：批量A / 批量B / 半批量 / 单条拍 / 实时" in CONTENT_CALENDAR_PROMPT_TEMPLATE
     assert "允许优先生成的题型" in CONTENT_CALENDAR_PROMPT_TEMPLATE
     assert "好题示例：第一次卖旧空调，客户最容易误会的是哪一步" in CONTENT_CALENDAR_PROMPT_TEMPLATE
     assert "坏题示例：她们在这里短暂逃离家庭" in CONTENT_CALENDAR_PROMPT_TEMPLATE

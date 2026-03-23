@@ -541,7 +541,7 @@
   line-height: 1.35;
   overflow: hidden;
   display: -webkit-box;
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
 
@@ -569,7 +569,8 @@
 }
 
 .calendar-priority-badge,
-.calendar-role-badge {
+.calendar-role-badge,
+.calendar-production-badge {
   font-size: 10px;
   line-height: 1.2;
 }

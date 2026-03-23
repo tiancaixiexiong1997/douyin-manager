@@ -16,7 +16,7 @@ async def test_generate_content_calendar_includes_performance_recap_context(monk
             "放大:{winning_patterns}\n"
             "优化:{optimization_focus}\n"
             "选题:{next_topic_angles}\n"
-            "字段:priority content_role is_main_validation is_batch_shootable batch_shoot_group\n"
+            "字段:priority content_role is_main_validation production_mode production_type production_reason is_batch_shootable batch_shoot_group\n"
             "规则:禁止肉香盖过班味 全是笑声 只讲烟火气",
             {},
         )
@@ -57,7 +57,7 @@ async def test_generate_content_calendar_includes_performance_recap_context(monk
     assert "避坑类选题更容易出播放" in user_prompt
     assert "继续优化前3秒反差" in user_prompt
     assert "同城娱乐价格透明化" in user_prompt
-    assert "priority content_role is_main_validation is_batch_shootable batch_shoot_group" in user_prompt
+    assert "priority content_role is_main_validation production_mode production_type production_reason is_batch_shootable batch_shoot_group" in user_prompt
     assert "禁止肉香盖过班味" in user_prompt
 
 
