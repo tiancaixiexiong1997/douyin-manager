@@ -2057,10 +2057,6 @@ export default function ProjectDetail() {
                           <span className="calendar-extra-value">{scheduleMeta.shootScene}</span>
                         </div>
                         <div className="calendar-extra-line">
-                          <span className="calendar-extra-label">预计时长</span>
-                          <span className="calendar-extra-value">{scheduleMeta.estimatedDuration}</span>
-                        </div>
-                        <div className="calendar-extra-line">
                           <span className="calendar-extra-label">准备成本</span>
                           <span className="calendar-extra-value">{scheduleMeta.prepRequirement}</span>
                         </div>
