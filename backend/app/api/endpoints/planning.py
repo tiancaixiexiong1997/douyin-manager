@@ -661,9 +661,6 @@ async def _apply_calendar_quality_guardrails(
     if len(finalized_items) != 30:
         raise ValueError(f"内容日历质控补位后仍不足 30 条，当前仅 {len(finalized_items)} 条")
 
-    p0_count = sum(1 for item in finalized_items[:10] if item.get("is_main_validation"))
-    if p0_count < min(10, len(finalized_items[:10])):
-        raise ValueError("内容日历质控后前10条主验证题数量不足")
     if any(not _safe_text(item.get("batch_shoot_group")) for item in finalized_items):
         raise ValueError("内容日历存在缺失拍摄分组的条目")
 
@@ -818,7 +815,7 @@ def _normalize_content_type(value: str | None) -> str:
     return "口播+画中画"
 
 
-def _normalize_calendar_priority(value) -> str:
+def _normalize_calendar_priority(value) -> str | None:
     text = _safe_text(value)
     if text.startswith("P0"):
         return "P0-主验证"
@@ -826,7 +823,7 @@ def _normalize_calendar_priority(value) -> str:
         return "P2-补充储备"
     if text.startswith("P1"):
         return "P1-稳定输出"
-    return "P1-稳定输出"
+    return None
 
 
 def _normalize_calendar_role(value) -> str:
@@ -939,7 +936,7 @@ def _normalize_content_calendar_item(raw: dict, *, day_fallback: int) -> dict:
     is_main_validation = (
         bool(is_main_validation_raw)
         if isinstance(is_main_validation_raw, bool)
-        else priority == "P0-主验证" or day <= 10
+        else priority == "P0-主验证"
     )
     profile = _derive_schedule_profile(content_type)
     is_batch_shootable_raw = raw.get("is_batch_shootable")

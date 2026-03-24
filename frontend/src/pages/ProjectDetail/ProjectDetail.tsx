@@ -1434,7 +1434,6 @@ export default function ProjectDetail() {
     () => new Set(pendingCalendarRegeneration?.dayNumbers || []),
     [pendingCalendarRegeneration],
   );
-  const mainValidationCount = visibleCalendarItems.filter((item) => item.calendarMeta?.is_main_validation).length;
   const scheduleGroupEntries = Array.from(
     visibleCalendarItems.reduce((map, item) => {
       const group = getCalendarScheduleMeta(item).scheduleGroup;
@@ -1445,7 +1444,6 @@ export default function ProjectDetail() {
   );
   const filteredCalendarItems = visibleCalendarItems.filter((item) => {
     if (calendarFilter === 'all') return true;
-    if (calendarFilter === 'main_validation') return Boolean(item.calendarMeta?.is_main_validation);
     if (calendarFilter.startsWith(SCHEDULE_GROUP_FILTER_PREFIX)) {
       return getCalendarScheduleMeta(item).scheduleGroup === calendarFilter.slice(SCHEDULE_GROUP_FILTER_PREFIX.length);
     }
@@ -1894,15 +1892,6 @@ export default function ProjectDetail() {
                   <span className="calendar-summary-label">全部</span>
                   <strong>{calendarDisplayItems.length}</strong>
                 </button>
-                <button
-                  type="button"
-                  className={`calendar-summary-pill ${calendarFilter === 'main_validation' ? 'is-active' : ''}`}
-                  onClick={() => setCalendarFilter('main_validation')}
-                  disabled={isSelectingRegenerateDays}
-                >
-                  <span className="calendar-summary-label">主验证题</span>
-                  <strong>{mainValidationCount}</strong>
-                </button>
                 {scheduleGroupEntries.map(([group, count]) => {
                   const filterKey = `${SCHEDULE_GROUP_FILTER_PREFIX}${group}`;
                   return (
@@ -2043,11 +2032,6 @@ export default function ProjectDetail() {
                         </div>
                         <div className="calendar-title">{item.title_direction}</div>
                         <div className="calendar-tags">
-                          {item.calendarMeta?.priority ? (
-                            <span className={`badge calendar-priority-badge ${item.calendarMeta.priority.startsWith('P0') ? 'badge-green' : item.calendarMeta.priority.startsWith('P2') ? 'badge-yellow' : 'badge-blue'}`}>
-                              {item.calendarMeta.priority}
-                            </span>
-                          ) : null}
                           {item.calendarMeta?.content_role ? (
                             <span className="badge badge-blue calendar-role-badge">{item.calendarMeta.content_role}</span>
                           ) : null}

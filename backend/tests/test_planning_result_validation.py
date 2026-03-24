@@ -50,6 +50,8 @@ def test_normalize_content_calendar_item_derives_schedule_labels_for_legacy_data
     assert item["estimated_duration"] == "15分钟内"
     assert item["prep_requirement"] == "需提词器"
     assert item["schedule_group"] == "办公室口播组"
+    assert item["priority"] is None
+    assert item["is_main_validation"] is False
     assert item["is_batch_shootable"] is True
     assert item["batch_shoot_group"] == "办公室口播组"
 
