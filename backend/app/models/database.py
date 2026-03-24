@@ -301,6 +301,7 @@ class TaskCenterItem(Base):
     progress_step: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
     message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    context: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)

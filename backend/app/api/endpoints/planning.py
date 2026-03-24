@@ -974,6 +974,86 @@ def _normalize_content_calendar(value) -> list[dict]:
     return items
 
 
+def _build_strategy_task_context(project) -> dict:
+    account_plan = getattr(project, "account_plan", None)
+    account_plan = account_plan if isinstance(account_plan, dict) else {}
+    has_existing_strategy = _has_meaningful_strategy_result(
+        account_plan.get("account_positioning"),
+        account_plan.get("content_strategy"),
+    )
+    return {
+        "planning_state": "strategy_regenerating",
+        "has_existing_strategy": has_existing_strategy,
+    }
+
+
+def _serialize_calendar_snapshot_item(content_item, calendar_meta_by_day: dict[int, dict]) -> dict:
+    calendar_meta = calendar_meta_by_day.get(getattr(content_item, "day_number", 0))
+    return {
+        "id": getattr(content_item, "id", ""),
+        "day_number": getattr(content_item, "day_number", 0),
+        "title_direction": getattr(content_item, "title_direction", ""),
+        "content_type": _normalize_content_type(getattr(content_item, "content_type", None)),
+        "tags": _normalize_text_list(getattr(content_item, "tags", None), limit=6),
+        "is_script_generated": bool(getattr(content_item, "is_script_generated", False)),
+        "calendar_meta": dict(calendar_meta) if isinstance(calendar_meta, dict) else None,
+    }
+
+
+def _build_calendar_task_context(project, selected_days: list[int]) -> dict:
+    normalized_calendar = _normalize_content_calendar(project.content_calendar or [])
+    calendar_meta_by_day = {
+        item["day"]: item
+        for item in normalized_calendar
+        if isinstance(item, dict) and isinstance(item.get("day"), int)
+    }
+    content_items = list(project.content_items or [])
+    available_days = sorted({
+        *(
+            item.day_number
+            for item in content_items
+            if isinstance(getattr(item, "day_number", None), int)
+        ),
+        *(day for day in calendar_meta_by_day.keys() if isinstance(day, int)),
+    })
+    has_existing_calendar = bool(normalized_calendar) or bool(content_items)
+    is_partial_regenerate = has_existing_calendar and bool(selected_days)
+    target_days = selected_days or available_days
+    snapshots = [
+        _serialize_calendar_snapshot_item(item, calendar_meta_by_day)
+        for item in sorted(content_items, key=lambda current: current.day_number)
+        if item.day_number in target_days
+    ]
+    snapshot_days = {
+        item.get("day_number")
+        for item in snapshots
+        if isinstance(item, dict) and isinstance(item.get("day_number"), int)
+    }
+    for day in target_days:
+        if day in snapshot_days:
+            continue
+        calendar_meta = calendar_meta_by_day.get(day)
+        if not calendar_meta:
+            continue
+        snapshots.append(
+            {
+                "id": f"pending-day-{day}",
+                "day_number": day,
+                "title_direction": _safe_text(calendar_meta.get("title_direction")) or f"Day {day} 内容方向",
+                "content_type": _normalize_content_type(calendar_meta.get("content_type")),
+                "tags": _normalize_text_list(calendar_meta.get("tags"), limit=6),
+                "is_script_generated": False,
+                "calendar_meta": dict(calendar_meta),
+            }
+        )
+    return {
+        "planning_state": "calendar_regenerating",
+        "regeneration_mode": "partial" if is_partial_regenerate else ("full" if has_existing_calendar else "initial"),
+        "regenerate_day_numbers": target_days,
+        "calendar_snapshots": snapshots,
+    }
+
+
 def _has_meaningful_plan_result(account_positioning: dict | None, content_strategy: dict | None, content_calendar: list | None) -> bool:
     positioning = account_positioning if isinstance(account_positioning, dict) else {}
     strategy = content_strategy if isinstance(content_strategy, dict) else {}
@@ -1015,6 +1095,7 @@ async def _enqueue_strategy_generation(
         status=TaskStatus.QUEUED.value,
         progress_step="queued",
         message="定位生成任务已提交",
+        context=_build_strategy_task_context(project),
     )
     await db.commit()
 
@@ -1685,6 +1766,7 @@ async def regenerate_calendar(
         status=TaskStatus.QUEUED.value,
         progress_step="queued",
         message=queue_message,
+        context=_build_calendar_task_context(project, selected_days),
     )
     await db.commit()
 
@@ -2288,6 +2370,10 @@ async def _generate_plan_background(
             status=TaskStatus.RUNNING.value,
             progress_step="start",
             message="开始生成账号策划",
+            context=_build_strategy_task_context(project) if project else {
+                "planning_state": "strategy_regenerating",
+                "has_existing_strategy": False,
+            },
         )
         await db.commit()
         try:
@@ -2435,6 +2521,12 @@ async def _generate_calendar_only_background(
                 if is_partial_regenerate
                 else "开始生成30天内容日历"
             ),
+            context=_build_calendar_task_context(project, selected_days) if project else {
+                "planning_state": "calendar_regenerating",
+                "regeneration_mode": "partial" if selected_days else "initial",
+                "regenerate_day_numbers": selected_days,
+                "calendar_snapshots": [],
+            },
         )
         await db.commit()
         try:

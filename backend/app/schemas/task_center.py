@@ -16,6 +16,7 @@ class TaskCenterItemResponse(BaseModel):
     progress_step: str | None
     message: str | None
     error_message: str | None
+    context: dict | None
     started_at: datetime | None
     finished_at: datetime | None
     created_at: datetime

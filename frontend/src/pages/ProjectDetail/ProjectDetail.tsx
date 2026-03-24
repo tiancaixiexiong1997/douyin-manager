@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toPng } from 'html-to-image';
-import { bloggerApi, downloadApi, planningApi, taskApi, type ContentCalendarItem, type ContentItem, type ContentPerformance, type ContentPerformanceCreateRequest, type VideoScript, type UpdatePlanningRequest, type TaskCenterItem } from '../../api/client';
+import { bloggerApi, downloadApi, planningApi, taskApi, type ContentCalendarItem, type ContentItem, type ContentPerformance, type ContentPerformanceCreateRequest, type VideoScript, type UpdatePlanningRequest, type TaskCenterItem, type TaskCenterListResponse } from '../../api/client';
 import { CustomSelect } from '../../components/CustomSelect';
 import { ArrowLeft, FileText, Loader2, ChevronDown, ChevronUp, Sparkles, Calendar, Pencil, Save, X, RefreshCw, Plus, Trash2, TrendingUp, Download } from '../../components/Icons';
 import { formatBackendDateTime, toBackendTimestamp } from '../../utils/datetime';
@@ -15,40 +15,24 @@ type CalendarDisplayItem = ContentItem & { calendarMeta?: ContentCalendarItem | 
 type PendingCalendarRegeneration = {
   dayNumbers: number[];
   snapshotsByDay: Record<number, CalendarDisplayItem>;
-  previousItemIdsByDay: Record<number, string>;
+};
+type PlanningTaskContext = {
+  planning_state?: string;
+  has_existing_strategy?: boolean;
+  regeneration_mode?: 'initial' | 'full' | 'partial';
+  regenerate_day_numbers?: number[];
+  calendar_snapshots?: Array<{
+    id: string;
+    day_number: number;
+    title_direction: string;
+    content_type?: string | null;
+    tags?: string[] | null;
+    is_script_generated?: boolean;
+    calendar_meta?: ContentCalendarItem | null;
+  }>;
 };
 const SCHEDULE_GROUP_FILTER_PREFIX = 'schedule_group:';
-const PENDING_CALENDAR_REGEN_STORAGE_PREFIX = 'planning:pending-calendar-regeneration:';
-const PENDING_STRATEGY_REGEN_STORAGE_PREFIX = 'planning:pending-strategy-regeneration:';
 type ProjectStage = 'draft' | 'strategy_generating' | 'strategy_completed' | 'calendar_generating' | 'completed';
-
-function getPendingCalendarRegenerationStorageKey(projectId?: string): string {
-  return `${PENDING_CALENDAR_REGEN_STORAGE_PREFIX}${projectId || 'unknown'}`;
-}
-
-function loadPendingCalendarRegeneration(projectId?: string): PendingCalendarRegeneration | null {
-  if (!projectId || typeof window === 'undefined') return null;
-  try {
-    const raw = window.sessionStorage.getItem(getPendingCalendarRegenerationStorageKey(projectId));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as PendingCalendarRegeneration | null;
-    if (!parsed || !Array.isArray(parsed.dayNumbers) || typeof parsed.snapshotsByDay !== 'object' || typeof parsed.previousItemIdsByDay !== 'object') {
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function getPendingStrategyRegenerationStorageKey(projectId?: string): string {
-  return `${PENDING_STRATEGY_REGEN_STORAGE_PREFIX}${projectId || 'unknown'}`;
-}
-
-function loadPendingStrategyRegeneration(projectId?: string): boolean {
-  if (!projectId || typeof window === 'undefined') return false;
-  return window.sessionStorage.getItem(getPendingStrategyRegenerationStorageKey(projectId)) === '1';
-}
 
 function inferProjectStage(project: {
   status: string;
@@ -222,6 +206,57 @@ function getPerformanceHighlightMeta(
 
 function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function isPendingTask(task?: TaskCenterItem | null): boolean {
+  return task?.status === 'queued' || task?.status === 'running';
+}
+
+function parsePlanningTaskContext(task?: TaskCenterItem | null): PlanningTaskContext | null {
+  const context = task?.context;
+  if (!context || typeof context !== 'object') return null;
+  return context as PlanningTaskContext;
+}
+
+function buildPendingCalendarRegeneration(task?: TaskCenterItem | null): PendingCalendarRegeneration | null {
+  if (!isPendingTask(task)) return null;
+  const context = parsePlanningTaskContext(task);
+  if (!context || context.planning_state !== 'calendar_regenerating') return null;
+
+  const dayNumbers = Array.from(new Set((context.regenerate_day_numbers || []).filter((value): value is number => Number.isInteger(value) && value >= 1 && value <= 30))).sort((a, b) => a - b);
+  if (dayNumbers.length === 0) return null;
+
+  const snapshotsByDay: Record<number, CalendarDisplayItem> = {};
+  for (const snapshot of context.calendar_snapshots || []) {
+    if (!snapshot || !Number.isInteger(snapshot.day_number)) continue;
+    snapshotsByDay[snapshot.day_number] = {
+      id: snapshot.id,
+      day_number: snapshot.day_number,
+      title_direction: snapshot.title_direction,
+      content_type: snapshot.content_type || undefined,
+      tags: snapshot.tags || undefined,
+      is_script_generated: Boolean(snapshot.is_script_generated),
+      full_script: undefined,
+      calendarMeta: snapshot.calendar_meta || null,
+    };
+  }
+
+  return { dayNumbers, snapshotsByDay };
+}
+
+function upsertOptimisticTask(
+  current: TaskCenterListResponse | undefined,
+  task: TaskCenterItem,
+): TaskCenterListResponse {
+  const items = [task, ...(current?.items || []).filter((item) => item.task_key !== task.task_key)];
+  return {
+    items,
+    total: Math.max(current?.total || 0, items.length),
+    skip: current?.skip || 0,
+    limit: current?.limit || 20,
+    has_more: false,
+    summary: current?.summary || {},
+  };
 }
 
 function sanitizeFilename(value: string): string {
@@ -1265,54 +1300,11 @@ export default function ProjectDetail() {
   const [editForm, setEditForm] = useState({ title_direction: '', content_type: '' });
   const [showEditProject, setShowEditProject] = useState(false);
   const [showEditPlan, setShowEditPlan] = useState(false);
-  const [pendingStrategyRegeneration, setPendingStrategyRegeneration] = useState<boolean>(() => loadPendingStrategyRegeneration(id));
   const [isSelectingRegenerateDays, setIsSelectingRegenerateDays] = useState(false);
   const [regenerateSelectedDays, setRegenerateSelectedDays] = useState<number[]>([]);
-  const [pendingCalendarRegeneration, setPendingCalendarRegeneration] = useState<PendingCalendarRegeneration | null>(() => loadPendingCalendarRegeneration(id));
   const [showPerformanceModal, setShowPerformanceModal] = useState(false);
   const [editingPerformance, setEditingPerformance] = useState<ContentPerformance | null>(null);
   const [calendarFilter, setCalendarFilter] = useState<string>('all');
-
-  const generateStrategyMutation = useMutation({
-    mutationFn: () => planningApi.generateStrategy(id!),
-    onMutate: () => {
-      setPendingStrategyRegeneration(true);
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['project', id] });
-    },
-    onError: () => {
-      setPendingStrategyRegeneration(false);
-    },
-  });
-
-  const regenerateCalendarMutation = useMutation({
-    mutationFn: (dayNumbers: number[]) => planningApi.regenerateCalendar(id!, { regenerate_day_numbers: dayNumbers }),
-    onMutate: (dayNumbers) => {
-      const targetDays = dayNumbers.length > 0 ? dayNumbers : calendarDisplayItems.map((item) => item.day_number);
-      if (targetDays.length === 0) return;
-      const snapshotsByDay: Record<number, CalendarDisplayItem> = {};
-      const previousItemIdsByDay: Record<number, string> = {};
-      for (const item of calendarDisplayItems) {
-        if (!targetDays.includes(item.day_number)) continue;
-        snapshotsByDay[item.day_number] = item;
-        previousItemIdsByDay[item.day_number] = item.id;
-      }
-      setPendingCalendarRegeneration({
-        dayNumbers: targetDays,
-        snapshotsByDay,
-        previousItemIdsByDay,
-      });
-    },
-    onSuccess: () => {
-      setIsSelectingRegenerateDays(false);
-      setRegenerateSelectedDays([]);
-      qc.invalidateQueries({ queryKey: ['project', id] });
-    },
-    onError: () => {
-      setPendingCalendarRegeneration(null);
-    },
-  });
 
   const updateItemMutation = useMutation({
     mutationFn: ({ itemId, data }: { itemId: string; data: { title_direction: string; content_type: string } }) =>
@@ -1346,6 +1338,18 @@ export default function ProjectDetail() {
     refetchInterval: 3000,
   });
 
+  const { data: projectTaskPage } = useQuery({
+    queryKey: ['project-planning-tasks', id],
+    queryFn: () =>
+      taskApi.list({
+        entity_type: 'planning_project',
+        entity_id: id!,
+        limit: 50,
+      }),
+    enabled: Boolean(id),
+    refetchInterval: 3000,
+  });
+
   const scriptTaskMap = useMemo(() => {
     const map = new Map<string, TaskCenterItem>();
     const tasks = scriptTaskPage?.items || [];
@@ -1368,6 +1372,107 @@ export default function ProjectDetail() {
     queryKey: ['project-performance-summary', id],
     queryFn: () => planningApi.getPerformanceSummary(id!),
     enabled: Boolean(id),
+  });
+
+  const latestPlanningTaskByType = useMemo(() => {
+    const map = new Map<string, TaskCenterItem>();
+    for (const task of projectTaskPage?.items || []) {
+      const previous = map.get(task.task_type);
+      if (!previous || toBackendTimestamp(task.updated_at) >= toBackendTimestamp(previous.updated_at)) {
+        map.set(task.task_type, task);
+      }
+    }
+    return map;
+  }, [projectTaskPage]);
+
+  const generateStrategyMutation = useMutation({
+    mutationFn: () => planningApi.generateStrategy(id!),
+    onMutate: async () => {
+      const optimisticTask: TaskCenterItem = {
+        id: `optimistic-strategy-${id}`,
+        task_key: `planning:${id}:generate-strategy`,
+        task_type: 'planning_generate',
+        title: `生成定位：${project?.client_name || id}`,
+        entity_type: 'planning_project',
+        entity_id: id!,
+        status: 'queued',
+        progress_step: 'queued',
+        message: '定位生成任务已提交',
+        context: {
+          planning_state: 'strategy_regenerating',
+          has_existing_strategy: hasStrategy,
+        },
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      const previousTaskPage = qc.getQueryData<TaskCenterListResponse>(['project-planning-tasks', id]);
+      qc.setQueryData<TaskCenterListResponse>(['project-planning-tasks', id], (current) => upsertOptimisticTask(current, optimisticTask));
+      return { previousTaskPage };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['project', id] });
+      qc.invalidateQueries({ queryKey: ['project-planning-tasks', id] });
+    },
+    onError: (_error, _variables, context) => {
+      qc.setQueryData(['project-planning-tasks', id], context?.previousTaskPage);
+    },
+  });
+
+  const regenerateCalendarMutation = useMutation({
+    mutationFn: (dayNumbers: number[]) => planningApi.regenerateCalendar(id!, { regenerate_day_numbers: dayNumbers }),
+    onMutate: async (dayNumbers) => {
+      const fallbackDayNumbers = calendarDisplayItems.length > 0
+        ? calendarDisplayItems.map((item) => item.day_number)
+        : (project?.content_calendar || []).map((item) => item.day);
+      const isPartialRegeneration = dayNumbers.length > 0 && hasCalendar;
+      const targetDays = (dayNumbers.length > 0 ? dayNumbers : fallbackDayNumbers)
+        .filter((dayNumber, index, source) => source.indexOf(dayNumber) === index)
+        .sort((a, b) => a - b);
+      const snapshots = calendarDisplayItems
+        .filter((item) => targetDays.includes(item.day_number))
+        .map((item) => ({
+          id: item.id,
+          day_number: item.day_number,
+          title_direction: item.title_direction,
+          content_type: item.content_type || null,
+          tags: item.tags || [],
+          is_script_generated: item.is_script_generated,
+          calendar_meta: item.calendarMeta || (project?.content_calendar || []).find((calendarItem) => calendarItem.day === item.day_number) || null,
+        }));
+      const optimisticTask: TaskCenterItem = {
+        id: `optimistic-calendar-${id}`,
+        task_key: `planning:${id}:calendar`,
+        task_type: 'planning_calendar',
+        title: `${hasCalendar ? '重生成日历' : '生成日历'}：${project?.client_name || id}`,
+        entity_type: 'planning_project',
+        entity_id: id!,
+        status: 'queued',
+        progress_step: 'queued',
+        message: isPartialRegeneration
+          ? `已提交局部重生成任务，将重写 Day ${targetDays.join(', ')}`
+          : '30天日历生成任务已提交',
+        context: {
+          planning_state: 'calendar_regenerating',
+          regeneration_mode: isPartialRegeneration ? 'partial' : (hasCalendar ? 'full' : 'initial'),
+          regenerate_day_numbers: targetDays,
+          calendar_snapshots: snapshots,
+        },
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      const previousTaskPage = qc.getQueryData<TaskCenterListResponse>(['project-planning-tasks', id]);
+      qc.setQueryData<TaskCenterListResponse>(['project-planning-tasks', id], (current) => upsertOptimisticTask(current, optimisticTask));
+      return { previousTaskPage };
+    },
+    onSuccess: () => {
+      setIsSelectingRegenerateDays(false);
+      setRegenerateSelectedDays([]);
+      qc.invalidateQueries({ queryKey: ['project', id] });
+      qc.invalidateQueries({ queryKey: ['project-planning-tasks', id] });
+    },
+    onError: (_error, _variables, context) => {
+      qc.setQueryData(['project-planning-tasks', id], context?.previousTaskPage);
+    },
   });
 
   const generatePerformanceRecapMutation = useMutation({
@@ -1407,6 +1512,12 @@ export default function ProjectDetail() {
   const hasCalendar = Boolean((project?.content_calendar || []).length > 0 || (project?.content_items || []).length > 0);
   const performanceRecap = plan?.performance_recap;
   const nextTopicBatch = plan?.next_topic_batch;
+  const latestStrategyTask = latestPlanningTaskByType.get('planning_generate') || null;
+  const latestCalendarTask = latestPlanningTaskByType.get('planning_calendar') || null;
+  const pendingCalendarRegeneration = useMemo(
+    () => buildPendingCalendarRegeneration(latestCalendarTask),
+    [latestCalendarTask],
+  );
   const contentItemMap = new Map((project?.content_items || []).map((item) => [item.id, item]));
   const calendarMetaByDay = new Map<number, ContentCalendarItem>(
     (project?.content_calendar || [])
@@ -1466,72 +1577,7 @@ export default function ProjectDetail() {
   const allCalendarDays = visibleCalendarItems.map((item) => item.day_number);
   const preservedDayCount = Math.max(0, visibleCalendarItems.length - regenerateSelectedDays.length);
   const displayCalendarItems = isSelectingRegenerateDays ? visibleCalendarItems : filteredCalendarItems;
-  const isStrategyRegenerating = Boolean(hasStrategy && (currentStage === 'strategy_generating' || pendingStrategyRegeneration));
-
-  useEffect(() => {
-    if (!pendingCalendarRegeneration) return;
-    const remainingDays = pendingCalendarRegeneration.dayNumbers.filter((dayNumber) => {
-      const currentItem = calendarDisplayItems.find((item) => item.day_number === dayNumber);
-      if (!currentItem) return true;
-      return currentItem.id === pendingCalendarRegeneration.previousItemIdsByDay[dayNumber];
-    });
-
-    if (remainingDays.length === pendingCalendarRegeneration.dayNumbers.length) return;
-    if (remainingDays.length === 0) {
-      setPendingCalendarRegeneration(null);
-      return;
-    }
-
-    setPendingCalendarRegeneration((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        dayNumbers: remainingDays,
-      };
-    });
-  }, [calendarDisplayItems, pendingCalendarRegeneration]);
-
-  useEffect(() => {
-    if (!id || typeof window === 'undefined') return;
-    const storageKey = getPendingCalendarRegenerationStorageKey(id);
-    if (!pendingCalendarRegeneration) {
-      window.sessionStorage.removeItem(storageKey);
-      return;
-    }
-    window.sessionStorage.setItem(storageKey, JSON.stringify(pendingCalendarRegeneration));
-  }, [id, pendingCalendarRegeneration]);
-
-  useEffect(() => {
-    if (!id || pendingCalendarRegeneration) return;
-    const restored = loadPendingCalendarRegeneration(id);
-    if (restored) {
-      setPendingCalendarRegeneration(restored);
-    }
-  }, [id, pendingCalendarRegeneration]);
-
-  useEffect(() => {
-    if (!id || typeof window === 'undefined') return;
-    const storageKey = getPendingStrategyRegenerationStorageKey(id);
-    if (!pendingStrategyRegeneration) {
-      window.sessionStorage.removeItem(storageKey);
-      return;
-    }
-    window.sessionStorage.setItem(storageKey, '1');
-  }, [id, pendingStrategyRegeneration]);
-
-  useEffect(() => {
-    if (!id || pendingStrategyRegeneration) return;
-    if (loadPendingStrategyRegeneration(id)) {
-      setPendingStrategyRegeneration(true);
-    }
-  }, [id, pendingStrategyRegeneration]);
-
-  useEffect(() => {
-    if (!pendingStrategyRegeneration) return;
-    if (currentStage !== 'strategy_generating') {
-      setPendingStrategyRegeneration(false);
-    }
-  }, [currentStage, pendingStrategyRegeneration]);
+  const isStrategyRegenerating = Boolean(hasStrategy && (currentStage === 'strategy_generating' || isPendingTask(latestStrategyTask)));
 
   if (isLoading) {
     return (

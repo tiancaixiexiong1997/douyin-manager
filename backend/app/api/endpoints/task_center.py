@@ -18,23 +18,35 @@ async def list_tasks(
     status: str | None = Query(None, description="queued/running/completed/failed/cancelled"),
     task_type: str | None = Query(None, description="blogger_collect/planning_generate/script_extraction ..."),
     entity_type: str | None = Query(None, description="blogger/planning_project/script_extraction"),
+    entity_id: str | None = Query(None, description="具体实体 ID"),
     db: AsyncSession = Depends(get_db),
 ):
+    normalized_status = (status or "").strip() or None
+    normalized_task_type = (task_type or "").strip() or None
+    normalized_entity_type = (entity_type or "").strip() or None
+    normalized_entity_id = (entity_id or "").strip() or None
     items = await task_center_repo.list_tasks(
         db,
         skip=skip,
         limit=limit,
-        status=(status or "").strip() or None,
-        task_type=(task_type or "").strip() or None,
-        entity_type=(entity_type or "").strip() or None,
+        status=normalized_status,
+        task_type=normalized_task_type,
+        entity_type=normalized_entity_type,
+        entity_id=normalized_entity_id,
     )
     total = await task_center_repo.count_tasks(
         db,
-        status=(status or "").strip() or None,
-        task_type=(task_type or "").strip() or None,
-        entity_type=(entity_type or "").strip() or None,
+        status=normalized_status,
+        task_type=normalized_task_type,
+        entity_type=normalized_entity_type,
+        entity_id=normalized_entity_id,
     )
-    summary = await task_center_repo.status_summary(db)
+    summary = await task_center_repo.status_summary(
+        db,
+        task_type=normalized_task_type,
+        entity_type=normalized_entity_type,
+        entity_id=normalized_entity_id,
+    )
     return {
         "items": items,
         "total": total,

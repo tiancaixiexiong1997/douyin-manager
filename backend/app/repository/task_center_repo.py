@@ -49,6 +49,7 @@ class TaskCenterRepository:
         progress_step: Optional[str] = None,
         message: Optional[str] = None,
         error_message: Optional[str] = None,
+        context: Optional[dict] = None,
     ) -> Optional[TaskCenterItem]:
         if not hasattr(db, "execute"):
             return None
@@ -64,6 +65,7 @@ class TaskCenterRepository:
                 progress_step=progress_step,
                 message=message,
                 error_message=error_message,
+                context=context,
             )
             if status == TaskStatus.RUNNING.value:
                 task.started_at = datetime.utcnow()
@@ -84,6 +86,8 @@ class TaskCenterRepository:
         task.progress_step = progress_step
         task.message = message
         task.error_message = error_message
+        if context is not None:
+            task.context = context
         if status == TaskStatus.RUNNING.value:
             task.started_at = task.started_at or datetime.utcnow()
             task.finished_at = None
@@ -102,6 +106,7 @@ class TaskCenterRepository:
         progress_step: Optional[str] = None,
         message: Optional[str] = None,
         error_message: Optional[str] = None,
+        context: Optional[dict] = None,
     ) -> Optional[TaskCenterItem]:
         if not hasattr(db, "execute"):
             return None
@@ -115,6 +120,8 @@ class TaskCenterRepository:
             task.message = message
         if error_message is not None:
             task.error_message = error_message
+        if context is not None:
+            task.context = context
         if status == TaskStatus.RUNNING.value:
             task.started_at = task.started_at or datetime.utcnow()
             task.finished_at = None
@@ -133,6 +140,7 @@ class TaskCenterRepository:
         status: Optional[str] = None,
         task_type: Optional[str] = None,
         entity_type: Optional[str] = None,
+        entity_id: Optional[str] = None,
     ) -> list[TaskCenterItem]:
         if not hasattr(db, "execute"):
             return []
@@ -143,6 +151,8 @@ class TaskCenterRepository:
             stmt = stmt.where(TaskCenterItem.task_type == task_type)
         if entity_type:
             stmt = stmt.where(TaskCenterItem.entity_type == entity_type)
+        if entity_id:
+            stmt = stmt.where(TaskCenterItem.entity_id == entity_id)
         stmt = stmt.order_by(desc(TaskCenterItem.updated_at)).offset(skip).limit(limit)
         result = await db.execute(stmt)
         return list(result.scalars().all())
@@ -154,6 +164,7 @@ class TaskCenterRepository:
         status: Optional[str] = None,
         task_type: Optional[str] = None,
         entity_type: Optional[str] = None,
+        entity_id: Optional[str] = None,
     ) -> int:
         if not hasattr(db, "execute"):
             return 0
@@ -164,10 +175,19 @@ class TaskCenterRepository:
             stmt = stmt.where(TaskCenterItem.task_type == task_type)
         if entity_type:
             stmt = stmt.where(TaskCenterItem.entity_type == entity_type)
+        if entity_id:
+            stmt = stmt.where(TaskCenterItem.entity_id == entity_id)
         result = await db.execute(stmt)
         return int(result.scalar_one() or 0)
 
-    async def status_summary(self, db: AsyncSession) -> dict[str, int]:
+    async def status_summary(
+        self,
+        db: AsyncSession,
+        *,
+        task_type: Optional[str] = None,
+        entity_type: Optional[str] = None,
+        entity_id: Optional[str] = None,
+    ) -> dict[str, int]:
         if not hasattr(db, "execute"):
             return {
                 TaskStatus.QUEUED.value: 0,
@@ -176,10 +196,14 @@ class TaskCenterRepository:
                 TaskStatus.FAILED.value: 0,
                 TaskStatus.CANCELLED.value: 0,
             }
-        result = await db.execute(
-            select(TaskCenterItem.status, func.count())
-            .group_by(TaskCenterItem.status)
-        )
+        stmt = select(TaskCenterItem.status, func.count()).group_by(TaskCenterItem.status)
+        if task_type:
+            stmt = stmt.where(TaskCenterItem.task_type == task_type)
+        if entity_type:
+            stmt = stmt.where(TaskCenterItem.entity_type == entity_type)
+        if entity_id:
+            stmt = stmt.where(TaskCenterItem.entity_id == entity_id)
+        result = await db.execute(stmt)
         summary = {status: int(count) for status, count in result.all()}
         for status in (
             TaskStatus.QUEUED.value,

@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import app.api.endpoints.planning as planning_endpoint
 import pytest
 
@@ -90,6 +92,60 @@ def test_build_calendar_gap_brief_highlights_missing_pillars_and_groups() -> Non
     assert "转化引导" in brief
     assert "办公室口播组" in brief
     assert "最近保留的条目有：旧题1；旧题2" in brief
+
+
+def test_build_calendar_task_context_keeps_selected_days_and_snapshots() -> None:
+    project = SimpleNamespace(
+        content_calendar=[
+            {
+                "day": 2,
+                "title_direction": "第2天旧题",
+                "content_type": "口播+画中画",
+                "shoot_format": "口播",
+                "talent_requirement": "IP单人出镜",
+                "shoot_scene": "办公室",
+                "prep_requirement": "需提词器",
+                "schedule_group": "办公室口播组",
+            },
+            {
+                "day": 4,
+                "title_direction": "第4天旧题",
+                "content_type": "测评",
+                "shoot_format": "演示",
+                "talent_requirement": "IP单人出镜",
+                "shoot_scene": "产品展示区",
+                "prep_requirement": "需道具",
+                "schedule_group": "测评演示组",
+            },
+        ],
+        content_items=[
+            SimpleNamespace(
+                id="item-2",
+                day_number=2,
+                title_direction="第2天旧题",
+                content_type="口播+画中画",
+                tags=["专业干货"],
+                is_script_generated=False,
+            ),
+            SimpleNamespace(
+                id="item-4",
+                day_number=4,
+                title_direction="第4天旧题",
+                content_type="测评",
+                tags=["案例证明"],
+                is_script_generated=True,
+            ),
+        ],
+    )
+
+    context = planning_endpoint._build_calendar_task_context(project, [2, 4])
+
+    assert context["planning_state"] == "calendar_regenerating"
+    assert context["regeneration_mode"] == "partial"
+    assert context["regenerate_day_numbers"] == [2, 4]
+    assert [item["day_number"] for item in context["calendar_snapshots"]] == [2, 4]
+    assert context["calendar_snapshots"][0]["calendar_meta"]["schedule_group"] == "办公室口播组"
+    assert context["calendar_snapshots"][1]["is_script_generated"] is True
 
 
 @pytest.mark.asyncio

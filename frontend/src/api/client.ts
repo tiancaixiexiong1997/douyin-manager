@@ -1022,6 +1022,7 @@ export interface TaskCenterItem {
   progress_step?: string | null;
   message?: string | null;
   error_message?: string | null;
+  context?: Record<string, unknown> | null;
   started_at?: string | null;
   finished_at?: string | null;
   created_at: string;
@@ -1043,6 +1044,7 @@ export interface TaskCenterQueryParams {
   status?: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
   task_type?: string;
   entity_type?: string;
+  entity_id?: string;
 }
 
 export const taskApi = {
