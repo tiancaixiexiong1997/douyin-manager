@@ -148,6 +148,26 @@ def test_build_calendar_task_context_keeps_selected_days_and_snapshots() -> None
     assert context["calendar_snapshots"][1]["is_script_generated"] is True
 
 
+def test_attach_normalized_content_calendar_fills_legacy_schedule_fields() -> None:
+    project = SimpleNamespace(
+        content_calendar=[
+            {
+                "day": 1,
+                "title_direction": "旧题",
+                "content_type": "口播+画中画",
+            }
+        ]
+    )
+
+    normalized_project = planning_endpoint._attach_normalized_content_calendar(project)
+
+    assert normalized_project.content_calendar[0]["shoot_format"] == "口播"
+    assert normalized_project.content_calendar[0]["talent_requirement"] == "IP单人出镜"
+    assert normalized_project.content_calendar[0]["shoot_scene"] == "办公室"
+    assert normalized_project.content_calendar[0]["prep_requirement"] == "需提词器"
+    assert normalized_project.content_calendar[0]["schedule_group"] == "办公室口播组"
+
+
 @pytest.mark.asyncio
 async def test_apply_calendar_quality_guardrails_uses_backup_pool_to_keep_30(monkeypatch: pytest.MonkeyPatch) -> None:
     raw_calendar = [

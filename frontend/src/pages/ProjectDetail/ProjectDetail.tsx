@@ -54,113 +54,19 @@ function inferProjectStage(project: {
   return hasStrategy ? (hasCalendar ? 'completed' : 'strategy_completed') : 'draft';
 }
 
-function normalizeCalendarContentType(value?: string | null): string {
-  const raw = String(value || '').trim();
-  if (!raw) return '口播+画中画';
-  const compact = raw.toLowerCase().replace(/\s+/g, '');
-  if (compact.includes('口播') || compact.includes('画中画')) return '口播+画中画';
-  if (compact.includes('vlog') || raw.includes('跟拍') || raw.includes('记录')) return '跟拍Vlog';
-  if (raw.includes('评测') || raw.includes('测评')) return '测评';
-  if (raw.includes('教程') || raw.includes('教学')) return '教程';
-  if (raw.includes('探店')) return '探店实拍';
-  return raw;
-}
-
-function deriveCalendarBatchGroup(contentType?: string | null): string {
-  const text = normalizeCalendarContentType(contentType);
-  if (text.includes('口播') || text.includes('画中画')) return '办公室口播组';
-  if (text.includes('教程')) return '教程演示组';
-  if (text.includes('测评')) return '测评演示组';
-  if (text.includes('探店') || text.includes('实拍')) return '门店实拍组';
-  if (text.includes('Vlog') || text.includes('跟拍')) return '门店跟拍组';
-  return '办公室口播组';
-}
-
-function deriveScheduleMeta(contentType?: string | null): {
-  shootFormat: string;
-  talentRequirement: string;
-  shootScene: string;
-  estimatedDuration: string;
-  prepRequirement: string;
-  scheduleGroup: string;
-} {
-  const text = normalizeCalendarContentType(contentType);
-  if (text.includes('口播') || text.includes('画中画')) {
-    return {
-      shootFormat: '口播',
-      talentRequirement: 'IP单人出镜',
-      shootScene: '办公室',
-      estimatedDuration: '15分钟内',
-      prepRequirement: '需提词器',
-      scheduleGroup: '办公室口播组',
-    };
-  }
-  if (text.includes('教程')) {
-    return {
-      shootFormat: '演示',
-      talentRequirement: 'IP单人出镜',
-      shootScene: '演示区',
-      estimatedDuration: '15分钟内',
-      prepRequirement: '需道具',
-      scheduleGroup: '教程演示组',
-    };
-  }
-  if (text.includes('测评')) {
-    return {
-      shootFormat: '演示',
-      talentRequirement: 'IP单人出镜',
-      shootScene: '产品展示区',
-      estimatedDuration: '15分钟内',
-      prepRequirement: '需道具',
-      scheduleGroup: '测评演示组',
-    };
-  }
-  if (text.includes('探店') || text.includes('实拍')) {
-    return {
-      shootFormat: '实拍讲解',
-      talentRequirement: 'IP单人出镜',
-      shootScene: '门店现场',
-      estimatedDuration: '30分钟内',
-      prepRequirement: '需现场配合',
-      scheduleGroup: '门店实拍组',
-    };
-  }
-  if (text.includes('Vlog') || text.includes('跟拍')) {
-    return {
-      shootFormat: '跟拍',
-      talentRequirement: 'IP单人出镜',
-      shootScene: '门店现场',
-      estimatedDuration: '30分钟内',
-      prepRequirement: '需流程提纲',
-      scheduleGroup: '门店跟拍组',
-    };
-  }
-  return {
-    shootFormat: '口播',
-    talentRequirement: 'IP单人出镜',
-    shootScene: '办公室',
-    estimatedDuration: '15分钟内',
-    prepRequirement: '需提词器',
-    scheduleGroup: '办公室口播组',
-  };
-}
-
 function getCalendarScheduleMeta(item: CalendarDisplayItem): {
   shootFormat: string;
   talentRequirement: string;
   shootScene: string;
-  estimatedDuration: string;
   prepRequirement: string;
   scheduleGroup: string;
 } {
-  const profile = deriveScheduleMeta(item.calendarMeta?.content_type || item.content_type);
   return {
-    shootFormat: item.calendarMeta?.shoot_format?.trim() || profile.shootFormat,
-    talentRequirement: item.calendarMeta?.talent_requirement?.trim() || profile.talentRequirement,
-    shootScene: item.calendarMeta?.shoot_scene?.trim() || profile.shootScene,
-    estimatedDuration: item.calendarMeta?.estimated_duration?.trim() || profile.estimatedDuration,
-    prepRequirement: item.calendarMeta?.prep_requirement?.trim() || profile.prepRequirement,
-    scheduleGroup: item.calendarMeta?.schedule_group?.trim() || item.calendarMeta?.batch_shoot_group?.trim() || profile.scheduleGroup || deriveCalendarBatchGroup(item.calendarMeta?.content_type || item.content_type),
+    shootFormat: item.calendarMeta?.shoot_format?.trim() || '待定',
+    talentRequirement: item.calendarMeta?.talent_requirement?.trim() || '待安排',
+    shootScene: item.calendarMeta?.shoot_scene?.trim() || '待安排',
+    prepRequirement: item.calendarMeta?.prep_requirement?.trim() || '待安排',
+    scheduleGroup: item.calendarMeta?.schedule_group?.trim() || item.calendarMeta?.batch_shoot_group?.trim() || '待分组',
   };
 }
 

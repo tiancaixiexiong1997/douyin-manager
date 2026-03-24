@@ -1054,6 +1054,13 @@ def _build_calendar_task_context(project, selected_days: list[int]) -> dict:
     }
 
 
+def _attach_normalized_content_calendar(project):
+    if not project or not hasattr(project, "content_calendar"):
+        return project
+    project.content_calendar = _normalize_content_calendar(getattr(project, "content_calendar", None))
+    return project
+
+
 def _has_meaningful_plan_result(account_positioning: dict | None, content_strategy: dict | None, content_calendar: list | None) -> bool:
     positioning = account_positioning if isinstance(account_positioning, dict) else {}
     strategy = content_strategy if isinstance(content_strategy, dict) else {}
@@ -1639,7 +1646,7 @@ async def get_project(project_id: str, db: AsyncSession = Depends(get_db)):
     project = await planning_repository.get_by_id(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="项目不存在")
-    return project
+    return _attach_normalized_content_calendar(project)
 
 
 @router.post("/{project_id}/retry", summary="重新生成账号定位方案")
@@ -1703,7 +1710,7 @@ async def update_project(
     )
     await db.commit()
     await db.refresh(project)
-    return project
+    return _attach_normalized_content_calendar(project)
 
 
 @router.post("/{project_id}/regenerate-calendar", summary="基于当前定位生成或重生成30天内容日历")
@@ -1875,7 +1882,7 @@ async def update_account_homepage(
     )
     await db.commit()
     await db.refresh(project)
-    return project
+    return _attach_normalized_content_calendar(project)
 
 
 @router.post("/script/generate", summary="为单条内容生成完整脚本")
