@@ -1,11 +1,9 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { planningApi, type ContentCalendarItem, type ContentItem, type TaskCenterItem } from '../../api/client';
+import { planningApi, type TaskCenterItem } from '../../api/client';
 import { Calendar, Loader2, Pencil, RefreshCw, Save } from '../../components/Icons';
 import { notifyInfo } from '../../utils/notify';
-
-type CalendarDisplayItem = ContentItem & { calendarMeta?: ContentCalendarItem | null };
-type ProjectStage = 'draft' | 'strategy_generating' | 'strategy_completed' | 'calendar_generating' | 'completed';
+import type { CalendarDisplayItem, ProjectStage } from './projectDetailShared';
 
 const SCHEDULE_GROUP_FILTER_PREFIX = 'schedule_group:';
 

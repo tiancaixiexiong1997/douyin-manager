@@ -1,109 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { bloggerApi, planningApi, taskApi, type ContentCalendarItem, type ContentItem, type ContentPerformance, type TaskCenterItem, type TaskCenterListResponse } from '../../api/client';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { planningApi, type ContentItem, type ContentPerformance, type TaskCenterItem, type TaskCenterListResponse } from '../../api/client';
 import { ArrowLeft, Loader2, ChevronDown, ChevronUp, Sparkles, Calendar, Pencil, RefreshCw } from '../../components/Icons';
-import { toBackendTimestamp } from '../../utils/datetime';
 import { CalendarPanel } from './CalendarPanel';
 import { EditPlanModal } from './EditPlanModal';
 import { EditProjectModal } from './EditProjectModal';
 import { PerformanceModal } from './PerformanceModal';
 import { PerformancePanel } from './PerformancePanel';
 import { ScriptModal } from './ScriptModal';
+import { upsertOptimisticTask } from './projectDetailShared';
+import { usePlanningTaskState } from './usePlanningTaskState';
+import { useProjectDetailData } from './useProjectDetailData';
 import './ProjectDetail.css';
-
-type CalendarDisplayItem = ContentItem & { calendarMeta?: ContentCalendarItem | null };
-type PendingCalendarRegeneration = {
-  dayNumbers: number[];
-  snapshotsByDay: Record<number, CalendarDisplayItem>;
-};
-type PlanningTaskContext = {
-  planning_state?: string;
-  has_existing_strategy?: boolean;
-  regeneration_mode?: 'initial' | 'full' | 'partial';
-  regenerate_day_numbers?: number[];
-  calendar_snapshots?: Array<{
-    id: string;
-    day_number: number;
-    title_direction: string;
-    content_type?: string | null;
-    tags?: string[] | null;
-    is_script_generated?: boolean;
-    calendar_meta?: ContentCalendarItem | null;
-  }>;
-};
-type ProjectStage = 'draft' | 'strategy_generating' | 'strategy_completed' | 'calendar_generating' | 'completed';
-
-function inferProjectStage(project: {
-  status: string;
-  account_plan?: {
-    account_positioning?: unknown;
-    content_strategy?: unknown;
-    calendar_generation_meta?: unknown;
-  } | null;
-}): ProjectStage {
-  const hasStrategy = Boolean(project.account_plan?.account_positioning || project.account_plan?.content_strategy);
-  const hasCalendar = Boolean(project.account_plan?.calendar_generation_meta);
-  if (project.status === 'strategy_generating') return 'strategy_generating';
-  if (project.status === 'strategy_completed') return 'strategy_completed';
-  if (project.status === 'calendar_generating') return 'calendar_generating';
-  if (project.status === 'completed') return 'completed';
-  if (project.status === 'in_progress') {
-    return hasStrategy && hasCalendar ? 'calendar_generating' : 'strategy_generating';
-  }
-  return hasStrategy ? (hasCalendar ? 'completed' : 'strategy_completed') : 'draft';
-}
-
-function isPendingTask(task?: TaskCenterItem | null): boolean {
-  return task?.status === 'queued' || task?.status === 'running';
-}
-
-function parsePlanningTaskContext(task?: TaskCenterItem | null): PlanningTaskContext | null {
-  const context = task?.context;
-  if (!context || typeof context !== 'object') return null;
-  return context as PlanningTaskContext;
-}
-
-function buildPendingCalendarRegeneration(task?: TaskCenterItem | null): PendingCalendarRegeneration | null {
-  if (!isPendingTask(task)) return null;
-  const context = parsePlanningTaskContext(task);
-  if (!context || context.planning_state !== 'calendar_regenerating') return null;
-
-  const dayNumbers = Array.from(new Set((context.regenerate_day_numbers || []).filter((value): value is number => Number.isInteger(value) && value >= 1 && value <= 30))).sort((a, b) => a - b);
-  if (dayNumbers.length === 0) return null;
-
-  const snapshotsByDay: Record<number, CalendarDisplayItem> = {};
-  for (const snapshot of context.calendar_snapshots || []) {
-    if (!snapshot || !Number.isInteger(snapshot.day_number)) continue;
-    snapshotsByDay[snapshot.day_number] = {
-      id: snapshot.id,
-      day_number: snapshot.day_number,
-      title_direction: snapshot.title_direction,
-      content_type: snapshot.content_type || undefined,
-      tags: snapshot.tags || undefined,
-      is_script_generated: Boolean(snapshot.is_script_generated),
-      full_script: undefined,
-      calendarMeta: snapshot.calendar_meta || null,
-    };
-  }
-
-  return { dayNumbers, snapshotsByDay };
-}
-
-function upsertOptimisticTask(
-  current: TaskCenterListResponse | undefined,
-  task: TaskCenterItem,
-): TaskCenterListResponse {
-  const items = [task, ...(current?.items || []).filter((item) => item.task_key !== task.task_key)];
-  return {
-    items,
-    total: Math.max(current?.total || 0, items.length),
-    skip: current?.skip || 0,
-    limit: current?.limit || 20,
-    has_more: false,
-    summary: current?.summary || {},
-  };
-}
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -114,92 +23,34 @@ export default function ProjectDetail() {
   const [showEditPlan, setShowEditPlan] = useState(false);
   const [showPerformanceModal, setShowPerformanceModal] = useState(false);
   const [editingPerformance, setEditingPerformance] = useState<ContentPerformance | null>(null);
-
-  const { data: project, isLoading } = useQuery({
-    queryKey: ['project', id],
-    queryFn: () => planningApi.get(id!),
+  const {
+    project,
+    isLoading,
+    positioning,
+    strategy,
+    currentStage,
+    hasStrategy,
+    hasCalendar,
+    performanceList,
+    performanceSummary,
+    performanceRecap,
+    nextTopicBatch,
+    calendarDisplayItems,
+    referenceNames,
+    referenceScopeItems,
+  } = useProjectDetailData(id);
+  const {
+    scriptTaskMap,
+    visibleCalendarItems,
+    pendingRegenerationDaySet,
+    isStrategyRegenerating,
+  } = usePlanningTaskState({
+    projectId: id,
+    project,
+    currentStage,
+    hasStrategy,
+    calendarDisplayItems,
   });
-  const { data: bloggers = [] } = useQuery({
-    queryKey: ['bloggers'],
-    queryFn: () => bloggerApi.list(),
-  });
-  const projectContentItemIdSet = useMemo(
-    () => new Set((project?.content_items || []).map((item) => item.id)),
-    [project?.content_items],
-  );
-
-  const { data: scriptTaskPage } = useQuery({
-    queryKey: ['content-script-tasks', id],
-    queryFn: () =>
-      taskApi.list({
-        entity_type: 'content_item',
-        task_type: 'planning_script_generate',
-        limit: 200,
-      }),
-    enabled: Boolean(id),
-    refetchInterval: (query) => {
-      const page = query.state.data as TaskCenterListResponse | undefined;
-      if (!page) return false;
-      const hasPendingTasks = page.items.some((task) => isPendingTask(task) && projectContentItemIdSet.has(task.entity_id));
-      return hasPendingTasks ? 3000 : false;
-    },
-  });
-
-  const { data: projectTaskPage } = useQuery({
-    queryKey: ['project-planning-tasks', id],
-    queryFn: () =>
-      taskApi.list({
-        entity_type: 'planning_project',
-        entity_id: id!,
-        limit: 50,
-      }),
-    enabled: Boolean(id),
-    refetchInterval: (query) => {
-      const page = query.state.data as TaskCenterListResponse | undefined;
-      if (!page) return false;
-      return page.items.some((task) => isPendingTask(task)) ? 3000 : false;
-    },
-  });
-
-  const scriptTaskMap = useMemo(() => {
-    const map = new Map<string, TaskCenterItem>();
-    const tasks = scriptTaskPage?.items || [];
-    for (const task of tasks) {
-      const prev = map.get(task.entity_id);
-      if (!prev || toBackendTimestamp(task.updated_at) >= toBackendTimestamp(prev.updated_at)) {
-        map.set(task.entity_id, task);
-      }
-    }
-    return map;
-  }, [scriptTaskPage]);
-
-  const { data: performanceList = [] } = useQuery({
-    queryKey: ['project-performance', id],
-    queryFn: () => planningApi.listPerformance(id!),
-    enabled: Boolean(id),
-  });
-
-  const { data: performanceSummary } = useQuery({
-    queryKey: ['project-performance-summary', id],
-    queryFn: () => planningApi.getPerformanceSummary(id!),
-    enabled: Boolean(id),
-  });
-
-  const latestPlanningTaskByType = useMemo(() => {
-    const map = new Map<string, TaskCenterItem>();
-    for (const task of projectTaskPage?.items || []) {
-      const previous = map.get(task.task_type);
-      if (!previous || toBackendTimestamp(task.updated_at) >= toBackendTimestamp(previous.updated_at)) {
-        map.set(task.task_type, task);
-      }
-    }
-    return map;
-  }, [projectTaskPage]);
-  const projectScriptTasks = useMemo(
-    () => (scriptTaskPage?.items || []).filter((task) => projectContentItemIdSet.has(task.entity_id)),
-    [projectContentItemIdSet, scriptTaskPage],
-  );
-  const lastTaskRefreshSignatureRef = useRef<string | null>(null);
 
   const generateStrategyMutation = useMutation({
     mutationFn: () => planningApi.generateStrategy(id!),
@@ -317,81 +168,6 @@ export default function ProjectDetail() {
       qc.invalidateQueries({ queryKey: ['project-performance-summary', id] });
     },
   });
-
-  const plan = project?.account_plan;
-  const currentStage: ProjectStage = project ? inferProjectStage(project) : 'draft';
-  const positioning = plan?.account_positioning;
-  const strategy = plan?.content_strategy;
-  const hasStrategy = Boolean(positioning || strategy);
-  const hasCalendar = Boolean((project?.content_calendar || []).length > 0 || (project?.content_items || []).length > 0);
-  const performanceRecap = plan?.performance_recap;
-  const nextTopicBatch = plan?.next_topic_batch;
-  const latestStrategyTask = latestPlanningTaskByType.get('planning_generate') || null;
-  const latestCalendarTask = latestPlanningTaskByType.get('planning_calendar') || null;
-  const pendingCalendarRegeneration = useMemo(
-    () => buildPendingCalendarRegeneration(latestCalendarTask),
-    [latestCalendarTask],
-  );
-  const calendarMetaByDay = new Map<number, ContentCalendarItem>(
-    (project?.content_calendar || [])
-      .filter((item): item is ContentCalendarItem => Boolean(item && typeof item.day === 'number'))
-      .map((item) => [item.day, item]),
-  );
-  const calendarDisplayItems: CalendarDisplayItem[] = (project?.content_items || [])
-    .map((item) => ({
-      ...item,
-      calendarMeta: calendarMetaByDay.get(item.day_number) || null,
-    }))
-    .sort((a, b) => a.day_number - b.day_number);
-  const visibleCalendarItems = useMemo(() => {
-    if (!pendingCalendarRegeneration) return calendarDisplayItems;
-    const currentByDay = new Map(calendarDisplayItems.map((item) => [item.day_number, item]));
-    const mergedItems = [...calendarDisplayItems];
-    for (const dayNumber of pendingCalendarRegeneration.dayNumbers) {
-      if (currentByDay.has(dayNumber)) continue;
-      const snapshot = pendingCalendarRegeneration.snapshotsByDay[dayNumber];
-      if (snapshot) mergedItems.push(snapshot);
-    }
-    return mergedItems.sort((a, b) => a.day_number - b.day_number);
-  }, [calendarDisplayItems, pendingCalendarRegeneration]);
-  const pendingRegenerationDaySet = useMemo(
-    () => new Set(pendingCalendarRegeneration?.dayNumbers || []),
-    [pendingCalendarRegeneration],
-  );
-  const bloggerNameMap = new Map(bloggers.map((blogger) => [blogger.id, blogger.nickname]));
-  const referenceNames = (project?.reference_blogger_ids || [])
-    .map((bloggerId) => bloggerNameMap.get(bloggerId))
-    .filter((name): name is string => Boolean(name));
-  const referenceScopeItems = [
-    `账号定位会参考 ${referenceNames.join('、')} 的人设切入点、受众表达方式和内容支柱拆法，但会优先贴合你当前账号的行业、目标受众和商业目标。`,
-    '30 天内容日历会参考这些 IP 里更稳定的选题方向、内容结构和更新节奏，用来辅助规划每天拍什么，不会直接照搬某一条内容。',
-    '后续生成单条脚本时，也会继续参考这些 IP 的开头节奏、表达习惯和镜头组织方式，但脚本会按你当前项目的定位重新写。',
-    '如果后面你更换或减少参考 IP，重新生成策划和日历后，下面这套方案也会跟着变化。',
-  ];
-  const isStrategyRegenerating = Boolean(hasStrategy && (currentStage === 'strategy_generating' || isPendingTask(latestStrategyTask)));
-  const taskDrivenRefreshSignature = useMemo(() => JSON.stringify({
-    strategy: latestStrategyTask ? [latestStrategyTask.status, latestStrategyTask.progress_step, latestStrategyTask.updated_at] : null,
-    calendar: latestCalendarTask ? [latestCalendarTask.status, latestCalendarTask.progress_step, latestCalendarTask.updated_at] : null,
-    scripts: projectScriptTasks
-      .map((task) => `${task.entity_id}:${task.status}:${task.progress_step || ''}:${task.updated_at}`)
-      .sort(),
-  }), [latestCalendarTask, latestStrategyTask, projectScriptTasks]);
-
-  useEffect(() => {
-    lastTaskRefreshSignatureRef.current = null;
-  }, [id]);
-
-  useEffect(() => {
-    if (!id || !project) return;
-    if (!taskDrivenRefreshSignature) return;
-    if (lastTaskRefreshSignatureRef.current === null) {
-      lastTaskRefreshSignatureRef.current = taskDrivenRefreshSignature;
-      return;
-    }
-    if (lastTaskRefreshSignatureRef.current === taskDrivenRefreshSignature) return;
-    lastTaskRefreshSignatureRef.current = taskDrivenRefreshSignature;
-    qc.invalidateQueries({ queryKey: ['project', id] });
-  }, [id, project, qc, taskDrivenRefreshSignature]);
 
   if (isLoading) {
     return (
