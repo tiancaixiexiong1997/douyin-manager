@@ -19,6 +19,7 @@ type PendingCalendarRegeneration = {
 };
 const SCHEDULE_GROUP_FILTER_PREFIX = 'schedule_group:';
 const PENDING_CALENDAR_REGEN_STORAGE_PREFIX = 'planning:pending-calendar-regeneration:';
+const PENDING_STRATEGY_REGEN_STORAGE_PREFIX = 'planning:pending-strategy-regeneration:';
 type ProjectStage = 'draft' | 'strategy_generating' | 'strategy_completed' | 'calendar_generating' | 'completed';
 
 function getPendingCalendarRegenerationStorageKey(projectId?: string): string {
@@ -38,6 +39,15 @@ function loadPendingCalendarRegeneration(projectId?: string): PendingCalendarReg
   } catch {
     return null;
   }
+}
+
+function getPendingStrategyRegenerationStorageKey(projectId?: string): string {
+  return `${PENDING_STRATEGY_REGEN_STORAGE_PREFIX}${projectId || 'unknown'}`;
+}
+
+function loadPendingStrategyRegeneration(projectId?: string): boolean {
+  if (!projectId || typeof window === 'undefined') return false;
+  return window.sessionStorage.getItem(getPendingStrategyRegenerationStorageKey(projectId)) === '1';
 }
 
 function inferProjectStage(project: {
@@ -1255,6 +1265,7 @@ export default function ProjectDetail() {
   const [editForm, setEditForm] = useState({ title_direction: '', content_type: '' });
   const [showEditProject, setShowEditProject] = useState(false);
   const [showEditPlan, setShowEditPlan] = useState(false);
+  const [pendingStrategyRegeneration, setPendingStrategyRegeneration] = useState<boolean>(() => loadPendingStrategyRegeneration(id));
   const [isSelectingRegenerateDays, setIsSelectingRegenerateDays] = useState(false);
   const [regenerateSelectedDays, setRegenerateSelectedDays] = useState<number[]>([]);
   const [pendingCalendarRegeneration, setPendingCalendarRegeneration] = useState<PendingCalendarRegeneration | null>(() => loadPendingCalendarRegeneration(id));
@@ -1264,8 +1275,14 @@ export default function ProjectDetail() {
 
   const generateStrategyMutation = useMutation({
     mutationFn: () => planningApi.generateStrategy(id!),
+    onMutate: () => {
+      setPendingStrategyRegeneration(true);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['project', id] });
+    },
+    onError: () => {
+      setPendingStrategyRegeneration(false);
     },
   });
 
@@ -1451,6 +1468,7 @@ export default function ProjectDetail() {
   const allCalendarDays = visibleCalendarItems.map((item) => item.day_number);
   const preservedDayCount = Math.max(0, visibleCalendarItems.length - regenerateSelectedDays.length);
   const displayCalendarItems = isSelectingRegenerateDays ? visibleCalendarItems : filteredCalendarItems;
+  const isStrategyRegenerating = Boolean(hasStrategy && (currentStage === 'strategy_generating' || pendingStrategyRegeneration));
 
   useEffect(() => {
     if (!pendingCalendarRegeneration) return;
@@ -1492,6 +1510,30 @@ export default function ProjectDetail() {
       setPendingCalendarRegeneration(restored);
     }
   }, [id, pendingCalendarRegeneration]);
+
+  useEffect(() => {
+    if (!id || typeof window === 'undefined') return;
+    const storageKey = getPendingStrategyRegenerationStorageKey(id);
+    if (!pendingStrategyRegeneration) {
+      window.sessionStorage.removeItem(storageKey);
+      return;
+    }
+    window.sessionStorage.setItem(storageKey, '1');
+  }, [id, pendingStrategyRegeneration]);
+
+  useEffect(() => {
+    if (!id || pendingStrategyRegeneration) return;
+    if (loadPendingStrategyRegeneration(id)) {
+      setPendingStrategyRegeneration(true);
+    }
+  }, [id, pendingStrategyRegeneration]);
+
+  useEffect(() => {
+    if (!pendingStrategyRegeneration) return;
+    if (currentStage !== 'strategy_generating') {
+      setPendingStrategyRegeneration(false);
+    }
+  }, [currentStage, pendingStrategyRegeneration]);
 
   if (isLoading) {
     return (
@@ -1657,7 +1699,7 @@ export default function ProjectDetail() {
 
       {/* 账号定位 */}
       {positioning && (
-        <div className="card detail-section detail-positioning">
+        <div className={`card detail-section detail-positioning ${isStrategyRegenerating ? 'detail-positioning-regenerating' : ''}`}>
           <div
             className={`detail-section-head ${showFullPlan ? 'is-open' : ''}`}
             onClick={() => setShowFullPlan(!showFullPlan)}
@@ -1677,7 +1719,7 @@ export default function ProjectDetail() {
           </div>
 
           {showFullPlan && (
-            <div className="animate-fade-in">
+            <div className="detail-positioning-body animate-fade-in">
               {/* 核心定位 */}
               {positioning.core_identity && (
                 <div className="identity-block">
@@ -1784,6 +1826,13 @@ export default function ProjectDetail() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+          {isStrategyRegenerating && (
+            <div className="detail-positioning-overlay">
+              <span className="detail-positioning-overlay-badge">
+                <Loader2 size={14} className="spin-icon" /> 重新生成定位中
+              </span>
             </div>
           )}
         </div>
