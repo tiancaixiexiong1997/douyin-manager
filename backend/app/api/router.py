@@ -7,6 +7,7 @@ from app.api.endpoints import (
     auth,
     blogger,
     planning,
+    planning_project,
     script,
     setting,
     download,
@@ -22,6 +23,7 @@ api_router.include_router(auth.router, prefix="/auth", tags=["认证"])
 api_router.include_router(setting.public_router, prefix="/settings", tags=["系统设置"])
 api_router.include_router(blogger.router, prefix="/bloggers", tags=["博主IP库"], dependencies=[Depends(require_member_or_admin)])
 api_router.include_router(planning.router, prefix="/planning", tags=["账号策划"], dependencies=[Depends(require_member_or_admin)])
+api_router.include_router(planning_project.router, prefix="/planning", tags=["账号策划"], dependencies=[Depends(require_member_or_admin)])
 api_router.include_router(script.router, prefix="/script", tags=["视频脚本提取复刻"], dependencies=[Depends(require_member_or_admin)])
 api_router.include_router(setting.router, prefix="/settings", tags=["系统设置"], dependencies=[Depends(require_admin)])
 api_router.include_router(download.router, prefix="/download", tags=["无水印下载"], dependencies=[Depends(require_member_or_admin)])
