@@ -323,17 +323,6 @@ def _build_calendar_gap_brief(
         if pillar_gaps:
             lines.append("优先补足的内容支柱：" + "；".join(pillar_gaps[:4]) + "。")
 
-    role_counts: dict[str, int] = {}
-    for item in existing_calendar:
-        role = _safe_text(item.get("content_role"))
-        if role:
-            role_counts[role] = role_counts.get(role, 0) + 1
-    if role_counts:
-        sorted_roles = sorted(role_counts.items(), key=lambda item: item[1])
-        underfilled_roles = [f"{role}（当前 {count} 条）" for role, count in sorted_roles[:3] if count <= sorted_roles[0][1] + 1]
-        if underfilled_roles:
-            lines.append("优先补的内容角色：" + "、".join(underfilled_roles) + "。")
-
     schedule_counts: dict[str, int] = {}
     for item in existing_calendar:
         group = _safe_text(item.get("schedule_group") or item.get("batch_shoot_group"))

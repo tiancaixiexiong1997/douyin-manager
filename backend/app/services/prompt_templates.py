@@ -223,7 +223,7 @@ CONTENT_CALENDAR_PROMPT_TEMPLATE = (
     "- content_calendar 必须严格输出第1天到第30天，共30条，不得缺天、不得截断\n"
     "- 每条必须具体到一个可拍的选题，不要空泛方向词\n"
     "- 每条都要回答：陌生用户为什么会停下来继续看\n"
-    "- 必须补齐编导排期标签：shoot_format / talent_requirement / shoot_scene / estimated_duration / prep_requirement / schedule_group\n"
+    "- 必须补齐编导排期标签：shoot_format / talent_requirement / shoot_scene / prep_requirement / schedule_group\n"
     "- 这30条默认都按可集中排期内容来写，不要输出“不可批量拍”“实时内容优先”等判断型标签\n"
     "- schedule_group 不是内容支柱，而是帮助编导把同一时间段可连拍的内容归成一组，如：上午办公室口播 / 下午案例讲解 / 门店实拍一组\n"
     "- 每条必须同时包含：具体对象 + 具体场景 + 具体问题/动作/差异/结果 + 明确观看回报\n"
@@ -281,11 +281,9 @@ CONTENT_CALENDAR_PROMPT_TEMPLATE = (
     '      "title_direction": "具体视频标题方向（可参考直接使用，25字以内）",\n'
     '      "content_type": "口播+画中画/跟拍Vlog/教程/测评/探店实拍",\n'
     '      "content_pillar": "所属内容支柱名称",\n'
-    '      "content_role": "主验证/稳定输出/流量放大/信任建立/承接转化/补充试错",\n'
     '      "shoot_format": "口播/演示/对谈/情景化口播/跟拍/实拍讲解",\n'
     '      "talent_requirement": "IP单人出镜/IP+客户/IP配助理/仅IP配音",\n'
     '      "shoot_scene": "办公室/门店现场/咨询室/演示区等具体拍摄场景",\n'
-    '      "estimated_duration": "5分钟内/15分钟内/30分钟内",\n'
     '      "prep_requirement": "无准备/需提词器/需案例素材/需道具/需现场配合/需流程提纲",\n'
     '      "schedule_group": "编导排期分组，如上午办公室口播/下午案例讲解/门店实拍一组"\n'
     '    }}\n'
@@ -331,7 +329,6 @@ CALENDAR_GAP_FILL_PROMPT_TEMPLATE = (
     '      "shoot_format": "口播/演示/对谈/情景化口播/跟拍/实拍讲解",\n'
     '      "talent_requirement": "IP单人出镜/IP+客户/IP配助理/仅IP配音",\n'
     '      "shoot_scene": "办公室/门店现场/咨询室/演示区等具体拍摄场景",\n'
-    '      "estimated_duration": "5分钟内/15分钟内/30分钟内",\n'
     '      "prep_requirement": "无准备/需提词器/需案例素材/需道具/需现场配合/需流程提纲",\n'
     '      "schedule_group": "建议归属的编导排期分组",\n'
     '      "replacement_hint": "这条在替换时解决了哪类低质问题"\n'
