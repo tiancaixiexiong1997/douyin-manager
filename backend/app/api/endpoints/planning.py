@@ -29,6 +29,7 @@ from app.schemas.planning import (
     ContentPerformanceSummaryResponse,
     NextTopicBatchResponse,
     PerformanceRecapResponse,
+    CalendarRegenerateRequest,
 )
 from app.services.ai_analysis_service import ai_analysis_service
 from app.services.cancellation import cancellation_registry
@@ -237,6 +238,12 @@ def _normalize_backup_topic_pool_item(raw: dict, *, fallback_index: int) -> dict
         "content_pillar": _safe_text(raw.get("content_pillar")) or None,
         "key_message": _safe_text(raw.get("key_message")),
         "tags": _normalize_text_list(raw.get("tags"), limit=6),
+        "shoot_format": _safe_text(raw.get("shoot_format")),
+        "talent_requirement": _safe_text(raw.get("talent_requirement")),
+        "shoot_scene": _safe_text(raw.get("shoot_scene")),
+        "estimated_duration": _safe_text(raw.get("estimated_duration")),
+        "prep_requirement": _safe_text(raw.get("prep_requirement")),
+        "schedule_group": _safe_text(raw.get("schedule_group")),
         "batch_shoot_group": _safe_text(raw.get("batch_shoot_group")) or _derive_batch_group(content_type),
         "replacement_hint": _safe_text(raw.get("replacement_hint")),
     }
@@ -260,6 +267,93 @@ def _normalize_calendar_generation_meta(value) -> dict:
         "backup_used_count": max(0, int(raw.get("backup_used_count", 0) or 0)),
         "regeneration_count": max(0, int(raw.get("regeneration_count", 0) or 0)),
     }
+
+
+def _extract_ratio_value(value) -> float:
+    text = _safe_text(value).replace("%", "")
+    if not text:
+        return 0.0
+    match = re.search(r"\d+(?:\.\d+)?", text)
+    if not match:
+        return 0.0
+    try:
+        return float(match.group(0))
+    except ValueError:
+        return 0.0
+
+
+def _build_calendar_gap_brief(
+    *,
+    existing_calendar: list[dict],
+    account_plan: dict,
+    missing_days: list[int],
+) -> str:
+    if not existing_calendar:
+        return "当前没有保留条目，请直接围绕账号定位补出完整的高传播题，并尽量拉开内容支柱与拍摄分组。"
+
+    lines: list[str] = []
+    lines.append(f"当前已保留 {len(existing_calendar)} 条，待补 Day {', '.join(str(day) for day in missing_days)}。")
+
+    pillar_entries = []
+    positioning = account_plan.get("account_positioning") if isinstance(account_plan, dict) else {}
+    if isinstance(positioning, dict):
+        pillar_entries = positioning.get("content_pillars") if isinstance(positioning.get("content_pillars"), list) else []
+
+    if pillar_entries:
+        total_ratio = sum(_extract_ratio_value(item.get("ratio")) for item in pillar_entries if isinstance(item, dict))
+        existing_pillar_counts: dict[str, int] = {}
+        for item in existing_calendar:
+            pillar = _safe_text(item.get("content_pillar"))
+            if pillar:
+                existing_pillar_counts[pillar] = existing_pillar_counts.get(pillar, 0) + 1
+
+        pillar_gaps: list[str] = []
+        for pillar in pillar_entries:
+            if not isinstance(pillar, dict):
+                continue
+            name = _safe_text(pillar.get("name"))
+            if not name:
+                continue
+            ratio_value = _extract_ratio_value(pillar.get("ratio"))
+            target_count = round((ratio_value / total_ratio) * 30) if total_ratio > 0 else 0
+            current_count = existing_pillar_counts.get(name, 0)
+            gap = max(0, target_count - current_count)
+            if gap > 0:
+                pillar_gaps.append(f"{name} 还差约 {gap} 条（当前 {current_count} / 目标约 {target_count}）")
+        if pillar_gaps:
+            lines.append("优先补足的内容支柱：" + "；".join(pillar_gaps[:4]) + "。")
+
+    role_counts: dict[str, int] = {}
+    for item in existing_calendar:
+        role = _safe_text(item.get("content_role"))
+        if role:
+            role_counts[role] = role_counts.get(role, 0) + 1
+    if role_counts:
+        sorted_roles = sorted(role_counts.items(), key=lambda item: item[1])
+        underfilled_roles = [f"{role}（当前 {count} 条）" for role, count in sorted_roles[:3] if count <= sorted_roles[0][1] + 1]
+        if underfilled_roles:
+            lines.append("优先补的内容角色：" + "、".join(underfilled_roles) + "。")
+
+    schedule_counts: dict[str, int] = {}
+    for item in existing_calendar:
+        group = _safe_text(item.get("schedule_group") or item.get("batch_shoot_group"))
+        if group:
+            schedule_counts[group] = schedule_counts.get(group, 0) + 1
+    if schedule_counts:
+        sorted_groups = sorted(schedule_counts.items(), key=lambda item: item[1])
+        scarce_groups = [f"{group}（当前 {count} 条）" for group, count in sorted_groups[:3]]
+        dominant_group, dominant_count = max(schedule_counts.items(), key=lambda item: item[1])
+        lines.append("拍摄排期上优先补这些分组：" + "、".join(scarce_groups) + "。")
+        if dominant_count >= max(6, len(existing_calendar) // 3):
+            lines.append(f"注意避免继续堆在 {dominant_group}，它当前已占 {dominant_count} 条。")
+
+    recent_items = sorted(existing_calendar, key=lambda item: int(item.get("day", 0)))[-5:]
+    if recent_items:
+        recent_titles = "；".join(_safe_text(item.get("title_direction")) for item in recent_items if _safe_text(item.get("title_direction")))
+        if recent_titles:
+            lines.append(f"最近保留的条目有：{recent_titles}。新题要尽量拉开切入角度、不要只做近义改写。")
+
+    return "\n".join(lines)
 
 
 def _calendar_titles_are_too_similar(candidate: dict, existing_items: list[dict]) -> bool:
@@ -292,6 +386,12 @@ def _convert_backup_topic_to_calendar_item(backup_item: dict, target_item: dict)
         "content_pillar": backup_item.get("content_pillar") or target_item.get("content_pillar"),
         "key_message": backup_item.get("key_message") or target_item.get("key_message"),
         "tags": backup_item.get("tags") or target_item.get("tags"),
+        "shoot_format": backup_item.get("shoot_format") or target_item.get("shoot_format"),
+        "talent_requirement": backup_item.get("talent_requirement") or target_item.get("talent_requirement"),
+        "shoot_scene": backup_item.get("shoot_scene") or target_item.get("shoot_scene"),
+        "estimated_duration": backup_item.get("estimated_duration") or target_item.get("estimated_duration"),
+        "prep_requirement": backup_item.get("prep_requirement") or target_item.get("prep_requirement"),
+        "schedule_group": backup_item.get("schedule_group") or target_item.get("schedule_group"),
         "batch_shoot_group": backup_item.get("batch_shoot_group") or target_item.get("batch_shoot_group"),
         "replacement_hint": backup_item.get("replacement_hint") or target_item.get("replacement_hint"),
         "replaced_from_backup": True,
@@ -499,6 +599,11 @@ async def _apply_calendar_quality_guardrails(
             },
             account_plan=account_plan,
             existing_calendar=kept_items,
+            calendar_gap_brief=_build_calendar_gap_brief(
+                existing_calendar=kept_items,
+                account_plan=account_plan,
+                missing_days=missing_days,
+            ),
             blocked_topics=blocked_items[-10:],
             missing_days=missing_days,
             run_context={"entity_type": "planning_project", "entity_id": project_id},
@@ -572,6 +677,117 @@ async def _apply_calendar_quality_guardrails(
         quality_notes_parts.append("已启用本地兜底补位，保证30天日历完整")
 
     return finalized_items, available_backup_pool, meta, "；".join(quality_notes_parts)
+
+
+async def _regenerate_selected_calendar_days(
+    *,
+    project,
+    client_data: dict,
+    account_plan: dict,
+    regenerate_days: list[int],
+    project_id: str,
+    db: AsyncSession,
+) -> tuple[list[dict], dict, str]:
+    existing_calendar = _normalize_content_calendar(project.content_calendar or [])
+    if len(existing_calendar) != 30:
+        raise ValueError("当前内容日历不足 30 条，暂不支持局部重生成，请先整批生成一次")
+
+    selected_days = sorted({day for day in regenerate_days if isinstance(day, int) and 1 <= day <= 30})
+    if not selected_days:
+        return existing_calendar, _normalize_calendar_generation_meta({}), ""
+
+    preserved_items = [dict(item) for item in existing_calendar if item.get("day") not in selected_days]
+    blocked_topics = [
+        {
+            "day": item.get("day"),
+            "title_direction": item.get("title_direction"),
+            "content_type": item.get("content_type"),
+            "content_pillar": item.get("content_pillar"),
+            "quality_flags": ["manual_regenerate"],
+        }
+        for item in existing_calendar
+        if item.get("day") in selected_days
+    ]
+
+    gap_fill_result = await ai_analysis_service.generate_calendar_gap_fill(
+        project_context={
+            "client_name": client_data.get("client_name"),
+            "industry": client_data.get("industry"),
+            "target_audience": client_data.get("target_audience"),
+            "ip_requirements": client_data.get("ip_requirements"),
+        },
+        account_plan=account_plan,
+        existing_calendar=preserved_items,
+        calendar_gap_brief=_build_calendar_gap_brief(
+            existing_calendar=preserved_items,
+            account_plan=account_plan,
+            missing_days=selected_days,
+        ),
+        blocked_topics=blocked_topics[-10:],
+        missing_days=selected_days,
+        run_context={"entity_type": "planning_project", "entity_id": project_id},
+        db=db,
+    )
+    if isinstance(gap_fill_result, dict) and gap_fill_result.get("error"):
+        raise ValueError(gap_fill_result["error"])
+
+    candidate_pool = _normalize_backup_topic_pool(gap_fill_result.get("items", []) if isinstance(gap_fill_result, dict) else [])
+    if len(candidate_pool) < len(selected_days):
+        candidate_pool.extend(
+            _build_local_calendar_fallback_pool(
+                client_data=client_data,
+                account_plan=account_plan,
+                existing_items=preserved_items,
+                missing_count=len(selected_days) - len(candidate_pool),
+            )
+        )
+
+    regenerated_items: list[dict] = []
+    for target_day in selected_days:
+        placeholder = _normalize_content_calendar_item({"day": target_day}, day_fallback=target_day)
+        replacement, replacement_index = _pick_backup_replacement(
+            placeholder,
+            candidate_pool,
+            preserved_items + regenerated_items,
+        )
+        if replacement is None:
+            for index, candidate in enumerate(candidate_pool):
+                if candidate.get("day") == target_day:
+                    replacement = candidate
+                    replacement_index = index
+                    break
+        if replacement is None and candidate_pool:
+            replacement = candidate_pool[0]
+            replacement_index = 0
+        if replacement is None:
+            raise ValueError(f"第 {target_day} 天未能生成可替换的新选题，请稍后重试")
+        chosen_replacement = candidate_pool.pop(replacement_index)
+        normalized_replacement = _convert_backup_topic_to_calendar_item(
+            {**chosen_replacement, "replacement_source_index": replacement_index},
+            placeholder,
+        )
+        normalized_replacement["replacement_source_index"] = replacement_index
+        normalized_replacement["quality_flags"] = _collect_calendar_quality_flags(normalized_replacement)
+        regenerated_items.append(normalized_replacement)
+
+    finalized_items = [
+        _normalize_content_calendar_item(item, day_fallback=item.get("day", index))
+        for index, item in enumerate(
+            sorted([*preserved_items, *regenerated_items], key=lambda item: int(item.get("day", 0))),
+            start=1,
+        )
+    ]
+    if len(finalized_items) != 30:
+        raise ValueError(f"局部重生成后日历数量异常，当前 {len(finalized_items)} 条")
+
+    meta = _normalize_calendar_generation_meta(
+        {
+            "backup_used_count": len(regenerated_items),
+            "regeneration_count": 1,
+        }
+    )
+    note = f"已保留 {len(preserved_items)} 条原日历，仅重生成 {len(regenerated_items)} 条选中内容"
+    return finalized_items, meta, note
 
 
 def _safe_text(value) -> str:
@@ -1426,6 +1642,7 @@ async def update_project(
 @router.post("/{project_id}/regenerate-calendar", summary="基于当前定位生成或重生成30天内容日历")
 async def regenerate_calendar(
     project_id: str,
+    payload: CalendarRegenerateRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_member_or_admin),
 ):
@@ -1438,6 +1655,7 @@ async def regenerate_calendar(
     if not project.account_plan:
         raise HTTPException(status_code=400, detail="账号策划尚未生成，无法单独生成日历")
     previous_status = project.status
+    selected_days = sorted({day for day in payload.regenerate_day_numbers if isinstance(day, int) and 1 <= day <= 30})
 
     # 仅更新状态，避免入队失败时丢失已有结果。
     project.status = "calendar_generating"
@@ -1462,9 +1680,12 @@ async def regenerate_calendar(
         isinstance(project.account_plan, dict) and isinstance(project.account_plan.get("performance_recap"), dict)
     )
     has_existing_calendar = bool(project.content_calendar) or bool(project.content_items)
-    calendar_task_title = "重生成日历" if has_existing_calendar else "生成日历"
+    is_partial_regenerate = has_existing_calendar and bool(selected_days)
+    calendar_task_title = "局部重生成日历" if is_partial_regenerate else ("重生成日历" if has_existing_calendar else "生成日历")
     queue_message = (
-        "30天日历生成任务已提交，AI 将结合最新复盘建议优化选题"
+        f"已提交局部重生成任务，将重写 Day {', '.join(str(day) for day in selected_days)}"
+        if is_partial_regenerate
+        else "30天日历生成任务已提交，AI 将结合最新复盘建议优化选题"
         if has_performance_recap
         else "30天日历生成任务已提交"
     )
@@ -1488,6 +1709,7 @@ async def regenerate_calendar(
             client_data,
             project.account_plan,
             task_key,
+            selected_days,
             job_id=task_key,
             description=f"planning calendar {project.id}",
         )
@@ -2203,23 +2425,30 @@ async def _generate_calendar_only_background(
     client_data: dict,
     account_plan: dict,
     task_key: str | None = None,
+    regenerate_day_numbers: list[int] | None = None,
 ):
     """后台任务：仅生成 30 天内容日历"""
     from app.models.db_session import AsyncSessionLocal
     async with AsyncSessionLocal() as db:
         resolved_task_key = task_key or f"planning:{project_id}:calendar"
         project = await planning_repository.get_by_id(db, project_id)
+        selected_days = sorted({day for day in (regenerate_day_numbers or []) if isinstance(day, int) and 1 <= day <= 30})
         has_existing_calendar = bool(project and (project.content_calendar or project.content_items))
+        is_partial_regenerate = has_existing_calendar and bool(selected_days)
         await task_center_repo.upsert_task(
             db,
             task_key=resolved_task_key,
             task_type="planning_calendar",
-            title=f"{'重生成日历' if has_existing_calendar else '生成日历'}：{project.client_name if project else project_id}",
+            title=f"{'局部重生成日历' if is_partial_regenerate else ('重生成日历' if has_existing_calendar else '生成日历')}：{project.client_name if project else project_id}",
             entity_type="planning_project",
             entity_id=project_id,
             status=TaskStatus.RUNNING.value,
             progress_step="start",
-            message="开始生成30天内容日历",
+            message=(
+                f"开始重生成 Day {', '.join(str(day) for day in selected_days)}"
+                if is_partial_regenerate
+                else "开始生成30天内容日历"
+            ),
         )
         await db.commit()
         try:
@@ -2242,37 +2471,55 @@ async def _generate_calendar_only_background(
                 status=TaskStatus.RUNNING.value,
                 progress_step="ai_generate",
                 message=(
+                    f"AI 正在重写 Day {', '.join(str(day) for day in selected_days)}"
+                    if is_partial_regenerate
+                    else
                     "AI 正在结合最新复盘建议生成新的 30 天日历"
                     if isinstance(account_plan, dict) and isinstance(account_plan.get("performance_recap"), dict)
                     else "AI 正在生成新的 30 天日历"
                 ),
             )
             await db.commit()
-            result = await ai_analysis_service.generate_content_calendar(
-                client_info=client_data,
-                account_plan=account_plan,
-                run_context={"entity_type": "planning_project", "entity_id": project_id},
-                db=db,
-            )
+            if is_partial_regenerate:
+                content_calendar, calendar_meta, quality_notes = await _regenerate_selected_calendar_days(
+                    project=project,
+                    client_data=client_data,
+                    account_plan=account_plan,
+                    regenerate_days=selected_days,
+                    project_id=project_id,
+                    db=db,
+                )
+            else:
+                result = await ai_analysis_service.generate_content_calendar(
+                    client_info=client_data,
+                    account_plan=account_plan,
+                    run_context={"entity_type": "planning_project", "entity_id": project_id},
+                    db=db,
+                )
 
-            if result.get("error"):
-                logger.error(f"日历重构: 项目 {project_id} AI 分析返回 error: {result['error']}")
-                raise Exception(result["error"])
+                if result.get("error"):
+                    logger.error(f"日历重构: 项目 {project_id} AI 分析返回 error: {result['error']}")
+                    raise Exception(result["error"])
+
+                if cancellation_registry.is_cancelled(project_id):
+                    return
+
+                content_calendar = _normalize_content_calendar(result.get("content_calendar", []))
+                if len(content_calendar) != 30:
+                    raise ValueError(f"内容日历输出数量异常，应为30条，实际 {len(content_calendar)} 条")
+                calendar_meta = {
+                    "blocked_count": 0,
+                    "backup_used_count": 0,
+                    "regeneration_count": 0,
+                }
+                quality_notes = ""
 
             if cancellation_registry.is_cancelled(project_id):
                 return
-
-            content_calendar = _normalize_content_calendar(result.get("content_calendar", []))
-            if len(content_calendar) != 30:
-                raise ValueError(f"内容日历输出数量异常，应为30条，实际 {len(content_calendar)} 条")
             persisted_account_plan = dict(account_plan or {})
             persisted_account_plan["backup_topic_pool"] = []
-            persisted_account_plan["calendar_generation_meta"] = {
-                "blocked_count": 0,
-                "backup_used_count": 0,
-                "regeneration_count": 0,
-            }
-            persisted_account_plan["quality_notes"] = ""
+            persisted_account_plan["calendar_generation_meta"] = calendar_meta
+            persisted_account_plan["quality_notes"] = quality_notes
 
             # 更新项目的 content_calendar 和状态为 completed
             await task_center_repo.update_status(
@@ -2280,13 +2527,18 @@ async def _generate_calendar_only_background(
                 resolved_task_key,
                 status=TaskStatus.RUNNING.value,
                 progress_step="persist",
-                message="正在写入新日历内容",
+                message="正在写入重生成结果",
             )
-            await planning_repository.delete_content_items_by_project(db, project_id)
             await planning_repository.update_plan_result(db, project_id, persisted_account_plan, content_calendar)
 
-            # 批量创建新的内容条目
-            for item_data in content_calendar:
+            if is_partial_regenerate:
+                await planning_repository.delete_content_items_by_days(db, project_id, selected_days)
+                content_items_to_create = [item for item in content_calendar if item.get("day") in selected_days]
+            else:
+                await planning_repository.delete_content_items_by_project(db, project_id)
+                content_items_to_create = content_calendar
+
+            for item_data in content_items_to_create:
                 await planning_repository.add_content_item(db, {
                     "project_id": project_id,
                     "day_number": item_data.get("day", 1),
@@ -2302,7 +2554,11 @@ async def _generate_calendar_only_background(
                 resolved_task_key,
                 status=TaskStatus.COMPLETED.value,
                 progress_step="done",
-                message=f"30天日历生成完成，共 {len(content_calendar)} 条内容",
+                message=(
+                    f"已重生成 {len(selected_days)} 条内容，其余日历已保留"
+                    if is_partial_regenerate
+                    else f"30天日历生成完成，共 {len(content_calendar)} 条内容"
+                ),
             )
             await db.commit()
 

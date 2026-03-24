@@ -513,6 +513,7 @@ def test_calendar_gap_fill_prompt_template_can_be_formatted() -> None:
         project_context="{}",
         account_plan_json="{}",
         existing_calendar_json="[]",
+        calendar_gap_brief="补足案例证明与承接转化",
         blocked_topics_json="[]",
         missing_days="1、2",
     )

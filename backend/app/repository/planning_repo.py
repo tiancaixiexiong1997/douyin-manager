@@ -153,6 +153,19 @@ class PlanningRepository:
         await db.execute(delete(ContentItem).where(ContentItem.project_id == project_id))
         await db.flush()
 
+    async def delete_content_items_by_days(self, db: AsyncSession, project_id: str, day_numbers: list[int]) -> None:
+        """删除项目下指定天数的内容条目"""
+        if not day_numbers:
+            return
+        from sqlalchemy import delete
+        await db.execute(
+            delete(ContentItem).where(
+                ContentItem.project_id == project_id,
+                ContentItem.day_number.in_(day_numbers),
+            )
+        )
+        await db.flush()
+
     async def delete(self, db: AsyncSession, project_id: str) -> bool:
         """删除策划项目（级联删除由数据库外键或 ORM 处理）"""
         project = await self.get_by_id(db, project_id)

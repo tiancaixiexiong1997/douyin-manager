@@ -71,8 +71,9 @@ def run_planning_calendar_generate(
     client_data: dict,
     account_plan: dict,
     task_key: str | None = None,
+    regenerate_day_numbers: Optional[list[int]] = None,
 ) -> None:
-    asyncio.run(_generate_calendar_only_background(project_id, client_data, account_plan, task_key))
+    asyncio.run(_generate_calendar_only_background(project_id, client_data, account_plan, task_key, regenerate_day_numbers))
 
 
 def run_script_extraction(

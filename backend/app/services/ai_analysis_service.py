@@ -1405,6 +1405,7 @@ class AIAnalysisService:
         project_context: dict,
         account_plan: dict,
         existing_calendar: list[dict],
+        calendar_gap_brief: str,
         blocked_topics: list[dict],
         missing_days: list[int],
         run_context: Optional[dict] = None,
@@ -1427,6 +1428,7 @@ class AIAnalysisService:
             project_context=json.dumps(project_context, ensure_ascii=False, indent=2)[:3000],
             account_plan_json=json.dumps(account_plan, ensure_ascii=False, indent=2)[:6000],
             existing_calendar_json=json.dumps(existing_calendar, ensure_ascii=False, indent=2)[:7000],
+            calendar_gap_brief=calendar_gap_brief[:2500] if calendar_gap_brief else "暂无明确缺口提示，优先补足与已保留条目不同的角度与结构。",
             blocked_topics_json=json.dumps(blocked_topics, ensure_ascii=False, indent=2)[:4000],
             missing_days="、".join(str(day) for day in missing_days),
         )

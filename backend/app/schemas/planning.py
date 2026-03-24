@@ -78,6 +78,11 @@ class PlanningUpdateRequest(BaseModel):
     account_plan: Optional[dict] = None  # 支持直接更新账号定位方案
 
 
+class CalendarRegenerateRequest(BaseModel):
+    """重新生成日历请求"""
+    regenerate_day_numbers: list[int] = Field(default_factory=list)
+
+
 class ContentItemResponse(BaseModel):
     """内容条目响应"""
     id: str

@@ -54,6 +54,42 @@ def test_normalize_content_calendar_item_derives_schedule_labels_for_legacy_data
     assert item["batch_shoot_group"] == "办公室口播组"
 
 
+def test_build_calendar_gap_brief_highlights_missing_pillars_and_groups() -> None:
+    brief = planning_endpoint._build_calendar_gap_brief(
+        existing_calendar=[
+            {
+                "day": 1,
+                "title_direction": "旧题1",
+                "content_pillar": "专业干货",
+                "content_role": "主验证",
+                "schedule_group": "办公室口播组",
+            },
+            {
+                "day": 2,
+                "title_direction": "旧题2",
+                "content_pillar": "专业干货",
+                "content_role": "主验证",
+                "schedule_group": "办公室口播组",
+            },
+        ],
+        account_plan={
+            "account_positioning": {
+                "content_pillars": [
+                    {"name": "专业干货", "ratio": "50%"},
+                    {"name": "案例证明", "ratio": "30%"},
+                    {"name": "转化引导", "ratio": "20%"},
+                ]
+            }
+        },
+        missing_days=[3, 4],
+    )
+
+    assert "案例证明" in brief
+    assert "转化引导" in brief
+    assert "办公室口播组" in brief
+    assert "最近保留的条目有：旧题1；旧题2" in brief
+
+
 @pytest.mark.asyncio
 async def test_apply_calendar_quality_guardrails_uses_backup_pool_to_keep_30(monkeypatch: pytest.MonkeyPatch) -> None:
     raw_calendar = [
@@ -100,6 +136,62 @@ async def test_apply_calendar_quality_guardrails_uses_backup_pool_to_keep_30(mon
     assert meta["blocked_count"] == 1
     assert meta["backup_used_count"] == 1
     assert "已拦截 1 条低传播选题" in notes
+
+
+@pytest.mark.asyncio
+async def test_regenerate_selected_calendar_days_preserves_unselected_items(monkeypatch: pytest.MonkeyPatch) -> None:
+    project = type(
+        "Project",
+        (),
+        {
+            "content_calendar": [
+                {
+                    "day": day,
+                    "title_direction": f"旧日历第{day}天",
+                    "content_type": "口播+画中画",
+                }
+                for day in range(1, 31)
+            ]
+        },
+    )()
+
+    async def fake_gap_fill(**_kwargs):
+        return {
+            "items": [
+                {
+                    "day": 2,
+                    "title_direction": "新题-第2天",
+                    "content_type": "口播+画中画",
+                    "schedule_group": "上午办公室口播",
+                },
+                {
+                    "day": 5,
+                    "title_direction": "新题-第5天",
+                    "content_type": "教程",
+                    "schedule_group": "下午案例讲解",
+                },
+            ]
+        }
+
+    monkeypatch.setattr(planning_endpoint.ai_analysis_service, "generate_calendar_gap_fill", fake_gap_fill)
+
+    calendar, meta, note = await planning_endpoint._regenerate_selected_calendar_days(
+        project=project,
+        client_data={"client_name": "测试账号", "industry": "本地生活"},
+        account_plan={"account_positioning": {"core_identity": "测试定位"}},
+        regenerate_days=[2, 5],
+        project_id="project-keep",
+        db=None,
+    )
+
+    assert len(calendar) == 30
+    assert calendar[1]["title_direction"] == "新题-第2天"
+    assert calendar[4]["title_direction"] == "新题-第5天"
+    assert calendar[0]["title_direction"] == "旧日历第1天"
+    assert calendar[2]["title_direction"] == "旧日历第3天"
+    assert meta["regeneration_count"] == 1
+    assert meta["backup_used_count"] == 2
+    assert "仅重生成 2 条选中内容" in note
 
 
 @pytest.mark.asyncio

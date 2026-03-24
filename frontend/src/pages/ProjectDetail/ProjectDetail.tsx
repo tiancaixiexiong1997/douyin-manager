@@ -1231,6 +1231,7 @@ export default function ProjectDetail() {
   const [showEditProject, setShowEditProject] = useState(false);
   const [showEditPlan, setShowEditPlan] = useState(false);
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
+  const [regenerateSelectedDays, setRegenerateSelectedDays] = useState<number[]>([]);
   const [showPerformanceModal, setShowPerformanceModal] = useState(false);
   const [editingPerformance, setEditingPerformance] = useState<ContentPerformance | null>(null);
   const [calendarFilter, setCalendarFilter] = useState<string>('all');
@@ -1243,9 +1244,10 @@ export default function ProjectDetail() {
   });
 
   const regenerateCalendarMutation = useMutation({
-    mutationFn: () => planningApi.regenerateCalendar(id!),
+    mutationFn: (dayNumbers: number[]) => planningApi.regenerateCalendar(id!, { regenerate_day_numbers: dayNumbers }),
     onSuccess: () => {
       setShowRegenerateConfirm(false);
+      setRegenerateSelectedDays([]);
       qc.invalidateQueries({ queryKey: ['project', id] });
     },
   });
@@ -1403,6 +1405,19 @@ export default function ProjectDetail() {
     '后续生成单条脚本时，也会继续参考这些 IP 的开头节奏、表达习惯和镜头组织方式，但脚本会按你当前项目的定位重新写。',
     '如果后面你更换或减少参考 IP，重新生成策划和日历后，下面这套方案也会跟着变化。',
   ];
+  const allCalendarDays = calendarDisplayItems.map((item) => item.day_number);
+  const preservedDayCount = Math.max(0, calendarDisplayItems.length - regenerateSelectedDays.length);
+
+  const openRegenerateModal = () => {
+    setRegenerateSelectedDays(allCalendarDays);
+    setShowRegenerateConfirm(true);
+  };
+
+  const toggleRegenerateDay = (dayNumber: number) => {
+    setRegenerateSelectedDays((prev) =>
+      prev.includes(dayNumber) ? prev.filter((day) => day !== dayNumber) : [...prev, dayNumber].sort((a, b) => a - b)
+    );
+  };
 
   return (
     <div className="project-detail-page animate-fade-in">
@@ -1452,7 +1467,7 @@ export default function ProjectDetail() {
             </button>
           )}
           {(currentStage === 'strategy_completed' || (hasStrategy && !hasCalendar && currentStage !== 'calendar_generating')) && (
-            <button className="btn btn-primary btn-sm" onClick={() => regenerateCalendarMutation.mutate()} disabled={regenerateCalendarMutation.isPending}>
+            <button className="btn btn-primary btn-sm" onClick={() => regenerateCalendarMutation.mutate([])} disabled={regenerateCalendarMutation.isPending}>
               <Calendar size={13} /> {regenerateCalendarMutation.isPending ? '生成中...' : '生成30天日历'}
             </button>
           )}
@@ -1664,7 +1679,7 @@ export default function ProjectDetail() {
             {currentStage !== 'strategy_generating' && currentStage !== 'calendar_generating' && hasCalendar && (
               <button
                 className="btn btn-ghost btn-sm"
-                onClick={() => setShowRegenerateConfirm(true)}
+                onClick={openRegenerateModal}
               >
                 <RefreshCw size={13} /> 重新生成日历
               </button>
@@ -2176,16 +2191,63 @@ export default function ProjectDetail() {
             </div>
             <div className="p-4 flex flex-col gap-3 regenerate-modal-body">
               <div className="regenerate-tip">
-                确定要根据当前的<strong>【最新账号定位与策略】</strong>{performanceRecap ? '和【最新AI复盘建议】' : ''}重新生成 30 天内容日历吗？
+                选择要重生成的日期块。<strong>勾选的条目会被重写</strong>，未勾选的会原样保留。
               </div>
               <div className="regenerate-note">
                 注意：
                 <ul>
-                  <li>原有的所有内容日历规划均会被覆盖</li>
-                  <li>如果某个原有日历已经生成了具体角本，数据也会一起丢失</li>
+                  <li>仅勾选的条目会被替换，未勾选的日历、脚本和数据关联会保留</li>
+                  <li>如果勾选的某条已经生成了脚本，旧脚本会被新条目替换</li>
                   {performanceRecap && <li>本次将优先参考最新 AI 复盘里的有效模式、优化重点和下一批选题方向</li>}
                 </ul>
               </div>
+              {calendarDisplayItems.length > 0 && (
+                <>
+                  <div className="regenerate-selection-toolbar">
+                    <div className="regenerate-selection-summary">
+                      已选 {regenerateSelectedDays.length} 条重生成，保留 {preservedDayCount} 条
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        type="button"
+                        onClick={() => setRegenerateSelectedDays(allCalendarDays)}
+                        disabled={regenerateCalendarMutation.isPending}
+                      >
+                        全选重生成
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        type="button"
+                        onClick={() => setRegenerateSelectedDays([])}
+                        disabled={regenerateCalendarMutation.isPending}
+                      >
+                        全部保留
+                      </button>
+                    </div>
+                  </div>
+                  <div className="regenerate-selection-grid">
+                    {calendarDisplayItems.map((item) => {
+                      const checked = regenerateSelectedDays.includes(item.day_number);
+                      return (
+                        <label
+                          key={item.id}
+                          className={`regenerate-selection-card ${checked ? 'is-selected' : ''}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleRegenerateDay(item.day_number)}
+                            disabled={regenerateCalendarMutation.isPending}
+                          />
+                          <span className="regenerate-selection-day">Day {item.day_number}</span>
+                          <span className="regenerate-selection-title">{item.title_direction}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
               {regenerateCalendarMutation.isError && (
                 <div className="error-tip">{(regenerateCalendarMutation.error as Error).message}</div>
               )}
@@ -2200,13 +2262,19 @@ export default function ProjectDetail() {
               </button>
               <button
                 className="btn btn-primary"
-                onClick={() => regenerateCalendarMutation.mutate()}
+                onClick={() => {
+                  if (calendarDisplayItems.length > 0 && regenerateSelectedDays.length === 0) {
+                    notifyInfo('至少勾选 1 条需要重生成的内容');
+                    return;
+                  }
+                  regenerateCalendarMutation.mutate(regenerateSelectedDays);
+                }}
                 disabled={regenerateCalendarMutation.isPending}
               >
                 {regenerateCalendarMutation.isPending ? (
                   <><Loader2 size={14} className="spin-icon" /> 生成中...</>
                 ) : (
-                  <><RefreshCw size={14} /> 确认覆盖并生成</>
+                  <><RefreshCw size={14} /> 确认重生成选中条目</>
                 )}
               </button>
             </div>

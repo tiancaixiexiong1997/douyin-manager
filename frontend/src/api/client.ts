@@ -544,6 +544,10 @@ export interface ContentItemUpdateRequest {
   full_script?: VideoScript;
 }
 
+export interface CalendarRegenerateRequest {
+  regenerate_day_numbers: number[];
+}
+
 export interface VideoScript {
   title_options?: string[];
   hook_script?: string;
@@ -741,8 +745,8 @@ export const planningApi = {
     api.post(`/planning/${id}/retry`),
 
   /** 单独重新生成 30 天内容日历 */
-  regenerateCalendar: (id: string): Promise<{ message: string; status: string }> =>
-    api.post(`/planning/${id}/regenerate-calendar`),
+  regenerateCalendar: (id: string, data: CalendarRegenerateRequest): Promise<{ message: string; status: string }> =>
+    api.post(`/planning/${id}/regenerate-calendar`, data),
 
   /** 为内容条目生成脚本 */
   generateScript: (contentItemId: string, bloggerIds?: string[]): Promise<{ script: VideoScript }> =>
