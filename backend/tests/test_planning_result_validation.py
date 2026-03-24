@@ -34,7 +34,7 @@ def test_collect_calendar_quality_flags_detects_low_quality_self_indulgent_topic
     assert "too_poetic" in flags
 
 
-def test_normalize_content_calendar_item_derives_production_labels_for_legacy_data() -> None:
+def test_normalize_content_calendar_item_derives_schedule_labels_for_legacy_data() -> None:
     item = planning_endpoint._normalize_content_calendar_item(
         {
             "day": 1,
@@ -44,11 +44,14 @@ def test_normalize_content_calendar_item_derives_production_labels_for_legacy_da
         day_fallback=1,
     )
 
-    assert item["production_mode"] == "批量A"
-    assert item["production_type"] == "批量-口播连拍"
-    assert "同场景" in item["production_reason"]
+    assert item["shoot_format"] == "口播"
+    assert item["talent_requirement"] == "IP单人出镜"
+    assert item["shoot_scene"] == "办公室"
+    assert item["estimated_duration"] == "15分钟内"
+    assert item["prep_requirement"] == "需提词器"
+    assert item["schedule_group"] == "办公室口播组"
     assert item["is_batch_shootable"] is True
-    assert item["batch_shoot_group"] == "口播连拍"
+    assert item["batch_shoot_group"] == "办公室口播组"
 
 
 @pytest.mark.asyncio

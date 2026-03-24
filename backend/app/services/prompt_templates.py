@@ -223,10 +223,9 @@ CONTENT_CALENDAR_PROMPT_TEMPLATE = (
     "- content_calendar 必须严格输出第1天到第30天，共30条，不得缺天、不得截断\n"
     "- 每条必须具体到一个可拍的选题，不要空泛方向词\n"
     "- 每条都要回答：陌生用户为什么会停下来继续看\n"
-    "- 必须区分前10条主验证题，并给出批量拍摄分组\n"
-    "- 每条都要判断 production_mode；它不是在评估题目价值，而是在判断能否共用同一套拍摄条件\n"
-    "- production_mode 只能使用：批量A / 批量B / 半批量 / 单条拍 / 实时\n"
-    "- production_reason 必须写清依据，优先说明：是否同场景、同机位、同结构，是否依赖当天状态\n"
+    "- 必须区分前10条主验证题，并补齐编导排期标签：shoot_format / talent_requirement / shoot_scene / estimated_duration / prep_requirement / schedule_group\n"
+    "- 这30条默认都按可集中排期内容来写，不要输出“不可批量拍”“实时内容优先”等判断型标签\n"
+    "- schedule_group 不是内容支柱，而是帮助编导把同一时间段可连拍的内容归成一组，如：上午办公室口播 / 下午案例讲解 / 门店实拍一组\n"
     "- 每条必须同时包含：具体对象 + 具体场景 + 具体问题/动作/差异/结果 + 明确观看回报\n"
     "- 不能只写“她们/大家/很多人”，必须尽量写清身份、人群、时段、地点、动作中的至少两个信息点\n\n"
     "# 明确禁止输出的内容\n"
@@ -285,11 +284,12 @@ CONTENT_CALENDAR_PROMPT_TEMPLATE = (
     '      "priority": "P0-主验证/P1-稳定输出/P2-补充储备",\n'
     '      "content_role": "主验证/稳定输出/流量放大/信任建立/承接转化/补充试错",\n'
     '      "is_main_validation": true,\n'
-    '      "production_mode": "批量A/批量B/半批量/单条拍/实时",\n'
-    '      "production_type": "批量-口播连拍/批量-教程演示/半批量-外拍探店/单条拍-定制执行/实时-跟拍记录",\n'
-    '      "production_reason": "判断依据，如同场景同机位同结构，可一次连拍5条以上",\n'
-    '      "is_batch_shootable": true,\n'
-    '      "batch_shoot_group": "适合同天集中拍摄的分组名，如口播连拍-避坑清单"\n'
+    '      "shoot_format": "口播/演示/对谈/情景化口播/跟拍/实拍讲解",\n'
+    '      "talent_requirement": "IP单人出镜/IP+客户/IP配助理/仅IP配音",\n'
+    '      "shoot_scene": "办公室/门店现场/咨询室/演示区等具体拍摄场景",\n'
+    '      "estimated_duration": "5分钟内/15分钟内/30分钟内",\n'
+    '      "prep_requirement": "无准备/需提词器/需案例素材/需道具/需现场配合/需流程提纲",\n'
+    '      "schedule_group": "编导排期分组，如上午办公室口播/下午案例讲解/门店实拍一组"\n'
     '    }}\n'
     '  ]\n'
     "}}\n\n"
@@ -327,10 +327,12 @@ CALENDAR_GAP_FILL_PROMPT_TEMPLATE = (
     '      "content_pillar": "所属内容支柱名称",\n'
     '      "key_message": "这条视频要让观众记住的一句话核心信息",\n'
     '      "tags": ["话题标签1", "话题标签2", "话题标签3"],\n'
-    '      "production_mode": "批量A/批量B/半批量/单条拍/实时",\n'
-    '      "production_type": "批量-口播连拍/批量-教程演示/半批量-外拍探店/单条拍-定制执行/实时-跟拍记录",\n'
-    '      "production_reason": "判断依据，如同场景同机位同结构，可一次连拍5条以上",\n'
-    '      "batch_shoot_group": "建议归属的拍摄分组",\n'
+    '      "shoot_format": "口播/演示/对谈/情景化口播/跟拍/实拍讲解",\n'
+    '      "talent_requirement": "IP单人出镜/IP+客户/IP配助理/仅IP配音",\n'
+    '      "shoot_scene": "办公室/门店现场/咨询室/演示区等具体拍摄场景",\n'
+    '      "estimated_duration": "5分钟内/15分钟内/30分钟内",\n'
+    '      "prep_requirement": "无准备/需提词器/需案例素材/需道具/需现场配合/需流程提纲",\n'
+    '      "schedule_group": "建议归属的编导排期分组",\n'
     '      "replacement_hint": "这条在替换时解决了哪类低质问题"\n'
     "    }}\n"
     "  ]\n"

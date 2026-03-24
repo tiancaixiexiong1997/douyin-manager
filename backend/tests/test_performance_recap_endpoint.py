@@ -278,11 +278,14 @@ async def test_import_next_topic_batch_item_appends_content_calendar(client: Asy
     assert project.content_calendar[-1]["priority"] == "P2-补充储备"
     assert project.content_calendar[-1]["content_role"] == "补充试错"
     assert project.content_calendar[-1]["is_main_validation"] is False
-    assert project.content_calendar[-1]["production_mode"] == "批量A"
-    assert project.content_calendar[-1]["production_type"] == "批量-口播连拍"
-    assert "同场景" in project.content_calendar[-1]["production_reason"]
+    assert project.content_calendar[-1]["shoot_format"] == "口播"
+    assert project.content_calendar[-1]["talent_requirement"] == "IP单人出镜"
+    assert project.content_calendar[-1]["shoot_scene"] == "办公室"
+    assert project.content_calendar[-1]["estimated_duration"] == "15分钟内"
+    assert project.content_calendar[-1]["prep_requirement"] == "需提词器"
+    assert project.content_calendar[-1]["schedule_group"] == "办公室口播组"
     assert project.content_calendar[-1]["is_batch_shootable"] is True
-    assert project.content_calendar[-1]["batch_shoot_group"] == "口播连拍"
+    assert project.content_calendar[-1]["batch_shoot_group"] == "办公室口播组"
     assert project.account_plan["next_topic_batch"]["items"][0]["imported_day_number"] == 31
 
 

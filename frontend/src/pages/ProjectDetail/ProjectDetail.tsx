@@ -12,7 +12,7 @@ import './ProjectDetail.css';
 
 type ScriptTaskStatus = TaskCenterItem['status'] | null;
 type CalendarDisplayItem = ContentItem & { calendarMeta?: ContentCalendarItem | null };
-const PRODUCTION_MODE_FILTER_PREFIX = 'production_mode:';
+const SCHEDULE_GROUP_FILTER_PREFIX = 'schedule_group:';
 type ProjectStage = 'draft' | 'strategy_generating' | 'strategy_completed' | 'calendar_generating' | 'completed';
 
 function inferProjectStage(project: {
@@ -49,148 +49,100 @@ function normalizeCalendarContentType(value?: string | null): string {
 
 function deriveCalendarBatchGroup(contentType?: string | null): string {
   const text = normalizeCalendarContentType(contentType);
-  if (text.includes('口播') || text.includes('画中画')) return '口播连拍';
-  if (text.includes('教程')) return '教程演示';
-  if (text.includes('测评')) return '测评连拍';
-  if (text.includes('探店') || text.includes('实拍')) return '外拍探店';
-  if (text.includes('Vlog') || text.includes('跟拍')) return '跟拍纪实';
-  return '混合拍摄';
+  if (text.includes('口播') || text.includes('画中画')) return '办公室口播组';
+  if (text.includes('教程')) return '教程演示组';
+  if (text.includes('测评')) return '测评演示组';
+  if (text.includes('探店') || text.includes('实拍')) return '门店实拍组';
+  if (text.includes('Vlog') || text.includes('跟拍')) return '门店跟拍组';
+  return '办公室口播组';
 }
 
-function normalizeProductionMode(value?: string | null): string {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-  const compact = raw.toLowerCase().replace(/\s+/g, '');
-  const aliases: Record<string, string> = {
-    '批量a': '批量A',
-    a: '批量A',
-    batcha: '批量A',
-    '批量b': '批量B',
-    b: '批量B',
-    batchb: '批量B',
-    '半批量': '半批量',
-    semibatch: '半批量',
-    single: '单条拍',
-    '单条拍': '单条拍',
-    '单条': '单条拍',
-    '实时': '实时',
-    '实时内容': '实时',
-    realtime: '实时',
-  };
-  return aliases[compact] || (['批量A', '批量B', '半批量', '单条拍', '实时'].includes(raw) ? raw : '');
-}
-
-function deriveProductionProfile(contentType?: string | null): { mode: string; type: string; reason: string; group: string } {
+function deriveScheduleMeta(contentType?: string | null): {
+  shootFormat: string;
+  talentRequirement: string;
+  shootScene: string;
+  estimatedDuration: string;
+  prepRequirement: string;
+  scheduleGroup: string;
+} {
   const text = normalizeCalendarContentType(contentType);
   if (text.includes('口播') || text.includes('画中画')) {
     return {
-      mode: '批量A',
-      type: '批量-口播连拍',
-      reason: '同场景、同机位、同结构，可一次连拍 5 条以上',
-      group: '口播连拍',
+      shootFormat: '口播',
+      talentRequirement: 'IP单人出镜',
+      shootScene: '办公室',
+      estimatedDuration: '15分钟内',
+      prepRequirement: '需提词器',
+      scheduleGroup: '办公室口播组',
     };
   }
   if (text.includes('教程')) {
     return {
-      mode: '批量B',
-      type: '批量-教程演示',
-      reason: '核心结构一致，少量换案例或道具，可一次连拍 3 条以上',
-      group: '教程演示',
+      shootFormat: '演示',
+      talentRequirement: 'IP单人出镜',
+      shootScene: '演示区',
+      estimatedDuration: '15分钟内',
+      prepRequirement: '需道具',
+      scheduleGroup: '教程演示组',
     };
   }
   if (text.includes('测评')) {
     return {
-      mode: '批量B',
-      type: '批量-测评对比',
-      reason: '同机位同布光，可连续更换产品或案例集中拍摄',
-      group: '测评连拍',
+      shootFormat: '演示',
+      talentRequirement: 'IP单人出镜',
+      shootScene: '产品展示区',
+      estimatedDuration: '15分钟内',
+      prepRequirement: '需道具',
+      scheduleGroup: '测评演示组',
     };
   }
   if (text.includes('探店') || text.includes('实拍')) {
     return {
-      mode: '半批量',
-      type: '半批量-外拍探店',
-      reason: '可以集中外拍，但需要切换点位、环境镜头或现场素材',
-      group: '外拍探店',
+      shootFormat: '实拍讲解',
+      talentRequirement: 'IP单人出镜',
+      shootScene: '门店现场',
+      estimatedDuration: '30分钟内',
+      prepRequirement: '需现场配合',
+      scheduleGroup: '门店实拍组',
     };
   }
   if (text.includes('Vlog') || text.includes('跟拍')) {
     return {
-      mode: '实时',
-      type: '实时-跟拍记录',
-      reason: '依赖当天人物状态、事件进程或现场氛围，更适合当天现拍',
-      group: '跟拍纪实',
+      shootFormat: '跟拍',
+      talentRequirement: 'IP单人出镜',
+      shootScene: '门店现场',
+      estimatedDuration: '30分钟内',
+      prepRequirement: '需流程提纲',
+      scheduleGroup: '门店跟拍组',
     };
   }
   return {
-    mode: '单条拍',
-    type: '单条拍-定制执行',
-    reason: '拍摄条件切换较多，建议按单条脚本单独安排',
-    group: '混合拍摄',
+    shootFormat: '口播',
+    talentRequirement: 'IP单人出镜',
+    shootScene: '办公室',
+    estimatedDuration: '15分钟内',
+    prepRequirement: '需提词器',
+    scheduleGroup: '办公室口播组',
   };
 }
 
-function deriveProductionType(mode: string, contentType?: string | null): string {
-  const profile = deriveProductionProfile(contentType);
-  if (mode === profile.mode) return profile.type;
-  const fallback: Record<string, string> = {
-    批量A: '批量-高复用连拍',
-    批量B: '批量-结构化拍摄',
-    半批量: '半批量-换场景拍摄',
-    单条拍: '单条拍-定制执行',
-    实时: '实时-现场记录',
-  };
-  return fallback[mode] || profile.type;
-}
-
-function deriveProductionReason(mode: string, contentType?: string | null): string {
-  const profile = deriveProductionProfile(contentType);
-  if (mode === profile.mode) return profile.reason;
-  const fallback: Record<string, string> = {
-    批量A: '同场景、同机位、同结构，可一次连拍 5 条以上',
-    批量B: '核心结构一致，少量换案例或道具，可一次连拍 3 条以上',
-    半批量: '可以集中拍，但需要切换场景、机位或补素材',
-    单条拍: '依赖单独脚本或拍摄设置，切换成本高，建议单条安排',
-    实时: '依赖当天事件、人物状态或现场进程，更适合当天现拍',
-  };
-  return fallback[mode] || profile.reason;
-}
-
-function getCalendarProductionMeta(item: CalendarDisplayItem): { mode: string; type: string; reason: string; group: string; batchShootable: boolean } {
-  const profile = deriveProductionProfile(item.calendarMeta?.content_type || item.content_type);
-  const explicitMode = normalizeProductionMode(item.calendarMeta?.production_mode);
-  const explicitBatchShootable = typeof item.calendarMeta?.is_batch_shootable === 'boolean' ? item.calendarMeta.is_batch_shootable : null;
-
-  let mode = explicitMode;
-  if (!mode) {
-    if (explicitBatchShootable === true) {
-      mode = ['批量A', '批量B'].includes(profile.mode) ? profile.mode : '批量B';
-    } else if (explicitBatchShootable === false) {
-      mode = ['半批量', '实时'].includes(profile.mode) ? profile.mode : '单条拍';
-    } else {
-      mode = profile.mode;
-    }
-  }
-
+function getCalendarScheduleMeta(item: CalendarDisplayItem): {
+  shootFormat: string;
+  talentRequirement: string;
+  shootScene: string;
+  estimatedDuration: string;
+  prepRequirement: string;
+  scheduleGroup: string;
+} {
+  const profile = deriveScheduleMeta(item.calendarMeta?.content_type || item.content_type);
   return {
-    mode,
-    type: item.calendarMeta?.production_type?.trim() || deriveProductionType(mode, item.calendarMeta?.content_type || item.content_type),
-    reason: item.calendarMeta?.production_reason?.trim() || deriveProductionReason(mode, item.calendarMeta?.content_type || item.content_type),
-    group: item.calendarMeta?.batch_shoot_group?.trim() || profile.group || deriveCalendarBatchGroup(item.calendarMeta?.content_type || item.content_type),
-    batchShootable: explicitBatchShootable ?? ['批量A', '批量B'].includes(mode),
+    shootFormat: item.calendarMeta?.shoot_format?.trim() || profile.shootFormat,
+    talentRequirement: item.calendarMeta?.talent_requirement?.trim() || profile.talentRequirement,
+    shootScene: item.calendarMeta?.shoot_scene?.trim() || profile.shootScene,
+    estimatedDuration: item.calendarMeta?.estimated_duration?.trim() || profile.estimatedDuration,
+    prepRequirement: item.calendarMeta?.prep_requirement?.trim() || profile.prepRequirement,
+    scheduleGroup: item.calendarMeta?.schedule_group?.trim() || item.calendarMeta?.batch_shoot_group?.trim() || profile.scheduleGroup || deriveCalendarBatchGroup(item.calendarMeta?.content_type || item.content_type),
   };
-}
-
-function getCalendarProductionBadgeClass(mode: string): string {
-  if (mode === '批量A') return 'badge-green';
-  if (mode === '批量B') return 'badge-purple';
-  if (mode === '半批量') return 'badge-yellow';
-  if (mode === '实时') return 'badge-red';
-  return 'badge-blue';
-}
-
-function isCalendarBatchShootable(item: CalendarDisplayItem): boolean {
-  return getCalendarProductionMeta(item).batchShootable;
 }
 
 function formatMetricNumber(value?: number | null): string {
@@ -1421,21 +1373,19 @@ export default function ProjectDetail() {
     }))
     .sort((a, b) => a.day_number - b.day_number);
   const mainValidationCount = calendarDisplayItems.filter((item) => item.calendarMeta?.is_main_validation).length;
-  const batchShootableCount = calendarDisplayItems.filter((item) => isCalendarBatchShootable(item)).length;
-  const productionModeEntries = Array.from(
+  const scheduleGroupEntries = Array.from(
     calendarDisplayItems.reduce((map, item) => {
-      const mode = getCalendarProductionMeta(item).mode;
-      if (!mode) return map;
-      map.set(mode, (map.get(mode) || 0) + 1);
+      const group = getCalendarScheduleMeta(item).scheduleGroup;
+      if (!group) return map;
+      map.set(group, (map.get(group) || 0) + 1);
       return map;
     }, new Map<string, number>()),
   );
   const filteredCalendarItems = calendarDisplayItems.filter((item) => {
     if (calendarFilter === 'all') return true;
     if (calendarFilter === 'main_validation') return Boolean(item.calendarMeta?.is_main_validation);
-    if (calendarFilter === 'batch_shootable') return isCalendarBatchShootable(item);
-    if (calendarFilter.startsWith(PRODUCTION_MODE_FILTER_PREFIX)) {
-      return getCalendarProductionMeta(item).mode === calendarFilter.slice(PRODUCTION_MODE_FILTER_PREFIX.length);
+    if (calendarFilter.startsWith(SCHEDULE_GROUP_FILTER_PREFIX)) {
+      return getCalendarScheduleMeta(item).scheduleGroup === calendarFilter.slice(SCHEDULE_GROUP_FILTER_PREFIX.length);
     }
     return true;
   });
@@ -1746,24 +1696,16 @@ export default function ProjectDetail() {
                   <span className="calendar-summary-label">主验证题</span>
                   <strong>{mainValidationCount}</strong>
                 </button>
-                <button
-                  type="button"
-                  className={`calendar-summary-pill ${calendarFilter === 'batch_shootable' ? 'is-active' : ''}`}
-                  onClick={() => setCalendarFilter('batch_shootable')}
-                >
-                  <span className="calendar-summary-label">可批量拍</span>
-                  <strong>{batchShootableCount}</strong>
-                </button>
-                {productionModeEntries.map(([mode, count]) => {
-                  const filterKey = `${PRODUCTION_MODE_FILTER_PREFIX}${mode}`;
+                {scheduleGroupEntries.map(([group, count]) => {
+                  const filterKey = `${SCHEDULE_GROUP_FILTER_PREFIX}${group}`;
                   return (
                     <button
-                      key={mode}
+                      key={group}
                       type="button"
                       className={`calendar-summary-pill ${calendarFilter === filterKey ? 'is-active' : ''}`}
                       onClick={() => setCalendarFilter(filterKey)}
                     >
-                      <span className="calendar-summary-label">{mode}</span>
+                      <span className="calendar-summary-label">{group}</span>
                       <strong>{count}</strong>
                     </button>
                   );
@@ -1773,7 +1715,7 @@ export default function ProjectDetail() {
             {filteredCalendarItems.length > 0 ? (
             <div className="calendar-grid">
             {filteredCalendarItems.map(item => {
-                const productionMeta = getCalendarProductionMeta(item);
+                const scheduleMeta = getCalendarScheduleMeta(item);
                 return (
                 <div
                   key={item.id}
@@ -1833,8 +1775,8 @@ export default function ProjectDetail() {
                         {item.calendarMeta?.content_role ? (
                           <span className="badge badge-blue calendar-role-badge">{item.calendarMeta.content_role}</span>
                         ) : null}
-                        <span className={`badge calendar-production-badge ${getCalendarProductionBadgeClass(productionMeta.mode)}`}>
-                          {productionMeta.mode}
+                        <span className="badge badge-purple calendar-production-badge">
+                          {scheduleMeta.shootFormat}
                         </span>
                       </div>
                       <div className="calendar-meta">
@@ -1850,16 +1792,24 @@ export default function ProjectDetail() {
                         )}
                       </div>
                       <div className="calendar-extra-line">
-                        <span className="calendar-extra-label">生产标签</span>
-                        <span className="calendar-extra-value">{productionMeta.type}</span>
+                        <span className="calendar-extra-label">出镜要求</span>
+                        <span className="calendar-extra-value">{scheduleMeta.talentRequirement}</span>
                       </div>
                       <div className="calendar-extra-line">
-                        <span className="calendar-extra-label">判断依据</span>
-                        <span className="calendar-extra-value">{productionMeta.reason}</span>
+                        <span className="calendar-extra-label">拍摄场景</span>
+                        <span className="calendar-extra-value">{scheduleMeta.shootScene}</span>
                       </div>
                       <div className="calendar-extra-line">
-                        <span className="calendar-extra-label">拍摄分组</span>
-                        <span className="calendar-extra-value">{productionMeta.group}</span>
+                        <span className="calendar-extra-label">预计时长</span>
+                        <span className="calendar-extra-value">{scheduleMeta.estimatedDuration}</span>
+                      </div>
+                      <div className="calendar-extra-line">
+                        <span className="calendar-extra-label">准备成本</span>
+                        <span className="calendar-extra-value">{scheduleMeta.prepRequirement}</span>
+                      </div>
+                      <div className="calendar-extra-line">
+                        <span className="calendar-extra-label">排期分组</span>
+                        <span className="calendar-extra-value">{scheduleMeta.scheduleGroup}</span>
                       </div>
                       {item.calendarMeta?.replacement_hint ? (
                         <div className="calendar-extra-line calendar-extra-note">

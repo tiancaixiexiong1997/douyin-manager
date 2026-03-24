@@ -516,9 +516,12 @@ export interface ContentCalendarItem {
   priority?: string;
   content_role?: string;
   is_main_validation?: boolean;
-  production_mode?: string;
-  production_type?: string;
-  production_reason?: string;
+  shoot_format?: string;
+  talent_requirement?: string;
+  shoot_scene?: string;
+  estimated_duration?: string;
+  prep_requirement?: string;
+  schedule_group?: string;
   is_batch_shootable?: boolean;
   batch_shoot_group?: string;
   replacement_hint?: string;
