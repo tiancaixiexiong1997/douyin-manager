@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { type ContentItem, type ContentPerformance } from '../../api/client';
-import { ArrowLeft, Loader2, ChevronDown, ChevronUp, Sparkles, Calendar, Pencil, RefreshCw } from '../../components/Icons';
+import { ArrowLeft, Loader2, Sparkles, Calendar, Pencil } from '../../components/Icons';
 import { CalendarPanel } from './CalendarPanel';
 import { EditPlanModal } from './EditPlanModal';
 import { EditProjectModal } from './EditProjectModal';
 import { PerformanceModal } from './PerformanceModal';
 import { PerformancePanel } from './PerformancePanel';
+import { PositioningPanel } from './PositioningPanel';
 import { ScriptModal } from './ScriptModal';
 import { useProjectDetailActions } from './useProjectDetailActions';
 import { usePlanningTaskState } from './usePlanningTaskState';
@@ -199,145 +200,18 @@ export default function ProjectDetail() {
         </div>
       )}
 
-      {/* 账号定位 */}
       {positioning && (
-        <div className={`card detail-section detail-positioning ${isStrategyRegenerating ? 'detail-positioning-regenerating' : ''}`}>
-          <div
-            className={`detail-section-head ${showFullPlan ? 'is-open' : ''}`}
-            onClick={() => setShowFullPlan(!showFullPlan)}
-          >
-            <h2 className="section-title detail-section-title">账号定位方案</h2>
-            <div className="flex items-center gap-2 detail-section-actions" onClick={e => e.stopPropagation()}>
-              {currentStage !== 'strategy_generating' && currentStage !== 'calendar_generating' && (
-                <button className="btn btn-ghost btn-sm" onClick={() => generateStrategyMutation.mutate()} disabled={generateStrategyMutation.isPending}>
-                  <RefreshCw size={13} /> {generateStrategyMutation.isPending ? '生成中...' : '重新生成定位'}
-                </button>
-              )}
-              <button className="btn btn-ghost btn-sm" onClick={() => setShowEditPlan(true)}>
-                <Pencil size={13} /> 编辑
-              </button>
-              {showFullPlan ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </div>
-          </div>
-
-          {showFullPlan && (
-            <div className="detail-positioning-body animate-fade-in">
-              {/* 核心定位 */}
-              {positioning.core_identity && (
-                <div className="identity-block">
-                  <div className="identity-label">核心定位 slogan</div>
-                  <div className="identity-value gradient-text">{positioning.core_identity}</div>
-                </div>
-              )}
-
-              {/* 主页简介 */}
-              {positioning.bio_suggestion && (
-                <div className="bio-block">
-                  <div className="identity-label">主页简介建议</div>
-                  <div className="bio-text">{positioning.bio_suggestion}</div>
-                </div>
-              )}
-
-              {(positioning.target_audience_detail || positioning.differentiation || positioning.user_value || positioning.follow_reason) && (
-                <div className="strategy-grid">
-                  {positioning.target_audience_detail && (
-                    <div className="strategy-item">
-                      <div className="identity-label">受众细化</div>
-                      <div className="strategy-value">{positioning.target_audience_detail}</div>
-                    </div>
-                  )}
-                  {positioning.differentiation && (
-                    <div className="strategy-item">
-                      <div className="identity-label">差异化支点</div>
-                      <div className="strategy-value">{positioning.differentiation}</div>
-                    </div>
-                  )}
-                  {positioning.user_value && (
-                    <div className="strategy-item">
-                      <div className="identity-label">用户持续获得什么</div>
-                      <div className="strategy-value">{positioning.user_value}</div>
-                    </div>
-                  )}
-                  {positioning.follow_reason && (
-                    <div className="strategy-item">
-                      <div className="identity-label">用户为什么会关注</div>
-                      <div className="strategy-value">{positioning.follow_reason}</div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* 人设标签 */}
-              {positioning.personality_tags && (
-                <div className="positioning-block">
-                  <div className="identity-label positioning-label">人设标签</div>
-                  <div className="positioning-tags">
-                    {positioning.personality_tags.map(tag => (
-                      <span key={tag} className="badge badge-purple">{tag}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* 内容支柱 */}
-              {positioning.content_pillars && (
-                <div className="positioning-block">
-                  <div className="identity-label positioning-label">内容支柱</div>
-                  <div className="pillars-grid">
-                    {positioning.content_pillars.map(p => (
-                      <div key={p.name} className="pillar-card">
-                        <div className="pillar-name">{p.name}</div>
-                        <div className="pillar-ratio">{p.ratio}</div>
-                        <div className="pillar-desc">{p.description}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* 内容策略 */}
-              {strategy && (
-                <div className="strategy-grid">
-                  <div className="strategy-item">
-                    <div className="identity-label">发布频率</div>
-                    <div className="strategy-value">{strategy.posting_frequency}</div>
-                  </div>
-                  <div className="strategy-item">
-                    <div className="identity-label">内容形式</div>
-                    <div className="strategy-value">{strategy.primary_format}</div>
-                  </div>
-                  <div className="strategy-item">
-                    <div className="identity-label">最佳发布时间</div>
-                    <div className="strategy-value">{strategy.best_posting_times?.join('、')}</div>
-                  </div>
-                  <div className="strategy-item">
-                    <div className="identity-label">内容基调</div>
-                    <div className="strategy-value">{strategy.content_tone}</div>
-                  </div>
-                  {strategy.stop_scroll_reason && (
-                    <div className="strategy-item">
-                      <div className="identity-label">用户为什么会停下来继续看</div>
-                      <div className="strategy-value">{strategy.stop_scroll_reason}</div>
-                    </div>
-                  )}
-                  {strategy.interaction_trigger && (
-                    <div className="strategy-item">
-                      <div className="identity-label">互动触发点</div>
-                      <div className="strategy-value">{strategy.interaction_trigger}</div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-          {isStrategyRegenerating && (
-            <div className="detail-positioning-overlay">
-              <span className="detail-positioning-overlay-badge">
-                <Loader2 size={14} className="spin-icon" /> 重新生成定位中
-              </span>
-            </div>
-          )}
-        </div>
+        <PositioningPanel
+          positioning={positioning}
+          strategy={strategy}
+          currentStage={currentStage}
+          isExpanded={showFullPlan}
+          isRegenerating={isStrategyRegenerating}
+          isRegeneratePending={generateStrategyMutation.isPending}
+          onToggleExpand={() => setShowFullPlan((current) => !current)}
+          onRegenerate={() => generateStrategyMutation.mutate()}
+          onEdit={() => setShowEditPlan(true)}
+        />
       )}
 
       <CalendarPanel
