@@ -1362,38 +1362,21 @@ export default function ProjectDetail() {
     },
   });
 
-  if (isLoading) {
-    return (
-      <div className="project-detail-loading">
-        <div className="spinner project-detail-loading-spinner" />
-      </div>
-    );
-  }
-
-  if (!project) {
-    return (
-      <div className="empty-state">
-        <div className="empty-title">项目不存在</div>
-        <Link to="/planning" className="btn btn-primary project-detail-back-btn">返回列表</Link>
-      </div>
-    );
-  }
-
-  const plan = project.account_plan;
-  const currentStage = inferProjectStage(project);
+  const plan = project?.account_plan;
+  const currentStage: ProjectStage = project ? inferProjectStage(project) : 'draft';
   const positioning = plan?.account_positioning;
   const strategy = plan?.content_strategy;
   const hasStrategy = Boolean(positioning || strategy);
-  const hasCalendar = Boolean((project.content_calendar || []).length > 0 || (project.content_items || []).length > 0);
+  const hasCalendar = Boolean((project?.content_calendar || []).length > 0 || (project?.content_items || []).length > 0);
   const performanceRecap = plan?.performance_recap;
   const nextTopicBatch = plan?.next_topic_batch;
-  const contentItemMap = new Map((project.content_items || []).map((item) => [item.id, item]));
+  const contentItemMap = new Map((project?.content_items || []).map((item) => [item.id, item]));
   const calendarMetaByDay = new Map<number, ContentCalendarItem>(
-    (project.content_calendar || [])
+    (project?.content_calendar || [])
       .filter((item): item is ContentCalendarItem => Boolean(item && typeof item.day === 'number'))
       .map((item) => [item.day, item]),
   );
-  const calendarDisplayItems: CalendarDisplayItem[] = (project.content_items || [])
+  const calendarDisplayItems: CalendarDisplayItem[] = (project?.content_items || [])
     .map((item) => ({
       ...item,
       calendarMeta: calendarMetaByDay.get(item.day_number) || null,
@@ -1434,9 +1417,9 @@ export default function ProjectDetail() {
   const linkedContentItemIds = new Set(
     performanceList.map((row) => row.content_item_id).filter((value): value is string => Boolean(value))
   );
-  const pendingContentItems = (project.content_items || []).filter((item) => !linkedContentItemIds.has(item.id));
+  const pendingContentItems = (project?.content_items || []).filter((item) => !linkedContentItemIds.has(item.id));
   const bloggerNameMap = new Map(bloggers.map((blogger) => [blogger.id, blogger.nickname]));
-  const referenceNames = (project.reference_blogger_ids || [])
+  const referenceNames = (project?.reference_blogger_ids || [])
     .map((bloggerId) => bloggerNameMap.get(bloggerId))
     .filter((name): name is string => Boolean(name));
   const referenceScopeItems = [
@@ -1471,6 +1454,23 @@ export default function ProjectDetail() {
       };
     });
   }, [calendarDisplayItems, pendingCalendarRegeneration]);
+
+  if (isLoading) {
+    return (
+      <div className="project-detail-loading">
+        <div className="spinner project-detail-loading-spinner" />
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="empty-state">
+        <div className="empty-title">项目不存在</div>
+        <Link to="/planning" className="btn btn-primary project-detail-back-btn">返回列表</Link>
+      </div>
+    );
+  }
 
   const toggleRegenerateDay = (dayNumber: number) => {
     setRegenerateSelectedDays((prev) =>
