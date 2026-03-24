@@ -2032,9 +2032,6 @@ export default function ProjectDetail() {
                         </div>
                         <div className="calendar-title">{item.title_direction}</div>
                         <div className="calendar-tags">
-                          {item.calendarMeta?.content_role ? (
-                            <span className="badge badge-blue calendar-role-badge">{item.calendarMeta.content_role}</span>
-                          ) : null}
                           <span className="badge badge-purple calendar-production-badge">
                             {scheduleMeta.shootFormat}
                           </span>
