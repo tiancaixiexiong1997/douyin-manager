@@ -18,7 +18,27 @@ type PendingCalendarRegeneration = {
   previousItemIdsByDay: Record<number, string>;
 };
 const SCHEDULE_GROUP_FILTER_PREFIX = 'schedule_group:';
+const PENDING_CALENDAR_REGEN_STORAGE_PREFIX = 'planning:pending-calendar-regeneration:';
 type ProjectStage = 'draft' | 'strategy_generating' | 'strategy_completed' | 'calendar_generating' | 'completed';
+
+function getPendingCalendarRegenerationStorageKey(projectId?: string): string {
+  return `${PENDING_CALENDAR_REGEN_STORAGE_PREFIX}${projectId || 'unknown'}`;
+}
+
+function loadPendingCalendarRegeneration(projectId?: string): PendingCalendarRegeneration | null {
+  if (!projectId || typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(getPendingCalendarRegenerationStorageKey(projectId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PendingCalendarRegeneration | null;
+    if (!parsed || !Array.isArray(parsed.dayNumbers) || typeof parsed.snapshotsByDay !== 'object' || typeof parsed.previousItemIdsByDay !== 'object') {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
 
 function inferProjectStage(project: {
   status: string;
@@ -1237,7 +1257,7 @@ export default function ProjectDetail() {
   const [showEditPlan, setShowEditPlan] = useState(false);
   const [isSelectingRegenerateDays, setIsSelectingRegenerateDays] = useState(false);
   const [regenerateSelectedDays, setRegenerateSelectedDays] = useState<number[]>([]);
-  const [pendingCalendarRegeneration, setPendingCalendarRegeneration] = useState<PendingCalendarRegeneration | null>(null);
+  const [pendingCalendarRegeneration, setPendingCalendarRegeneration] = useState<PendingCalendarRegeneration | null>(() => loadPendingCalendarRegeneration(id));
   const [showPerformanceModal, setShowPerformanceModal] = useState(false);
   const [editingPerformance, setEditingPerformance] = useState<ContentPerformance | null>(null);
   const [calendarFilter, setCalendarFilter] = useState<string>('all');
@@ -1454,6 +1474,24 @@ export default function ProjectDetail() {
       };
     });
   }, [calendarDisplayItems, pendingCalendarRegeneration]);
+
+  useEffect(() => {
+    if (!id || typeof window === 'undefined') return;
+    const storageKey = getPendingCalendarRegenerationStorageKey(id);
+    if (!pendingCalendarRegeneration) {
+      window.sessionStorage.removeItem(storageKey);
+      return;
+    }
+    window.sessionStorage.setItem(storageKey, JSON.stringify(pendingCalendarRegeneration));
+  }, [id, pendingCalendarRegeneration]);
+
+  useEffect(() => {
+    if (!id || pendingCalendarRegeneration) return;
+    const restored = loadPendingCalendarRegeneration(id);
+    if (restored) {
+      setPendingCalendarRegeneration(restored);
+    }
+  }, [id, pendingCalendarRegeneration]);
 
   if (isLoading) {
     return (
