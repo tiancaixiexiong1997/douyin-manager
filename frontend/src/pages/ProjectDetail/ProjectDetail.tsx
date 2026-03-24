@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -200,6 +200,7 @@ function ScriptModal({
     onSuccess: (data) => {
       setScript(data.script);
       qc.invalidateQueries({ queryKey: ['project', projectId] });
+      qc.invalidateQueries({ queryKey: ['content-script-tasks', projectId] });
     },
   });
 
@@ -1224,13 +1225,15 @@ export default function ProjectDetail() {
   const { data: project, isLoading } = useQuery({
     queryKey: ['project', id],
     queryFn: () => planningApi.get(id!),
-    // 保持轻轮询，确保刷新/重开页面后仍可追踪脚本生成状态
-    refetchInterval: 5000,
   });
   const { data: bloggers = [] } = useQuery({
     queryKey: ['bloggers'],
     queryFn: () => bloggerApi.list(),
   });
+  const projectContentItemIdSet = useMemo(
+    () => new Set((project?.content_items || []).map((item) => item.id)),
+    [project?.content_items],
+  );
 
   const { data: scriptTaskPage } = useQuery({
     queryKey: ['content-script-tasks', id],
@@ -1241,7 +1244,12 @@ export default function ProjectDetail() {
         limit: 200,
       }),
     enabled: Boolean(id),
-    refetchInterval: 3000,
+    refetchInterval: (query) => {
+      const page = query.state.data as TaskCenterListResponse | undefined;
+      if (!page) return false;
+      const hasPendingTasks = page.items.some((task) => isPendingTask(task) && projectContentItemIdSet.has(task.entity_id));
+      return hasPendingTasks ? 3000 : false;
+    },
   });
 
   const { data: projectTaskPage } = useQuery({
@@ -1253,7 +1261,11 @@ export default function ProjectDetail() {
         limit: 50,
       }),
     enabled: Boolean(id),
-    refetchInterval: 3000,
+    refetchInterval: (query) => {
+      const page = query.state.data as TaskCenterListResponse | undefined;
+      if (!page) return false;
+      return page.items.some((task) => isPendingTask(task)) ? 3000 : false;
+    },
   });
 
   const scriptTaskMap = useMemo(() => {
@@ -1290,6 +1302,11 @@ export default function ProjectDetail() {
     }
     return map;
   }, [projectTaskPage]);
+  const projectScriptTasks = useMemo(
+    () => (scriptTaskPage?.items || []).filter((task) => projectContentItemIdSet.has(task.entity_id)),
+    [projectContentItemIdSet, scriptTaskPage],
+  );
+  const lastTaskRefreshSignatureRef = useRef<string | null>(null);
 
   const generateStrategyMutation = useMutation({
     mutationFn: () => planningApi.generateStrategy(id!),
@@ -1484,6 +1501,29 @@ export default function ProjectDetail() {
   const preservedDayCount = Math.max(0, visibleCalendarItems.length - regenerateSelectedDays.length);
   const displayCalendarItems = isSelectingRegenerateDays ? visibleCalendarItems : filteredCalendarItems;
   const isStrategyRegenerating = Boolean(hasStrategy && (currentStage === 'strategy_generating' || isPendingTask(latestStrategyTask)));
+  const taskDrivenRefreshSignature = useMemo(() => JSON.stringify({
+    strategy: latestStrategyTask ? [latestStrategyTask.status, latestStrategyTask.progress_step, latestStrategyTask.updated_at] : null,
+    calendar: latestCalendarTask ? [latestCalendarTask.status, latestCalendarTask.progress_step, latestCalendarTask.updated_at] : null,
+    scripts: projectScriptTasks
+      .map((task) => `${task.entity_id}:${task.status}:${task.progress_step || ''}:${task.updated_at}`)
+      .sort(),
+  }), [latestCalendarTask, latestStrategyTask, projectScriptTasks]);
+
+  useEffect(() => {
+    lastTaskRefreshSignatureRef.current = null;
+  }, [id]);
+
+  useEffect(() => {
+    if (!id || !project) return;
+    if (!taskDrivenRefreshSignature) return;
+    if (lastTaskRefreshSignatureRef.current === null) {
+      lastTaskRefreshSignatureRef.current = taskDrivenRefreshSignature;
+      return;
+    }
+    if (lastTaskRefreshSignatureRef.current === taskDrivenRefreshSignature) return;
+    lastTaskRefreshSignatureRef.current = taskDrivenRefreshSignature;
+    qc.invalidateQueries({ queryKey: ['project', id] });
+  }, [id, project, qc, taskDrivenRefreshSignature]);
 
   if (isLoading) {
     return (
