@@ -1,49 +1,49 @@
-"""
-策划项目 API 端点
-"""
-import logging
+"""策划项目兼容出口。"""
 from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.endpoints import planning_content, planning_intake, planning_performance
+from app.api.endpoints import planning_compat, planning_content, planning_intake, planning_performance
 from app.services import planning_calendar_guardrails as calendar_guardrails_service
 from app.services import planning_generation_service
-from app.services import planning_performance_utils as performance_utils_service
-from app.services.ai_analysis_service import ai_analysis_service
-from app.services.planning_calendar_utils import (
-    attach_normalized_content_calendar as _attach_normalized_content_calendar,
-    build_calendar_task_context as _build_calendar_task_context,
-    has_meaningful_plan_result as _has_meaningful_plan_result,
-    normalize_calendar_generation_meta as _normalize_calendar_generation_meta,
-    normalize_content_calendar_item as _normalize_content_calendar_item,
-    normalize_text_list as _normalize_text_list,
-    safe_text as _safe_text,
-)
-from app.repository.planning_repo import planning_repository
-from app.repository.operation_log_repo import operation_log_repo
 
 router = APIRouter()
 router.include_router(planning_content.router)
 router.include_router(planning_intake.router)
 router.include_router(planning_performance.router)
-logger = logging.getLogger(__name__)
 # Compatibility aliases for tests and internal monkeypatching.
-planning_generation = planning_generation_service
-performance_repo = planning_performance.performance_repo
+ai_analysis_service = planning_compat.ai_analysis_service
+planning_generation = planning_compat.planning_generation
+performance_repo = planning_compat.performance_repo
+planning_repository = planning_compat.planning_repository
+operation_log_repo = planning_compat.operation_log_repo
+planning_intake_assistant = planning_compat.planning_intake_assistant
+INTAKE_DRAFT_KEYS = planning_compat.INTAKE_DRAFT_KEYS
+INTAKE_REQUIRED_KEYS = planning_compat.INTAKE_REQUIRED_KEYS
+INTAKE_FIELD_LABELS = planning_compat.INTAKE_FIELD_LABELS
+_attach_normalized_content_calendar = planning_compat._attach_normalized_content_calendar
+_build_calendar_task_context = planning_compat._build_calendar_task_context
+_has_meaningful_plan_result = planning_compat._has_meaningful_plan_result
+_normalize_calendar_generation_meta = planning_compat._normalize_calendar_generation_meta
+_normalize_content_calendar_item = planning_compat._normalize_content_calendar_item
+_normalize_text_list = planning_compat._normalize_text_list
+_safe_text = planning_compat._safe_text
+_normalize_draft = planning_compat._normalize_draft
+_is_placeholder_value = planning_compat._is_placeholder_value
+_detect_industry = planning_compat._detect_industry
+_build_default_ip_requirements = planning_compat._build_default_ip_requirements
+_build_default_client_name = planning_compat._build_default_client_name
+_auto_fill_intake_draft = planning_compat._auto_fill_intake_draft
+_build_execution_preview = planning_compat._build_execution_preview
+_normalize_performance_recap = planning_compat._normalize_performance_recap
+_serialize_performance_rows = planning_compat._serialize_performance_rows
+_serialize_existing_content_items = planning_compat._serialize_existing_content_items
+_normalize_next_topic_batch = planning_compat._normalize_next_topic_batch
+_performance_build_calendar_item = planning_compat._performance_build_calendar_item
 _guardrails_collect_flags = calendar_guardrails_service.collect_calendar_quality_flags
 _guardrails_build_gap_brief = calendar_guardrails_service._build_calendar_gap_brief
 _guardrails_titles_too_similar = calendar_guardrails_service._calendar_titles_are_too_similar
 _guardrails_apply_quality = calendar_guardrails_service.apply_calendar_quality_guardrails
 _guardrails_regenerate_days = calendar_guardrails_service.regenerate_selected_calendar_days
-_performance_normalize_recap = performance_utils_service.normalize_performance_recap
-_performance_serialize_rows = performance_utils_service.serialize_performance_rows
-_performance_serialize_existing_items = performance_utils_service.serialize_existing_content_items
-_performance_normalize_batch = performance_utils_service.normalize_next_topic_batch
-_performance_build_calendar_item = performance_utils_service.build_next_topic_calendar_item
-planning_intake_assistant = planning_intake.planning_intake_assistant
-INTAKE_DRAFT_KEYS = planning_intake.INTAKE_DRAFT_KEYS
-INTAKE_REQUIRED_KEYS = planning_intake.INTAKE_REQUIRED_KEYS
-INTAKE_FIELD_LABELS = planning_intake.INTAKE_FIELD_LABELS
 
 def _collect_calendar_quality_flags(item: dict) -> list[str]:
     return _guardrails_collect_flags(item)
@@ -111,47 +111,47 @@ async def _regenerate_selected_calendar_days(
 
 
 def _normalize_draft(raw: dict) -> dict[str, str]:
-    return planning_intake._normalize_draft(raw)
+    return planning_compat._normalize_draft(raw)
 
 
 def _is_placeholder_value(value: str) -> bool:
-    return planning_intake._is_placeholder_value(value)
+    return planning_compat._is_placeholder_value(value)
 
 
 def _detect_industry(user_message: str) -> str:
-    return planning_intake._detect_industry(user_message)
+    return planning_compat._detect_industry(user_message)
 
 
 def _build_default_ip_requirements(industry: str) -> str:
-    return planning_intake._build_default_ip_requirements(industry)
+    return planning_compat._build_default_ip_requirements(industry)
 
 
 def _build_default_client_name(industry: str, user_message: str) -> str:
-    return planning_intake._build_default_client_name(industry, user_message)
+    return planning_compat._build_default_client_name(industry, user_message)
 
 
 def _auto_fill_intake_draft(draft: dict[str, str], user_message: str) -> list[str]:
-    return planning_intake._auto_fill_intake_draft(draft, user_message)
+    return planning_compat._auto_fill_intake_draft(draft, user_message)
 
 
 def _build_execution_preview(draft: dict[str, str]) -> str:
-    return planning_intake._build_execution_preview(draft)
+    return planning_compat._build_execution_preview(draft)
 
 
 def _normalize_performance_recap(raw: dict) -> dict:
-    return _performance_normalize_recap(raw)
+    return planning_compat._normalize_performance_recap(raw)
 
 
 def _serialize_performance_rows(project, rows: list) -> list[dict]:
-    return _performance_serialize_rows(project, rows)
+    return planning_compat._serialize_performance_rows(project, rows)
 
 
 def _serialize_existing_content_items(project) -> list[dict]:
-    return _performance_serialize_existing_items(project)
+    return planning_compat._serialize_existing_content_items(project)
 
 
 def _normalize_next_topic_batch(raw: dict) -> dict:
-    return _performance_normalize_batch(raw)
+    return planning_compat._normalize_next_topic_batch(raw)
 
 
 async def _generate_plan_background(
