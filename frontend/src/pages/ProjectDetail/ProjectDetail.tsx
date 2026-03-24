@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -12,6 +12,11 @@ import './ProjectDetail.css';
 
 type ScriptTaskStatus = TaskCenterItem['status'] | null;
 type CalendarDisplayItem = ContentItem & { calendarMeta?: ContentCalendarItem | null };
+type PendingCalendarRegeneration = {
+  dayNumbers: number[];
+  snapshotsByDay: Record<number, CalendarDisplayItem>;
+  previousItemIdsByDay: Record<number, string>;
+};
 const SCHEDULE_GROUP_FILTER_PREFIX = 'schedule_group:';
 type ProjectStage = 'draft' | 'strategy_generating' | 'strategy_completed' | 'calendar_generating' | 'completed';
 
@@ -1232,6 +1237,7 @@ export default function ProjectDetail() {
   const [showEditPlan, setShowEditPlan] = useState(false);
   const [isSelectingRegenerateDays, setIsSelectingRegenerateDays] = useState(false);
   const [regenerateSelectedDays, setRegenerateSelectedDays] = useState<number[]>([]);
+  const [pendingCalendarRegeneration, setPendingCalendarRegeneration] = useState<PendingCalendarRegeneration | null>(null);
   const [showPerformanceModal, setShowPerformanceModal] = useState(false);
   const [editingPerformance, setEditingPerformance] = useState<ContentPerformance | null>(null);
   const [calendarFilter, setCalendarFilter] = useState<string>('all');
@@ -1245,10 +1251,29 @@ export default function ProjectDetail() {
 
   const regenerateCalendarMutation = useMutation({
     mutationFn: (dayNumbers: number[]) => planningApi.regenerateCalendar(id!, { regenerate_day_numbers: dayNumbers }),
+    onMutate: (dayNumbers) => {
+      const targetDays = dayNumbers.length > 0 ? dayNumbers : calendarDisplayItems.map((item) => item.day_number);
+      if (targetDays.length === 0) return;
+      const snapshotsByDay: Record<number, CalendarDisplayItem> = {};
+      const previousItemIdsByDay: Record<number, string> = {};
+      for (const item of calendarDisplayItems) {
+        if (!targetDays.includes(item.day_number)) continue;
+        snapshotsByDay[item.day_number] = item;
+        previousItemIdsByDay[item.day_number] = item.id;
+      }
+      setPendingCalendarRegeneration({
+        dayNumbers: targetDays,
+        snapshotsByDay,
+        previousItemIdsByDay,
+      });
+    },
     onSuccess: () => {
       setIsSelectingRegenerateDays(false);
       setRegenerateSelectedDays([]);
       qc.invalidateQueries({ queryKey: ['project', id] });
+    },
+    onError: () => {
+      setPendingCalendarRegeneration(null);
     },
   });
 
@@ -1374,16 +1399,31 @@ export default function ProjectDetail() {
       calendarMeta: calendarMetaByDay.get(item.day_number) || null,
     }))
     .sort((a, b) => a.day_number - b.day_number);
-  const mainValidationCount = calendarDisplayItems.filter((item) => item.calendarMeta?.is_main_validation).length;
+  const visibleCalendarItems = useMemo(() => {
+    if (!pendingCalendarRegeneration) return calendarDisplayItems;
+    const currentByDay = new Map(calendarDisplayItems.map((item) => [item.day_number, item]));
+    const mergedItems = [...calendarDisplayItems];
+    for (const dayNumber of pendingCalendarRegeneration.dayNumbers) {
+      if (currentByDay.has(dayNumber)) continue;
+      const snapshot = pendingCalendarRegeneration.snapshotsByDay[dayNumber];
+      if (snapshot) mergedItems.push(snapshot);
+    }
+    return mergedItems.sort((a, b) => a.day_number - b.day_number);
+  }, [calendarDisplayItems, pendingCalendarRegeneration]);
+  const pendingRegenerationDaySet = useMemo(
+    () => new Set(pendingCalendarRegeneration?.dayNumbers || []),
+    [pendingCalendarRegeneration],
+  );
+  const mainValidationCount = visibleCalendarItems.filter((item) => item.calendarMeta?.is_main_validation).length;
   const scheduleGroupEntries = Array.from(
-    calendarDisplayItems.reduce((map, item) => {
+    visibleCalendarItems.reduce((map, item) => {
       const group = getCalendarScheduleMeta(item).scheduleGroup;
       if (!group) return map;
       map.set(group, (map.get(group) || 0) + 1);
       return map;
     }, new Map<string, number>()),
   );
-  const filteredCalendarItems = calendarDisplayItems.filter((item) => {
+  const filteredCalendarItems = visibleCalendarItems.filter((item) => {
     if (calendarFilter === 'all') return true;
     if (calendarFilter === 'main_validation') return Boolean(item.calendarMeta?.is_main_validation);
     if (calendarFilter.startsWith(SCHEDULE_GROUP_FILTER_PREFIX)) {
@@ -1405,9 +1445,32 @@ export default function ProjectDetail() {
     '后续生成单条脚本时，也会继续参考这些 IP 的开头节奏、表达习惯和镜头组织方式，但脚本会按你当前项目的定位重新写。',
     '如果后面你更换或减少参考 IP，重新生成策划和日历后，下面这套方案也会跟着变化。',
   ];
-  const allCalendarDays = calendarDisplayItems.map((item) => item.day_number);
-  const preservedDayCount = Math.max(0, calendarDisplayItems.length - regenerateSelectedDays.length);
-  const displayCalendarItems = isSelectingRegenerateDays ? calendarDisplayItems : filteredCalendarItems;
+  const allCalendarDays = visibleCalendarItems.map((item) => item.day_number);
+  const preservedDayCount = Math.max(0, visibleCalendarItems.length - regenerateSelectedDays.length);
+  const displayCalendarItems = isSelectingRegenerateDays ? visibleCalendarItems : filteredCalendarItems;
+
+  useEffect(() => {
+    if (!pendingCalendarRegeneration) return;
+    const remainingDays = pendingCalendarRegeneration.dayNumbers.filter((dayNumber) => {
+      const currentItem = calendarDisplayItems.find((item) => item.day_number === dayNumber);
+      if (!currentItem) return true;
+      return currentItem.id === pendingCalendarRegeneration.previousItemIdsByDay[dayNumber];
+    });
+
+    if (remainingDays.length === pendingCalendarRegeneration.dayNumbers.length) return;
+    if (remainingDays.length === 0) {
+      setPendingCalendarRegeneration(null);
+      return;
+    }
+
+    setPendingCalendarRegeneration((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        dayNumbers: remainingDays,
+      };
+    });
+  }, [calendarDisplayItems, pendingCalendarRegeneration]);
 
   const toggleRegenerateDay = (dayNumber: number) => {
     setRegenerateSelectedDays((prev) =>
@@ -1432,6 +1495,8 @@ export default function ProjectDetail() {
       notifyInfo('至少勾选 1 条需要重生成的内容');
       return;
     }
+    setCalendarFilter('all');
+    setActiveItem(null);
     regenerateCalendarMutation.mutate(regenerateSelectedDays);
   };
 
@@ -1483,7 +1548,15 @@ export default function ProjectDetail() {
             </button>
           )}
           {(currentStage === 'strategy_completed' || (hasStrategy && !hasCalendar && currentStage !== 'calendar_generating')) && (
-            <button className="btn btn-primary btn-sm" onClick={() => regenerateCalendarMutation.mutate([])} disabled={regenerateCalendarMutation.isPending}>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => {
+                setCalendarFilter('all');
+                setActiveItem(null);
+                regenerateCalendarMutation.mutate([]);
+              }}
+              disabled={regenerateCalendarMutation.isPending}
+            >
               <Calendar size={13} /> {regenerateCalendarMutation.isPending ? '生成中...' : '生成30天日历'}
             </button>
           )}
@@ -1696,7 +1769,11 @@ export default function ProjectDetail() {
               <div className="detail-calendar-actions">
                 <button
                   className="btn btn-ghost btn-sm"
-                  onClick={() => regenerateCalendarMutation.mutate([])}
+                  onClick={() => {
+                    setCalendarFilter('all');
+                    setActiveItem(null);
+                    regenerateCalendarMutation.mutate([]);
+                  }}
                   disabled={regenerateCalendarMutation.isPending || isSelectingRegenerateDays}
                 >
                   <RefreshCw size={13} /> {regenerateCalendarMutation.isPending && !isSelectingRegenerateDays ? '生成中...' : '重新生成日历'}
@@ -1812,12 +1889,14 @@ export default function ProjectDetail() {
             {displayCalendarItems.map(item => {
                 const scheduleMeta = getCalendarScheduleMeta(item);
                 const isSelectedForRegenerate = regenerateSelectedDays.includes(item.day_number);
+                const isPendingRegenerate = pendingRegenerationDaySet.has(item.day_number);
                 return (
                 <div
                   key={item.id}
-                  className={`calendar-item ${item.is_script_generated ? 'calendar-item-done' : ''} ${editingId === item.id ? 'calendar-item-editing' : ''} ${isSelectingRegenerateDays ? 'calendar-item-selecting' : ''} ${isSelectedForRegenerate ? 'calendar-item-selected' : ''}`}
+                  className={`calendar-item ${item.is_script_generated ? 'calendar-item-done' : ''} ${editingId === item.id ? 'calendar-item-editing' : ''} ${isSelectingRegenerateDays ? 'calendar-item-selecting' : ''} ${isSelectedForRegenerate ? 'calendar-item-selected' : ''} ${isPendingRegenerate ? 'calendar-item-regenerating' : ''}`}
                   onClick={() => {
                     if (editingId === item.id) return;
+                    if (isPendingRegenerate) return;
                     if (isSelectingRegenerateDays) {
                       toggleRegenerateDay(item.day_number);
                       return;
@@ -1825,108 +1904,117 @@ export default function ProjectDetail() {
                     setActiveItem(item);
                   }}
                 >
-                  {editingId === item.id ? (
-                    <div className="calendar-edit-form" onClick={e => e.stopPropagation()}>
-                      <input
-                        className="form-input calendar-edit-input"
-                        value={editForm.title_direction}
-                        onChange={e => setEditForm(f => ({ ...f, title_direction: e.target.value }))}
-                        placeholder="内容方向"
-                      />
-                      <input
-                        className="form-input calendar-edit-input"
-                        value={editForm.content_type}
-                        onChange={e => setEditForm(f => ({ ...f, content_type: e.target.value }))}
-                        placeholder="内容类型"
-                      />
-                      <div className="flex gap-2 calendar-edit-actions">
-                        <button
-                          className="btn btn-primary btn-sm calendar-edit-save"
-                          disabled={updateItemMutation.isPending}
-                          onClick={() => updateItemMutation.mutate({ itemId: item.id, data: editForm })}
-                        >
-                          <Save size={12} /> {updateItemMutation.isPending ? '保存中...' : '保存'}
-                        </button>
-                        <button className="btn btn-ghost btn-sm" onClick={() => setEditingId(null)}>
-                          取消
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="calendar-day-row">
-                        <span className="calendar-day">Day {item.day_number}</span>
-                        {isSelectingRegenerateDays ? (
-                          <span className={`calendar-select-indicator ${isSelectedForRegenerate ? 'is-selected' : ''}`}>
-                            {isSelectedForRegenerate ? '已选' : '选择'}
-                          </span>
-                        ) : (
+                  <div className="calendar-item-body">
+                    {editingId === item.id ? (
+                      <div className="calendar-edit-form" onClick={e => e.stopPropagation()}>
+                        <input
+                          className="form-input calendar-edit-input"
+                          value={editForm.title_direction}
+                          onChange={e => setEditForm(f => ({ ...f, title_direction: e.target.value }))}
+                          placeholder="内容方向"
+                        />
+                        <input
+                          className="form-input calendar-edit-input"
+                          value={editForm.content_type}
+                          onChange={e => setEditForm(f => ({ ...f, content_type: e.target.value }))}
+                          placeholder="内容类型"
+                        />
+                        <div className="flex gap-2 calendar-edit-actions">
                           <button
-                            className="btn btn-icon btn-ghost calendar-edit-btn"
-                            style={{ width: 22, height: 22, minWidth: 22 }}
-                            onClick={e => {
-                              e.stopPropagation();
-                              setEditForm({ title_direction: item.title_direction, content_type: item.content_type || '' });
-                              setEditingId(item.id);
-                            }}
+                            className="btn btn-primary btn-sm calendar-edit-save"
+                            disabled={updateItemMutation.isPending}
+                            onClick={() => updateItemMutation.mutate({ itemId: item.id, data: editForm })}
                           >
-                            <Pencil size={11} />
+                            <Save size={12} /> {updateItemMutation.isPending ? '保存中...' : '保存'}
                           </button>
-                        )}
-                      </div>
-                      <div className="calendar-title">{item.title_direction}</div>
-                      <div className="calendar-tags">
-                        {item.calendarMeta?.priority ? (
-                          <span className={`badge calendar-priority-badge ${item.calendarMeta.priority.startsWith('P0') ? 'badge-green' : item.calendarMeta.priority.startsWith('P2') ? 'badge-yellow' : 'badge-blue'}`}>
-                            {item.calendarMeta.priority}
-                          </span>
-                        ) : null}
-                        {item.calendarMeta?.content_role ? (
-                          <span className="badge badge-blue calendar-role-badge">{item.calendarMeta.content_role}</span>
-                        ) : null}
-                        <span className="badge badge-purple calendar-production-badge">
-                          {scheduleMeta.shootFormat}
-                        </span>
-                      </div>
-                      <div className="calendar-meta">
-                        <span className="badge badge-purple calendar-type-badge">{item.content_type || '待定'}</span>
-                        {item.is_script_generated ? (
-                          <span className="script-done-label">✓ 已生成</span>
-                        ) : (scriptTaskMap.get(item.id)?.status === 'queued' || scriptTaskMap.get(item.id)?.status === 'running') ? (
-                          <span className="script-gen-label">生成中</span>
-                        ) : scriptTaskMap.get(item.id)?.status === 'failed' ? (
-                          <span className="script-gen-label">生成失败</span>
-                        ) : (
-                          <span className="script-gen-label">待生成</span>
-                        )}
-                      </div>
-                      <div className="calendar-extra-line">
-                        <span className="calendar-extra-label">出镜要求</span>
-                        <span className="calendar-extra-value">{scheduleMeta.talentRequirement}</span>
-                      </div>
-                      <div className="calendar-extra-line">
-                        <span className="calendar-extra-label">拍摄场景</span>
-                        <span className="calendar-extra-value">{scheduleMeta.shootScene}</span>
-                      </div>
-                      <div className="calendar-extra-line">
-                        <span className="calendar-extra-label">预计时长</span>
-                        <span className="calendar-extra-value">{scheduleMeta.estimatedDuration}</span>
-                      </div>
-                      <div className="calendar-extra-line">
-                        <span className="calendar-extra-label">准备成本</span>
-                        <span className="calendar-extra-value">{scheduleMeta.prepRequirement}</span>
-                      </div>
-                      <div className="calendar-extra-line">
-                        <span className="calendar-extra-label">排期分组</span>
-                        <span className="calendar-extra-value">{scheduleMeta.scheduleGroup}</span>
-                      </div>
-                      {item.calendarMeta?.replacement_hint ? (
-                        <div className="calendar-extra-line calendar-extra-note">
-                          <span className="calendar-extra-label">替换建议</span>
-                          <span className="calendar-extra-value">{item.calendarMeta.replacement_hint}</span>
+                          <button className="btn btn-ghost btn-sm" onClick={() => setEditingId(null)}>
+                            取消
+                          </button>
                         </div>
-                      ) : null}
-                    </>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="calendar-day-row">
+                          <span className="calendar-day">Day {item.day_number}</span>
+                          {isSelectingRegenerateDays ? (
+                            <span className={`calendar-select-indicator ${isSelectedForRegenerate ? 'is-selected' : ''}`}>
+                              {isSelectedForRegenerate ? '已选' : '选择'}
+                            </span>
+                          ) : (
+                            <button
+                              className="btn btn-icon btn-ghost calendar-edit-btn"
+                              style={{ width: 22, height: 22, minWidth: 22 }}
+                              onClick={e => {
+                                e.stopPropagation();
+                                setEditForm({ title_direction: item.title_direction, content_type: item.content_type || '' });
+                                setEditingId(item.id);
+                              }}
+                            >
+                              <Pencil size={11} />
+                            </button>
+                          )}
+                        </div>
+                        <div className="calendar-title">{item.title_direction}</div>
+                        <div className="calendar-tags">
+                          {item.calendarMeta?.priority ? (
+                            <span className={`badge calendar-priority-badge ${item.calendarMeta.priority.startsWith('P0') ? 'badge-green' : item.calendarMeta.priority.startsWith('P2') ? 'badge-yellow' : 'badge-blue'}`}>
+                              {item.calendarMeta.priority}
+                            </span>
+                          ) : null}
+                          {item.calendarMeta?.content_role ? (
+                            <span className="badge badge-blue calendar-role-badge">{item.calendarMeta.content_role}</span>
+                          ) : null}
+                          <span className="badge badge-purple calendar-production-badge">
+                            {scheduleMeta.shootFormat}
+                          </span>
+                        </div>
+                        <div className="calendar-meta">
+                          <span className="badge badge-purple calendar-type-badge">{item.content_type || '待定'}</span>
+                          {item.is_script_generated ? (
+                            <span className="script-done-label">✓ 已生成</span>
+                          ) : (scriptTaskMap.get(item.id)?.status === 'queued' || scriptTaskMap.get(item.id)?.status === 'running') ? (
+                            <span className="script-gen-label">生成中</span>
+                          ) : scriptTaskMap.get(item.id)?.status === 'failed' ? (
+                            <span className="script-gen-label">生成失败</span>
+                          ) : (
+                            <span className="script-gen-label">待生成</span>
+                          )}
+                        </div>
+                        <div className="calendar-extra-line">
+                          <span className="calendar-extra-label">出镜要求</span>
+                          <span className="calendar-extra-value">{scheduleMeta.talentRequirement}</span>
+                        </div>
+                        <div className="calendar-extra-line">
+                          <span className="calendar-extra-label">拍摄场景</span>
+                          <span className="calendar-extra-value">{scheduleMeta.shootScene}</span>
+                        </div>
+                        <div className="calendar-extra-line">
+                          <span className="calendar-extra-label">预计时长</span>
+                          <span className="calendar-extra-value">{scheduleMeta.estimatedDuration}</span>
+                        </div>
+                        <div className="calendar-extra-line">
+                          <span className="calendar-extra-label">准备成本</span>
+                          <span className="calendar-extra-value">{scheduleMeta.prepRequirement}</span>
+                        </div>
+                        <div className="calendar-extra-line">
+                          <span className="calendar-extra-label">排期分组</span>
+                          <span className="calendar-extra-value">{scheduleMeta.scheduleGroup}</span>
+                        </div>
+                        {item.calendarMeta?.replacement_hint ? (
+                          <div className="calendar-extra-line calendar-extra-note">
+                            <span className="calendar-extra-label">替换建议</span>
+                            <span className="calendar-extra-value">{item.calendarMeta.replacement_hint}</span>
+                          </div>
+                        ) : null}
+                      </>
+                    )}
+                  </div>
+                  {isPendingRegenerate && (
+                    <div className="calendar-regenerate-overlay">
+                      <span className="calendar-regenerate-overlay-badge">
+                        <Loader2 size={14} className="spin-icon" /> 重新生成中
+                      </span>
+                    </div>
                   )}
                 </div>
               )})}
