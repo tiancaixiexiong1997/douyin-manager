@@ -12,6 +12,7 @@ from app.api.deps.auth import require_member_or_admin
 from app.models.database import TaskStatus, User
 from app.models.db_session import get_db
 from app.services import planning_calendar_guardrails as calendar_guardrails_service
+from app.services import planning_performance_utils as performance_utils_service
 from app.schemas.planning import (
     PlanningCreateRequest,
     PlanningResponse,
@@ -38,7 +39,6 @@ from app.services.planning_calendar_utils import (
     attach_normalized_content_calendar as _attach_normalized_content_calendar,
     build_calendar_task_context as _build_calendar_task_context,
     build_strategy_task_context as _build_strategy_task_context,
-    derive_batch_group as _derive_batch_group,
     has_meaningful_plan_result as _has_meaningful_plan_result,
     has_meaningful_strategy_result as _has_meaningful_strategy_result,
     normalize_calendar_generation_meta as _normalize_calendar_generation_meta,
@@ -63,6 +63,11 @@ _guardrails_build_gap_brief = calendar_guardrails_service._build_calendar_gap_br
 _guardrails_titles_too_similar = calendar_guardrails_service._calendar_titles_are_too_similar
 _guardrails_apply_quality = calendar_guardrails_service.apply_calendar_quality_guardrails
 _guardrails_regenerate_days = calendar_guardrails_service.regenerate_selected_calendar_days
+_performance_normalize_recap = performance_utils_service.normalize_performance_recap
+_performance_serialize_rows = performance_utils_service.serialize_performance_rows
+_performance_serialize_existing_items = performance_utils_service.serialize_existing_content_items
+_performance_normalize_batch = performance_utils_service.normalize_next_topic_batch
+_performance_build_calendar_item = performance_utils_service.build_next_topic_calendar_item
 
 INTAKE_DRAFT_KEYS = (
     "client_name",
@@ -459,104 +464,19 @@ def _build_execution_preview(draft: dict[str, str]) -> str:
 
 
 def _normalize_performance_recap(raw: dict) -> dict:
-    overall_summary = _safe_text(
-        raw.get("overall_summary")
-        or raw.get("raw_analysis")
-        or raw.get("error")
-        or "AI 暂未生成结构化复盘，请稍后重试。"
-    )
-    return {
-        "generated_at": datetime.utcnow().isoformat(),
-        "overall_summary": overall_summary,
-        "winning_patterns": _normalize_text_list(raw.get("winning_patterns"), limit=5),
-        "optimization_focus": _normalize_text_list(raw.get("optimization_focus"), limit=5),
-        "risk_alerts": _normalize_text_list(raw.get("risk_alerts"), limit=4),
-        "next_actions": _normalize_text_list(raw.get("next_actions"), limit=5),
-        "next_topic_angles": _normalize_text_list(raw.get("next_topic_angles"), limit=5),
-    }
+    return _performance_normalize_recap(raw)
 
 
 def _serialize_performance_rows(project, rows: list) -> list[dict]:
-    content_item_map = {item.id: item for item in project.content_items or []}
-    serialized_rows: list[dict] = []
-    for row in rows:
-        linked_item = content_item_map.get(row.content_item_id) if row.content_item_id else None
-        serialized_rows.append(
-            {
-                "title": row.title,
-                "publish_date": row.publish_date.isoformat() if row.publish_date else None,
-                "views": row.views,
-                "likes": row.likes,
-                "comments": row.comments,
-                "shares": row.shares,
-                "conversions": row.conversions,
-                "bounce_2s_rate": row.bounce_2s_rate,
-                "completion_5s_rate": row.completion_5s_rate,
-                "completion_rate": row.completion_rate,
-                "notes": row.notes,
-                "linked_content_item": (
-                    {
-                        "day_number": linked_item.day_number,
-                        "title_direction": linked_item.title_direction,
-                        "content_type": linked_item.content_type,
-                    }
-                    if linked_item
-                    else None
-                ),
-            }
-        )
-    return serialized_rows
+    return _performance_serialize_rows(project, rows)
 
 
 def _serialize_existing_content_items(project) -> list[dict]:
-    items = sorted(project.content_items or [], key=lambda item: item.day_number)
-    return [
-        {
-            "day_number": item.day_number,
-            "title_direction": item.title_direction,
-            "content_type": item.content_type,
-            "tags": item.tags or [],
-        }
-        for item in items
-    ]
+    return _performance_serialize_existing_items(project)
 
 
 def _normalize_next_topic_batch(raw: dict) -> dict:
-    overall_strategy = _safe_text(
-        raw.get("overall_strategy")
-        or raw.get("raw_analysis")
-        or raw.get("error")
-        or "AI 暂未生成下一批选题，请稍后重试。"
-    )
-    items: list[dict] = []
-    if isinstance(raw.get("items"), list):
-        for item in raw["items"]:
-            if not isinstance(item, dict):
-                continue
-            title_direction = _safe_text(item.get("title_direction"))
-            if not title_direction:
-                continue
-            items.append(
-                {
-                    "title_direction": title_direction,
-                    "content_type": _normalize_content_type(item.get("content_type")),
-                    "content_pillar": _safe_text(item.get("content_pillar")) or None,
-                    "hook_hint": _safe_text(item.get("hook_hint")) or None,
-                    "why_this_angle": _safe_text(item.get("why_this_angle")) or None,
-                    "imported_content_item_id": _safe_text(item.get("imported_content_item_id")) or None,
-                    "imported_day_number": item.get("imported_day_number") if isinstance(item.get("imported_day_number"), int) else None,
-                    "imported_at": (
-                        item.get("imported_at").isoformat()
-                        if isinstance(item.get("imported_at"), datetime)
-                        else (_safe_text(item.get("imported_at")) or None)
-                    ),
-                }
-            )
-    return {
-        "generated_at": datetime.utcnow().isoformat(),
-        "overall_strategy": overall_strategy,
-        "items": items[:10],
-    }
+    return _performance_normalize_batch(raw)
 
 
 @router.post("/intake-assistant", response_model=PlanningIntakeAssistantResponse, summary="互动问诊助手")
@@ -1456,25 +1376,7 @@ async def import_next_topic_batch_item(
     )
 
     updated_calendar = list(project.content_calendar or [])
-    updated_calendar.append(
-        _normalize_content_calendar_item(
-            {
-                "day": next_day_number,
-                "title_direction": batch_item.get("title_direction", ""),
-                "content_type": _normalize_content_type(batch_item.get("content_type")),
-                "content_pillar": batch_item.get("content_pillar"),
-                "key_message": batch_item.get("why_this_angle") or batch_item.get("hook_hint") or "",
-                "tags": [batch_item.get("content_pillar")] if batch_item.get("content_pillar") else [],
-                "priority": "P2-补充储备",
-                "content_role": "补充试错",
-                "is_main_validation": False,
-                "is_batch_shootable": True,
-                "batch_shoot_group": _derive_batch_group(_normalize_content_type(batch_item.get("content_type"))),
-                "replacement_hint": batch_item.get("why_this_angle") or "",
-            },
-            day_fallback=next_day_number,
-        )
-    )
+    updated_calendar.append(_performance_build_calendar_item(batch_item, next_day_number))
     project.content_calendar = updated_calendar
 
     batch_item["imported_content_item_id"] = content_item.id
