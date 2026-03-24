@@ -11,11 +11,11 @@ from app.api.endpoints.blogger import (
     _analyze_single_rep_video,
     _update_blogger_report_background,
 )
-from app.api.endpoints.planning import (
-    _generate_calendar_only_background,
-    _generate_plan_background,
-)
 from app.api.endpoints.script import _process_extraction_background
+from app.services.planning_generation_service import (
+    generate_calendar_only_background,
+    generate_plan_background,
+)
 
 
 def run_blogger_analyze(
@@ -63,7 +63,7 @@ def run_planning_generate(
     task_key: str | None = None,
     fallback_status: str | None = None,
 ) -> None:
-    asyncio.run(_generate_plan_background(project_id, client_data, blogger_ids, task_key, fallback_status))
+    asyncio.run(generate_plan_background(project_id, client_data, blogger_ids, task_key, fallback_status))
 
 
 def run_planning_calendar_generate(
@@ -73,7 +73,7 @@ def run_planning_calendar_generate(
     task_key: str | None = None,
     regenerate_day_numbers: Optional[list[int]] = None,
 ) -> None:
-    asyncio.run(_generate_calendar_only_background(project_id, client_data, account_plan, task_key, regenerate_day_numbers))
+    asyncio.run(generate_calendar_only_background(project_id, client_data, account_plan, task_key, regenerate_day_numbers))
 
 
 def run_script_extraction(
