@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toPng } from 'html-to-image';
 import { scriptApi, planningApi } from '../../api/client';
 import type { ExtractionCreateRequest, ExtractionListResponse, ExtractionResponse, ExtractionStatus } from '../../api/client';
 import { Sparkles, RefreshCw } from '../../components/Icons';
-import { AlertCircle, Trash2, ExternalLink, ChevronDown, Link2, Users, FileEdit, Clock, PlayCircle, Wand2, Save, X } from 'lucide-react';
+import { AlertCircle, Trash2, ExternalLink, ChevronDown, Link2, Users, FileEdit, Clock, PlayCircle, Wand2, Save, X, Download, Pencil } from 'lucide-react';
 import { notifyError, notifyInfo, notifySuccess } from '../../utils/notify';
 import './ScriptExtraction.css';
 
@@ -12,6 +13,17 @@ const extractUrl = (text: string) => {
   const match = text.match(/(https?:\/\/[^\s]+)/);
   return match ? match[1] : text;
 };
+
+const sanitizeFilename = (value: string) => value
+  .replace(/[\\/:*?"<>|]+/g, '-')
+  .replace(/\s+/g, '-')
+  .replace(/-+/g, '-')
+  .replace(/^-|-$/g, '')
+  .slice(0, 80) || 'script-analysis';
+
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
 
 const TRANSIENT_FAILURE_PATTERN = /timeout|timed out|超时|网络|network|连接|connection|502|503|504|429|繁忙|网关|rate limit/i;
 
@@ -89,9 +101,13 @@ export default function ScriptExtraction() {
   const [activeExtId, setActiveExtId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isEditingAnalysis, setIsEditingAnalysis] = useState(false);
+  const [editedHighlightAnalysis, setEditedHighlightAnalysis] = useState<ExtractionResponse['highlight_analysis'] | null>(null);
   const [isEditingGeneratedScript, setIsEditingGeneratedScript] = useState(false);
   const [editedGeneratedScript, setEditedGeneratedScript] = useState<ExtractionResponse['generated_script'] | null>(null);
+  const [isExportingAnalysis, setIsExportingAnalysis] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const analysisExportRef = useRef<HTMLDivElement | null>(null);
   const autoRetriedExtractionIdsRef = useRef<Set<string>>(new Set());
   const isDraftHydratedRef = useRef(false);
   const isDraftDirtyRef = useRef(false);
@@ -188,6 +204,10 @@ export default function ScriptExtraction() {
   });
 
   useEffect(() => {
+    setIsEditingAnalysis(false);
+    setEditedHighlightAnalysis(
+      extraction?.highlight_analysis ? JSON.parse(JSON.stringify(extraction.highlight_analysis)) : null,
+    );
     setIsEditingGeneratedScript(false);
     setEditedGeneratedScript(
       extraction?.generated_script ? JSON.parse(JSON.stringify(extraction.generated_script)) : null,
@@ -234,6 +254,24 @@ export default function ScriptExtraction() {
     },
   });
 
+  const saveAnalysisMutation = useMutation({
+    mutationFn: (highlightAnalysis: ExtractionResponse['highlight_analysis']) =>
+      scriptApi.updateExtraction(activeExtId!, { highlight_analysis: highlightAnalysis || undefined }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['extraction', data.id], data);
+      queryClient.invalidateQueries({ queryKey: ['extractions'] });
+      setEditedHighlightAnalysis(
+        data.highlight_analysis ? JSON.parse(JSON.stringify(data.highlight_analysis)) : null,
+      );
+      setIsEditingAnalysis(false);
+      notifySuccess('拆解文案已保存');
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : '未知错误';
+      notifyError(`保存失败：${message}`);
+    },
+  });
+
   const generateRemakeMutation = useMutation({
     mutationFn: (id: string) => scriptApi.generateRemake(id),
     onSuccess: (data) => {
@@ -265,6 +303,27 @@ export default function ScriptExtraction() {
         sceneIndex === index ? { ...scene, [key]: value } : scene,
       );
       return { ...current, storyboard: nextStoryboard };
+    });
+  };
+
+  const updateHighlightAnalysisField = <K extends keyof NonNullable<ExtractionResponse['highlight_analysis']>>(
+    key: K,
+    value: NonNullable<ExtractionResponse['highlight_analysis']>[K],
+  ) => {
+    setEditedHighlightAnalysis((current) => current ? { ...current, [key]: value } : current);
+  };
+
+  const updateCopySegmentField = (
+    index: number,
+    key: keyof NonNullable<NonNullable<ExtractionResponse['highlight_analysis']>['copy_segment_breakdown']>[number],
+    value: string,
+  ) => {
+    setEditedHighlightAnalysis((current) => {
+      if (!current?.copy_segment_breakdown) return current;
+      const nextSegments = current.copy_segment_breakdown.map((segment, segmentIndex) =>
+        segmentIndex === index ? { ...segment, [key]: value } : segment,
+      );
+      return { ...current, copy_segment_breakdown: nextSegments };
     });
   };
 
@@ -382,6 +441,43 @@ export default function ScriptExtraction() {
   const isProcessing = extraction?.status === 'pending' || extraction?.status === 'analyzing' || extraction?.status === 'generating';
   const hasAnalysis = Boolean(extraction?.highlight_analysis || extraction?.has_highlight_analysis);
   const hasGeneratedScript = Boolean(extraction?.generated_script || extraction?.has_generated_script);
+  const analysisExportBaseName = sanitizeFilename(extraction?.title || extraction?.source_video_url || 'source-analysis');
+
+  const handleExportAnalysisLongImage = async () => {
+    if (!extraction?.highlight_analysis || isEditingAnalysis || isExportingAnalysis) return;
+    if (!analysisExportRef.current) {
+      notifyInfo('当前还没有可导出的拆解内容');
+      return;
+    }
+
+    try {
+      setIsExportingAnalysis(true);
+      notifyInfo('正在生成拆解长图，请稍等');
+      if (typeof document !== 'undefined' && 'fonts' in document) {
+        await (document as Document & { fonts?: FontFaceSet }).fonts?.ready;
+      }
+      await sleep(80);
+
+      const dataUrl = await toPng(analysisExportRef.current, {
+        pixelRatio: 2,
+        cacheBust: true,
+        backgroundColor: '#f8fafc',
+      });
+
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = `${analysisExportBaseName}-源视频拆解长图.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      notifySuccess('已导出源视频拆解长图');
+    } catch (error) {
+      notifyError(`导出拆解长图失败：${(error as Error).message || '请稍后再试'}`);
+    } finally {
+      setIsExportingAnalysis(false);
+    }
+  };
 
   return (
     <div className="script-ext-container">
@@ -597,7 +693,36 @@ export default function ScriptExtraction() {
                 <div className="result-split-view">
                   {/* 左版块：源视频信息与拆解 */}
                   <div className="source-analysis-pane">
-                    <h2 className="pane-title">源视频拆解结果</h2>
+                    <div className="pane-header">
+                      <div>
+                        <h2 className="pane-title">源视频拆解结果</h2>
+                        <p className="pane-subtitle">支持手动修改拆解文案，并导出客户可看的长图版本。</p>
+                      </div>
+                      {extraction.highlight_analysis && (
+                        <div className="pane-header-actions">
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            onClick={handleExportAnalysisLongImage}
+                            disabled={isEditingAnalysis || isExportingAnalysis}
+                          >
+                            <Download size={14} /> {isExportingAnalysis ? '导出中...' : '导出长图'}
+                          </button>
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => {
+                              setEditedHighlightAnalysis(
+                                extraction.highlight_analysis
+                                  ? JSON.parse(JSON.stringify(extraction.highlight_analysis))
+                                  : null,
+                              );
+                              setIsEditingAnalysis(true);
+                            }}
+                          >
+                            <Pencil size={14} /> 编辑文案
+                          </button>
+                        </div>
+                      )}
+                    </div>
 
                     <div className="source-meta">
                       {extraction.cover_url && (
@@ -687,6 +812,83 @@ export default function ScriptExtraction() {
                         </div>
                       </div>
                     ) : null}
+
+                    {extraction.highlight_analysis && (
+                      <div className="analysis-export-canvas-wrap" aria-hidden="true">
+                        <div ref={analysisExportRef} className="analysis-export-long">
+                          <div className="analysis-export-header">
+                            <div className="analysis-export-pill">源视频拆解长图</div>
+                            <h2>{extraction.title || '未命名视频'}</h2>
+                            {extraction.description && (
+                              <p className="analysis-export-desc">{extraction.description}</p>
+                            )}
+                          </div>
+
+                          <div className="analysis-export-grid">
+                            <div className="analysis-export-card">
+                              <span>核心主题</span>
+                              <p>{extraction.highlight_analysis.core_theme}</p>
+                            </div>
+                            <div className="analysis-export-card">
+                              <span>爆款结构</span>
+                              <p>{extraction.highlight_analysis.success_structure}</p>
+                            </div>
+                            <div className="analysis-export-card">
+                              <span>钩子机制</span>
+                              <p>{extraction.highlight_analysis.hook_mechanism}</p>
+                            </div>
+                            <div className="analysis-export-card">
+                              <span>文案风格</span>
+                              <p>{extraction.highlight_analysis.copywriting_style}</p>
+                            </div>
+                            <div className="analysis-export-card analysis-export-card-wide">
+                              <span>视觉节奏</span>
+                              <p>{extraction.highlight_analysis.visual_rhythm}</p>
+                            </div>
+                            <div className="analysis-export-card analysis-export-card-wide">
+                              <span>声音与情绪</span>
+                              <p>{extraction.highlight_analysis.audio_emotion}</p>
+                            </div>
+                          </div>
+
+                          {extraction.highlight_analysis.copy_segment_breakdown?.length ? (
+                            <div className="analysis-export-segments">
+                              <h3>逐段文案拆解</h3>
+                              {extraction.highlight_analysis.copy_segment_breakdown.map((segment, idx) => (
+                                <div key={`${segment.segment}-${idx}`} className="analysis-export-segment-card">
+                                  <div className="analysis-export-segment-head">
+                                    <strong>{segment.segment || `第 ${idx + 1} 段`}</strong>
+                                    {segment.duration && <span>{segment.duration}</span>}
+                                  </div>
+                                  <div className="analysis-export-segment-body">
+                                    <div>
+                                      <label>原段文案</label>
+                                      <p>{segment.original_copy}</p>
+                                    </div>
+                                    <div>
+                                      <label>作用</label>
+                                      <p>{segment.copy_function}</p>
+                                    </div>
+                                    {segment.emotion_goal && (
+                                      <div>
+                                        <label>情绪目标</label>
+                                        <p>{segment.emotion_goal}</p>
+                                      </div>
+                                    )}
+                                    {segment.transition_role && (
+                                      <div>
+                                        <label>承接方式</label>
+                                        <p>{segment.transition_role}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* 右版块：生成的复刻脚本 */}
@@ -936,6 +1138,160 @@ export default function ScriptExtraction() {
           )}
         </div>
       </div>
+
+      {isEditingAnalysis && editedHighlightAnalysis && (
+        <div className="ext-modal-overlay">
+          <div className="ext-modal ext-modal-large">
+            <div className="analysis-edit-modal-header">
+              <div>
+                <h3 className="ext-modal-title">编辑源视频拆解文案</h3>
+                <p className="ext-modal-desc">你可以直接改每个拆解字段和逐段文案，保存后会覆盖当前拆解结果。</p>
+              </div>
+              <div className="analysis-edit-modal-actions">
+                <button
+                  className="btn btn-primary btn-sm"
+                  disabled={saveAnalysisMutation.isPending || !editedHighlightAnalysis}
+                  onClick={() => editedHighlightAnalysis && saveAnalysisMutation.mutate(editedHighlightAnalysis)}
+                >
+                  <Save size={14} /> {saveAnalysisMutation.isPending ? '保存中...' : '保存'}
+                </button>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  disabled={saveAnalysisMutation.isPending}
+                  onClick={() => {
+                    setEditedHighlightAnalysis(
+                      extraction?.highlight_analysis ? JSON.parse(JSON.stringify(extraction.highlight_analysis)) : null,
+                    );
+                    setIsEditingAnalysis(false);
+                  }}
+                >
+                  <X size={14} /> 取消
+                </button>
+              </div>
+            </div>
+
+            <div className="analysis-edit-modal-body">
+              <label className="script-edit-field">
+                <span>核心主题</span>
+                <textarea
+                  className="form-input form-textarea"
+                  rows={3}
+                  value={editedHighlightAnalysis.core_theme || ''}
+                  onChange={(e) => updateHighlightAnalysisField('core_theme', e.target.value)}
+                />
+              </label>
+              <label className="script-edit-field">
+                <span>爆款结构</span>
+                <textarea
+                  className="form-input form-textarea"
+                  rows={4}
+                  value={editedHighlightAnalysis.success_structure || ''}
+                  onChange={(e) => updateHighlightAnalysisField('success_structure', e.target.value)}
+                />
+              </label>
+              <label className="script-edit-field">
+                <span>钩子机制</span>
+                <textarea
+                  className="form-input form-textarea"
+                  rows={3}
+                  value={editedHighlightAnalysis.hook_mechanism || ''}
+                  onChange={(e) => updateHighlightAnalysisField('hook_mechanism', e.target.value)}
+                />
+              </label>
+              <label className="script-edit-field">
+                <span>文案风格</span>
+                <textarea
+                  className="form-input form-textarea"
+                  rows={4}
+                  value={editedHighlightAnalysis.copywriting_style || ''}
+                  onChange={(e) => updateHighlightAnalysisField('copywriting_style', e.target.value)}
+                />
+              </label>
+              <label className="script-edit-field">
+                <span>视觉节奏</span>
+                <textarea
+                  className="form-input form-textarea"
+                  rows={4}
+                  value={editedHighlightAnalysis.visual_rhythm || ''}
+                  onChange={(e) => updateHighlightAnalysisField('visual_rhythm', e.target.value)}
+                />
+              </label>
+              <label className="script-edit-field">
+                <span>声音与情绪</span>
+                <textarea
+                  className="form-input form-textarea"
+                  rows={4}
+                  value={editedHighlightAnalysis.audio_emotion || ''}
+                  onChange={(e) => updateHighlightAnalysisField('audio_emotion', e.target.value)}
+                />
+              </label>
+
+              {editedHighlightAnalysis.copy_segment_breakdown?.length ? (
+                <div className="analysis-edit-sections">
+                  <h4>逐段文案拆解</h4>
+                  {editedHighlightAnalysis.copy_segment_breakdown.map((segment, idx) => (
+                    <div key={`${segment.segment}-${idx}`} className="analysis-edit-segment-card">
+                      <div className="analysis-edit-segment-title">{segment.segment || `第 ${idx + 1} 段`}</div>
+                      <label className="script-edit-field">
+                        <span>阶段名称</span>
+                        <input
+                          className="form-input"
+                          value={segment.segment || ''}
+                          onChange={(e) => updateCopySegmentField(idx, 'segment', e.target.value)}
+                        />
+                      </label>
+                      <label className="script-edit-field">
+                        <span>时长区间</span>
+                        <input
+                          className="form-input"
+                          value={segment.duration || ''}
+                          onChange={(e) => updateCopySegmentField(idx, 'duration', e.target.value)}
+                        />
+                      </label>
+                      <label className="script-edit-field">
+                        <span>原段文案</span>
+                        <textarea
+                          className="form-input form-textarea"
+                          rows={3}
+                          value={segment.original_copy || ''}
+                          onChange={(e) => updateCopySegmentField(idx, 'original_copy', e.target.value)}
+                        />
+                      </label>
+                      <label className="script-edit-field">
+                        <span>作用</span>
+                        <textarea
+                          className="form-input form-textarea"
+                          rows={2}
+                          value={segment.copy_function || ''}
+                          onChange={(e) => updateCopySegmentField(idx, 'copy_function', e.target.value)}
+                        />
+                      </label>
+                      <label className="script-edit-field">
+                        <span>情绪目标</span>
+                        <textarea
+                          className="form-input form-textarea"
+                          rows={2}
+                          value={segment.emotion_goal || ''}
+                          onChange={(e) => updateCopySegmentField(idx, 'emotion_goal', e.target.value)}
+                        />
+                      </label>
+                      <label className="script-edit-field">
+                        <span>承接方式</span>
+                        <textarea
+                          className="form-input form-textarea"
+                          rows={2}
+                          value={segment.transition_role || ''}
+                          onChange={(e) => updateCopySegmentField(idx, 'transition_role', e.target.value)}
+                        />
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 删除确认弹窗 */}
       {deleteConfirmId && (
