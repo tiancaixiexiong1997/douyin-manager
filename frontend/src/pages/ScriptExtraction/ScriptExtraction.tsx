@@ -234,6 +234,19 @@ export default function ScriptExtraction() {
     },
   });
 
+  const generateRemakeMutation = useMutation({
+    mutationFn: (id: string) => scriptApi.generateRemake(id),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['extraction', data.id], data);
+      queryClient.invalidateQueries({ queryKey: ['extractions'] });
+      notifySuccess('复刻脚本任务已创建');
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : '未知错误';
+      notifyError(`生成复刻脚本失败：${message}`);
+    },
+  });
+
   const updateGeneratedScriptField = <K extends keyof NonNullable<ExtractionResponse['generated_script']>>(
     key: K,
     value: NonNullable<ExtractionResponse['generated_script']>[K],
@@ -276,8 +289,21 @@ export default function ScriptExtraction() {
     autoRetriedExtractionIdsRef.current.add(target.id);
     createMutation.mutate(payload);
     if (isAuto) notifyInfo('任务失败，系统已自动重试一次');
-    else notifyInfo('已按原参数重新创建任务');
+    else notifyInfo('已按原参数重新创建拆解任务');
   }, [createMutation, extraction?.status]);
+
+  const retryRemakeWithSameAnalysis = useCallback((targetId: string, isAuto = false) => {
+    const processing =
+      extraction?.status === 'pending' ||
+      extraction?.status === 'analyzing' ||
+      extraction?.status === 'generating';
+    if (generateRemakeMutation.isPending || processing) return;
+
+    autoRetriedExtractionIdsRef.current.add(targetId);
+    generateRemakeMutation.mutate(targetId);
+    if (isAuto) notifyInfo('复刻脚本生成失败，系统已自动重试一次');
+    else notifyInfo('已按当前拆解结果重新生成复刻脚本');
+  }, [extraction?.status, generateRemakeMutation]);
 
   useEffect(() => {
     if (!extraction || extraction.status !== 'failed') return;
@@ -285,11 +311,12 @@ export default function ScriptExtraction() {
     if (!extraction.error_message || !TRANSIENT_FAILURE_PATTERN.test(extraction.error_message)) return;
 
     const timer = window.setTimeout(() => {
-      retryExtractionWithSamePayload(extraction, true);
+      if (extraction.has_highlight_analysis) retryRemakeWithSameAnalysis(extraction.id, true);
+      else retryExtractionWithSamePayload(extraction, true);
     }, 1200);
 
     return () => window.clearTimeout(timer);
-  }, [extraction, retryExtractionWithSamePayload]);
+  }, [extraction, retryExtractionWithSamePayload, retryRemakeWithSameAnalysis]);
 
   // 轮询详情时，同步刷新“最近任务”中的对应状态，避免列表状态滞后
   useEffect(() => {
@@ -305,6 +332,8 @@ export default function ScriptExtraction() {
           status: extraction.status,
           title: extraction.title || item.title,
           cover_url: extraction.cover_url || item.cover_url,
+          has_highlight_analysis: extraction.has_highlight_analysis,
+          has_generated_script: extraction.has_generated_script,
           retry_count: extraction.retry_count ?? item.retry_count,
           max_retries: extraction.max_retries ?? item.max_retries,
         };
@@ -332,32 +361,35 @@ export default function ScriptExtraction() {
       case 'pending': return '任务排队中';
       case 'analyzing': return '正在解析原视频并提取亮点';
       case 'generating': return '正在生成复刻脚本';
-      case 'completed': return '复刻脚本生成完成';
+      case 'completed': return extraction?.generated_script ? '复刻脚本生成完成' : '源视频拆解完成，待生成复刻脚本';
       case 'failed': return '任务失败，请调整后重试';
       default: return '';
     }
   };
 
-  const getHistoryStatusText = (status: ExtractionStatus) => {
+  const getHistoryStatusText = (item: ExtractionListResponse) => {
+    const status = item.status;
     switch (status) {
       case 'pending': return '排队中';
       case 'analyzing': return '解析中';
       case 'generating': return '生成中';
-      case 'completed': return '已完成';
+      case 'completed': return item.has_generated_script ? '已复刻' : '已拆解';
       case 'failed': return '失败';
       default: return status;
     }
   };
 
   const isProcessing = extraction?.status === 'pending' || extraction?.status === 'analyzing' || extraction?.status === 'generating';
+  const hasAnalysis = Boolean(extraction?.highlight_analysis || extraction?.has_highlight_analysis);
+  const hasGeneratedScript = Boolean(extraction?.generated_script || extraction?.has_generated_script);
 
   return (
     <div className="script-ext-container">
       <section className="script-ext-hero">
         <div>
           <div className="script-ext-hero-pill"><Wand2 size={13} /> Script Remake</div>
-          <h1>脚本拆解复刻</h1>
-          <p>输入源视频链接，自动拆解结构亮点，并生成适配你账号定位的新脚本。</p>
+          <h1>脚本拆解与复刻</h1>
+          <p>先拆清楚源视频为什么有效，再决定是否基于拆解结果生成适配你账号定位的新脚本。</p>
         </div>
         <div className="script-ext-hero-stats">
           <div className="script-ext-stat">
@@ -437,7 +469,7 @@ export default function ScriptExtraction() {
                 )}
               </div>
               <p style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
-                选择项目后，系统会自动读取该账号定位与受众信息，生成更贴合的人设脚本。
+                选择项目后，系统会自动读取该账号定位与受众信息，后续生成复刻脚本时会更贴合人设。
               </p>
             </div>
 
@@ -464,7 +496,7 @@ export default function ScriptExtraction() {
             >
               {createMutation.isPending ? '正在创建任务...' : (isProcessing ? '任务处理中...' : (
                 <>
-                  <Sparkles size={16} /> 开始拆解并生成
+                  <Sparkles size={16} /> 开始拆解
                 </>
               ))}
             </button>
@@ -486,7 +518,7 @@ export default function ScriptExtraction() {
                     </div>
                     <div className="history-card-footer">
                       <div className="history-status status-badge" data-status={item.status}>
-                        {getHistoryStatusText(item.status)}
+                        {getHistoryStatusText(item)}
                       </div>
                       <div className="history-actions">
                         {item.status === 'completed' && item.source_video_url && (
@@ -526,7 +558,7 @@ export default function ScriptExtraction() {
             <div className="content-placeholder">
               <WaitingSmileFace />
               <h3>等待开始任务</h3>
-              <p>在左侧输入视频链接并设置改写要求，系统会自动拆解亮点并生成复刻脚本。</p>
+              <p>在左侧输入视频链接并设置改写要求，系统会先完成源视频拆解；拆解完成后，你再决定是否生成复刻脚本。</p>
             </div>
           ) : (
             <div className="result-container">
@@ -546,8 +578,11 @@ export default function ScriptExtraction() {
                     <button
                       type="button"
                       className="status-retry-btn"
-                      disabled={createMutation.isPending || isProcessing}
-                      onClick={() => retryExtractionWithSamePayload(extraction)}
+                      disabled={createMutation.isPending || generateRemakeMutation.isPending || isProcessing}
+                      onClick={() => {
+                        if (extraction.has_highlight_analysis) retryRemakeWithSameAnalysis(extraction.id);
+                        else retryExtractionWithSamePayload(extraction);
+                      }}
                     >
                       <RefreshCw size={13} /> 一键重试
                     </button>
@@ -558,7 +593,7 @@ export default function ScriptExtraction() {
                 </div>
               </div>
 
-              {extraction.status === 'completed' && (
+              {hasAnalysis && (
                 <div className="result-split-view">
                   {/* 左版块：源视频信息与拆解 */}
                   <div className="source-analysis-pane">
@@ -657,8 +692,11 @@ export default function ScriptExtraction() {
                   {/* 右版块：生成的复刻脚本 */}
                   <div className="generated-script-pane">
                     <div className="pane-header">
-                      <h2 className="pane-title">复刻脚本结果</h2>
-                      {extraction.generated_script && (
+                      <div>
+                        <h2 className="pane-title">复刻脚本结果</h2>
+                        <p className="pane-subtitle">拆解完成后，再决定是否进入复刻生成。</p>
+                      </div>
+                      {hasGeneratedScript && extraction.generated_script && (
                         <div className="pane-header-actions">
                           {isEditingGeneratedScript ? (
                             <>
@@ -703,7 +741,35 @@ export default function ScriptExtraction() {
                       )}
                     </div>
 
-                    {extraction.generated_script && (
+                    {!hasGeneratedScript && extraction.status !== 'generating' && (
+                      <div className="remake-empty-state">
+                        <div className="remake-empty-state-badge">第二步</div>
+                        <h3>基于拆解结果生成复刻脚本</h3>
+                        <p>现在已经拆清楚这条视频的结构、文案节奏和情绪推进。你可以直接基于这份拆解结果，生成新的可拍脚本。</p>
+                        <button
+                          type="button"
+                          className="ext-submit-btn remake-generate-btn"
+                          disabled={generateRemakeMutation.isPending || isProcessing}
+                          onClick={() => activeExtId && generateRemakeMutation.mutate(activeExtId)}
+                        >
+                          {generateRemakeMutation.isPending ? '正在创建复刻任务...' : (
+                            <>
+                              <Sparkles size={16} /> 生成复刻脚本
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+
+                    {!hasGeneratedScript && extraction.status === 'generating' && (
+                      <div className="remake-empty-state remake-loading-state">
+                        <RefreshCw size={18} className="spin-icon" />
+                        <h3>正在生成复刻脚本</h3>
+                        <p>拆解结果已经固定，系统正在基于这份分析生成新的脚本结构和分镜。</p>
+                      </div>
+                    )}
+
+                    {hasGeneratedScript && extraction.generated_script && (
                       <div className="script-content">
                         <div className="script-summary">
                           <h3>新视频切入点</h3>

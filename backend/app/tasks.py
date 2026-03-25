@@ -11,7 +11,7 @@ from app.api.endpoints.blogger import (
     _analyze_single_rep_video,
     _update_blogger_report_background,
 )
-from app.api.endpoints.script import _process_extraction_background
+from app.api.endpoints.script import _process_extraction_background, _process_remake_background
 from app.services.planning_generation_service import (
     generate_calendar_only_background,
     generate_plan_background,
@@ -84,3 +84,10 @@ def run_script_extraction(
     task_key: str | None = None,
 ) -> None:
     asyncio.run(_process_extraction_background(extraction_id, source_url, user_prompt, plan_id, task_key))
+
+
+def run_script_remake(
+    extraction_id: str,
+    task_key: str | None = None,
+) -> None:
+    asyncio.run(_process_remake_background(extraction_id, task_key))

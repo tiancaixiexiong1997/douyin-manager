@@ -826,10 +826,62 @@
   margin-bottom: 0;
 }
 
+.pane-subtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .pane-header-actions {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.remake-empty-state {
+  min-height: 240px;
+  border-radius: 16px;
+  border: 1px dashed rgba(148, 163, 184, 0.26);
+  background: rgba(15, 23, 42, 0.14);
+  padding: 22px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 10px;
+}
+
+.remake-empty-state-badge {
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.14);
+  color: #93c5fd;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+}
+
+.remake-empty-state h3 {
+  font-size: 18px;
+  color: var(--text-primary);
+}
+
+.remake-empty-state p {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  max-width: 520px;
+}
+
+.remake-generate-btn {
+  min-width: 180px;
+}
+
+.remake-loading-state {
+  align-items: center;
+  text-align: center;
 }
 
 .script-edit-fields,

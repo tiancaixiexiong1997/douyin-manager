@@ -22,6 +22,7 @@ const TASK_TYPE_LABELS: Record<string, string> = {
   planning_generate: '账号定位生成',
   planning_calendar: '30天日历生成',
   script_extraction: '脚本拆解',
+  script_remake: '复刻脚本生成',
 };
 
 const LOG_PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
@@ -54,6 +55,12 @@ const ACTION_LABELS: Record<string, string> = {
   'script.delete': '删除脚本拆解任务',
   'script.enqueue_failed': '脚本任务入队失败',
   'script.failed': '脚本拆解失败',
+  'script.remake.completed': '复刻脚本完成',
+  'script.remake.create': '创建复刻脚本任务',
+  'script.remake.enqueue_failed': '复刻脚本入队失败',
+  'script.remake.failed': '复刻脚本失败',
+  'script.remake.retry': '重试复刻脚本',
+  'script.remake.retry_scheduled': '复刻脚本加入重试队列',
   'script.retry': '重试脚本拆解',
   'script.retry.scheduled': '脚本拆解加入重试队列',
   'user.batch_delete': '批量删除用户',

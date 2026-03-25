@@ -49,6 +49,8 @@ class ExtractionResponse(BaseModel):
     
     highlight_analysis: Optional[dict] = None
     generated_script: Optional[dict] = None
+    has_highlight_analysis: bool = False
+    has_generated_script: bool = False
     
     status: ExtractionStatus
     error_message: Optional[str] = None
@@ -69,6 +71,8 @@ class ExtractionListResponse(BaseModel):
     title: Optional[str] = None
     cover_url: Optional[str] = None
     status: ExtractionStatus
+    has_highlight_analysis: bool = False
+    has_generated_script: bool = False
     retry_count: int = 0
     max_retries: int = 1
     created_at: datetime

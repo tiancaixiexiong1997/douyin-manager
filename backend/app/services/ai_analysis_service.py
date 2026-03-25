@@ -25,6 +25,8 @@ from app.services.prompt_templates import (
     NEXT_TOPIC_BATCH_PROMPT_TEMPLATE,
     PERFORMANCE_RECAP_PROMPT_TEMPLATE,
     PLANNING_INTAKE_PROMPT_TEMPLATE,
+    SCRIPT_ANALYSIS_PROMPT_TEMPLATE,
+    SCRIPT_REMAKE_FROM_ANALYSIS_PROMPT_TEMPLATE,
     SCRIPT_REMAKE_PROMPT_TEMPLATE,
     VIDEO_SCRIPT_PROMPT_TEMPLATE,
 )
@@ -45,6 +47,8 @@ class AIAnalysisService:
     DEFAULT_PERFORMANCE_RECAP_PROMPT = PERFORMANCE_RECAP_PROMPT_TEMPLATE
     DEFAULT_PLANNING_INTAKE_PROMPT = PLANNING_INTAKE_PROMPT_TEMPLATE
     DEFAULT_VIDEO_SCRIPT_PROMPT = VIDEO_SCRIPT_PROMPT_TEMPLATE
+    DEFAULT_SCRIPT_ANALYSIS_PROMPT = SCRIPT_ANALYSIS_PROMPT_TEMPLATE
+    DEFAULT_SCRIPT_REMAKE_FROM_ANALYSIS_PROMPT = SCRIPT_REMAKE_FROM_ANALYSIS_PROMPT_TEMPLATE
     DEFAULT_SCRIPT_REMAKE_PROMPT = SCRIPT_REMAKE_PROMPT_TEMPLATE
     PROMPT_SCENE_SETTING_MAP = {
         "blogger_report": "BLOGGER_REPORT_PROMPT",
@@ -55,6 +59,8 @@ class AIAnalysisService:
         "performance_recap": "PERFORMANCE_RECAP_PROMPT",
         "planning_intake": "PLANNING_INTAKE_PROMPT",
         "video_script": "VIDEO_SCRIPT_PROMPT",
+        "script_analysis": "SCRIPT_ANALYSIS_PROMPT",
+        "script_remake_text": "SCRIPT_REMAKE_FROM_ANALYSIS_PROMPT",
         "script_remake": "SCRIPT_REMAKE_PROMPT",
     }
     WRITING_RULE_SCENES = {
@@ -66,6 +72,8 @@ class AIAnalysisService:
         "next_topic_batch",
         "planning_intake",
         "video_script",
+        "script_analysis",
+        "script_remake_text",
         "script_remake",
     }
 
@@ -146,7 +154,7 @@ class AIAnalysisService:
 
     def _resolve_multimodal_video_base64_limit_mb(self, scene_key: str | None = None) -> float:
         default_limit = 8.0
-        if scene_key == "script_remake":
+        if scene_key in {"script_remake", "script_analysis"}:
             default_limit = 10.0
         raw = os.getenv("AI_MULTIMODAL_MAX_VIDEO_BASE64_MB", str(default_limit))
         try:
@@ -155,7 +163,7 @@ class AIAnalysisService:
             return default_limit
 
     def _build_video_compression_ladder(self, scene_key: str | None = None) -> list[dict[str, str]]:
-        if scene_key == "script_remake":
+        if scene_key in {"script_remake", "script_analysis"}:
             return [
                 {"label": "r1", "scale": "360:-2", "fps": "10", "crf": "33", "audio_bitrate": "48k"},
                 {"label": "r2", "scale": "320:-2", "fps": "8", "crf": "35", "audio_bitrate": "32k"},
@@ -299,6 +307,10 @@ class AIAnalysisService:
                 self._has_meaningful_value(result.get(key))
                 for key in ("overall_strategy", "items")
             )
+        if scene_key == "script_analysis":
+            return self._has_meaningful_value(result.get("highlight_analysis"))
+        if scene_key == "script_remake_text":
+            return self._has_meaningful_value(result.get("generated_script"))
         if scene_key == "planning_intake":
             return any(
                 self._has_meaningful_value(result.get(key))
@@ -690,6 +702,205 @@ class AIAnalysisService:
             db=db,
         )
 
+    async def generate_script_analysis(
+        self,
+        video_url: str,
+        title: str,
+        description: str,
+        user_prompt: str,
+        account_plan_data: dict | None = None,
+        video_id: str | None = None,
+        run_context: Optional[dict] = None,
+        db: Optional[Any] = None,
+    ) -> dict:
+        """仅分析原视频，不直接生成复刻脚本。"""
+        if not video_url:
+            return {"error": "未提供视频 URL，无法进行分析"}
+        return await self._analyze_script_by_video(
+            video_url,
+            title,
+            description,
+            user_prompt,
+            account_plan_data,
+            video_id,
+            run_context=run_context,
+            db=db,
+        )
+
+    async def _analyze_script_by_video(
+        self,
+        video_url: str,
+        title: str,
+        description: str,
+        user_prompt: str,
+        account_plan_data: dict | None = None,
+        video_id: str | None = None,
+        run_context: Optional[dict] = None,
+        db: Optional[Any] = None,
+    ) -> dict:
+        temp_original = None
+        encoded_video_path = None
+        try:
+            check = subprocess.run(["which", "ffmpeg"], capture_output=True)
+            if check.returncode != 0:
+                return {"error": "ffmpeg 未安装，无法处理视频"}
+
+            logger.info("开始下载脚本拆解原视频: %s...", video_url[:60])
+            temp_original = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+            temp_original.close()
+            try:
+                download_ok, download_error = await self._download_video_with_retry(
+                    video_url,
+                    temp_original.name,
+                    video_id=video_id,
+                )
+                if not download_ok or not os.path.exists(temp_original.name):
+                    detail = f"（{download_error}）" if download_error else ""
+                    return {"error": f"视频下载失败：源文件未成功保存到本地，请稍后重试{detail}"}
+                if os.path.getsize(temp_original.name) <= 0:
+                    return {"error": "视频下载失败：下载结果为空文件，请稍后重试"}
+            except Exception as e:
+                logger.error("视频下载失败: %s", e)
+                raise e
+
+            duration_seconds = self._probe_video_duration(temp_original.name)
+            try:
+                video_b64, encoded_video_path = self._encode_video_for_multimodal(
+                    temp_original.name,
+                    duration_seconds=duration_seconds,
+                    scene_key="script_analysis",
+                )
+            except Exception as exc:
+                return {"error": f"视频压缩失败: {exc}"}
+
+            base_system_prompt = (
+                "你是一位顶级短视频拆解编导。\n"
+                "你的任务是把一条视频为什么有效拆成可复用的方法，而不是直接生成新的台词。\n"
+                "每个结论都必须具体到段落、句式、镜头和情绪推进。"
+            )
+            system_prompt = await self._build_system_prompt(
+                scene_key="script_analysis",
+                base_prompt=base_system_prompt,
+            )
+
+            if user_prompt and user_prompt.strip():
+                final_user_prompt = user_prompt.strip()
+            elif account_plan_data:
+                final_user_prompt = (
+                    f"这条视频后续会服务于「{account_plan_data.get('core_identity', '本账号')}」的人设，"
+                    f"目标受众是「{account_plan_data.get('target_audience', '目标受众')}」。"
+                    "请在拆解时优先指出哪些结构和文案节奏最值得后续迁移。"
+                )
+            else:
+                final_user_prompt = "请重点拆出：开场钩子、逐段文案作用、情绪推进和普通人最值得借鉴的结构。"
+
+            prompt_template, prompt_meta = await self._resolve_prompt(
+                scene_key="script_analysis",
+                default_prompt=self.DEFAULT_SCRIPT_ANALYSIS_PROMPT,
+                db=db,
+            )
+            prompt_text = prompt_template.format(
+                title=title,
+                description=description,
+                user_prompt=final_user_prompt,
+            )
+            result = await self._call_ai_with_video(
+                video_b64,
+                title,
+                description,
+                scene_key="script_analysis",
+                override_user_prompt=prompt_text,
+                override_system_prompt=system_prompt,
+            )
+            await self._record_prompt_run(
+                scene_key="script_analysis",
+                result=result,
+                prompt_meta=prompt_meta,
+                run_context=run_context,
+                db=db,
+            )
+            return result
+        except Exception as e:
+            logger.error("脚本拆解分析失败: %s", e)
+            return {"error": f"分析异常: {str(e)}"}
+        finally:
+            for path in [temp_original.name if temp_original else None, encoded_video_path]:
+                if path and os.path.exists(path):
+                    try:
+                        os.unlink(path)
+                    except Exception:
+                        pass
+
+    async def generate_remake_script_from_analysis(
+        self,
+        *,
+        title: str,
+        description: str,
+        highlight_analysis: dict,
+        user_prompt: str,
+        account_plan_data: dict | None = None,
+        run_context: Optional[dict] = None,
+        db: Optional[Any] = None,
+    ) -> dict:
+        """基于已完成的拆解结果生成复刻脚本。"""
+        import json
+
+        if not highlight_analysis:
+            return {"error": "缺少拆解结果，无法生成复刻脚本"}
+
+        if account_plan_data:
+            core_identity = account_plan_data.get("core_identity", "未知定位")
+            target_audience = account_plan_data.get("target_audience", "未知受众")
+            base_system_prompt = (
+                f"你现在是「{core_identity}」这个账号的首席内容编导。\n"
+                f"你的目标受众是：{target_audience}。\n"
+                "你要基于已有拆解结果，生成完全服务于该账号定位的新脚本。\n"
+                "默认普通人单人可执行，优先口播主镜头+画中画补拍，或跟拍Vlog。"
+            )
+        else:
+            base_system_prompt = (
+                "你是一位顶级短视频内容编导。\n"
+                "你要基于已有拆解结果复刻结构，不要重新分析视频，也不要照抄原句。\n"
+                "默认输出普通人单人可执行方案：口播+画中画，或跟拍Vlog。"
+            )
+
+        system_prompt = await self._build_system_prompt(
+            scene_key="script_remake_text",
+            base_prompt=base_system_prompt,
+        )
+
+        if user_prompt and user_prompt.strip():
+            final_user_prompt = user_prompt.strip()
+        elif account_plan_data:
+            final_user_prompt = (
+                f"请围绕「{account_plan_data.get('core_identity', '本账号')}」的人设，"
+                f"面向「{account_plan_data.get('target_audience', '目标受众')}」，"
+                "把拆解出的爆款结构迁移成一份新的可拍脚本。"
+            )
+        else:
+            final_user_prompt = "请基于拆解结果，输出一份主题创新、普通人可执行的新脚本。"
+
+        prompt_template, prompt_meta = await self._resolve_prompt(
+            scene_key="script_remake_text",
+            default_prompt=self.DEFAULT_SCRIPT_REMAKE_FROM_ANALYSIS_PROMPT,
+            db=db,
+        )
+        prompt_text = prompt_template.format(
+            title=title,
+            description=description,
+            highlight_analysis_json=json.dumps(highlight_analysis, ensure_ascii=False, indent=2)[:9000],
+            user_prompt=final_user_prompt,
+        )
+        result = await self._call_ai(system_prompt, prompt_text, scene_key="script_remake_text")
+        await self._record_prompt_run(
+            scene_key="script_remake_text",
+            result=result,
+            prompt_meta=prompt_meta,
+            run_context=run_context,
+            db=db,
+        )
+        return result
+
     async def _analyze_remake_by_video(
         self,
         video_url: str,
@@ -928,6 +1139,8 @@ class AIAnalysisService:
                 "planning_intake",
                 "blogger_report",
                 "blogger_viral_profile",
+                "script_analysis",
+                "script_remake_text",
             }
 
             for index, provider in enumerate(providers):

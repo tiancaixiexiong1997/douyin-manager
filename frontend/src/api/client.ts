@@ -113,6 +113,8 @@ export interface ExtractionResponse {
   };
 
   status: ExtractionStatus;
+  has_highlight_analysis?: boolean;
+  has_generated_script?: boolean;
   error_message?: string;
   retry_count?: number;
   max_retries?: number;
@@ -127,6 +129,8 @@ export interface ExtractionListResponse {
   title?: string;
   cover_url?: string;
   status: ExtractionStatus;
+  has_highlight_analysis?: boolean;
+  has_generated_script?: boolean;
   retry_count?: number;
   max_retries?: number;
   created_at: string;
@@ -150,6 +154,11 @@ export const scriptApi = {
 
   getExtraction: async (id: string): Promise<ExtractionResponse> => {
     const res = await api.get(`/script/${id}`);
+    return res as unknown as ExtractionResponse;
+  },
+
+  generateRemake: async (id: string): Promise<ExtractionResponse> => {
+    const res = await api.post(`/script/${id}/generate-remake`);
     return res as unknown as ExtractionResponse;
   },
 

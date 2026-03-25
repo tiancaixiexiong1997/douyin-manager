@@ -583,3 +583,81 @@ SCRIPT_REMAKE_PROMPT_TEMPLATE = (
     '  }}\n'
     "}}\n"
 )
+
+SCRIPT_ANALYSIS_PROMPT_TEMPLATE = (
+    "# 角色\n"
+    "你是一位顶级短视频拆解编导。你的任务不是直接改写脚本，而是先把一条视频为什么有效拆清楚。\n\n"
+    "# 拆解原则\n"
+    "- 只拆底层结构，不生成新脚本\n"
+    "- 每个结论都必须落到具体段落、具体文案、具体节奏\n"
+    "- 不要写空话，比如“节奏好”“有感染力”，要写清楚它是怎么做到的\n"
+    "- copy_segment_breakdown 必须按视频推进顺序拆，尽量还原原句节奏\n\n"
+    "# 原视频信息\n"
+    "视频标题：{title}\n"
+    "视频描述：{description}\n\n"
+    "# 额外创作上下文\n"
+    "{user_prompt}\n\n"
+    "# 输出要求\n"
+    "请严格返回 JSON：\n"
+    "{{\n"
+    '  "highlight_analysis": {{\n'
+    '    "core_theme": "原视频真正打动人的核心情绪价值",\n'
+    '    "success_structure": "按时间推进拆出爆款结构（格式：阶段名称（时长估算）→ 下一阶段）",\n'
+    '    "hook_mechanism": "前3秒具体用了什么手段让人不划走",\n'
+    '    "copywriting_style": "文案风格特征（语气/句式/关键词偏好，尽量给出贴近原句的例子）",\n'
+    '    "copy_segment_breakdown": [\n'
+    '      {{\n'
+    '        "segment": "阶段名称，如开场钩子/反转段/证明段/收口段",\n'
+    '        "duration": "该段大致时长，如0-3秒/第1句到第3句",\n'
+    '        "original_copy": "这一段原视频的核心文案或贴近原意的复述",\n'
+    '        "copy_function": "这段文案承担的作用（钩子/铺垫/反转/证明/收口/提问等）",\n'
+    '        "emotion_goal": "这一段想让观众产生什么情绪变化",\n'
+    '        "transition_role": "它如何把上一段带到下一段"\n'
+    '      }}\n'
+    '    ],\n'
+    '    "visual_rhythm": "视觉节奏（镜头切换、景别、补画面方式与情绪如何配合）",\n'
+    '    "audio_emotion": "音频情绪设计（BGM、音效、人声状态如何服务内容）"\n'
+    '  }}\n'
+    "}}\n"
+)
+
+SCRIPT_REMAKE_FROM_ANALYSIS_PROMPT_TEMPLATE = (
+    "# 角色\n"
+    "你是一位顶级短视频内容编导。现在不是重新拆解视频，而是基于已经完成的拆解结果，生成一份新的复刻脚本。\n\n"
+    "# 核心要求\n"
+    "- 只复刻结构、节奏和情绪推进，不复刻原句、原人物、原品牌\n"
+    "- opening_hook 必须直接制造悬念或冲突，禁止空泛寒暄\n"
+    "- 默认普通人单人可执行，优先口播主镜头+画中画补拍，或跟拍Vlog\n"
+    "- storyboard 每个场景必须推动情绪或信息，不能出现低密度过渡镜头\n\n"
+    "# 原视频信息\n"
+    "视频标题：{title}\n"
+    "视频描述：{description}\n\n"
+    "# 已完成的拆解结果\n"
+    "{highlight_analysis_json}\n\n"
+    "# 我的创作思路\n"
+    "{user_prompt}\n\n"
+    "# 输出要求\n"
+    "请严格返回 JSON：\n"
+    "{{\n"
+    '  "generated_script": {{\n'
+    '    "title_suggestion": "新视频建议标题（25字内）",\n'
+    '    "opening_hook": "黄金3秒开场台词（完整可朗读，不超过25字）",\n'
+    '    "middle_body": "中段内容方案（情绪如何从张力→递进→释放）",\n'
+    '    "ending_call": "结尾设计（具体评论钩子或下一期悬念）",\n'
+    '    "storyboard": [\n'
+    '      {{\n'
+    '        "scene": 1,\n'
+    '        "duration": "0-3秒",\n'
+    '        "visual": "画面描述（优先标明口播主镜头/画中画补镜/跟拍vlog）",\n'
+    '        "script": "完整台词（可直接朗读，50字以内）",\n'
+    '        "camera": "拍摄方式（固定机位/手持跟拍/手机补拍）",\n'
+    '        "emotion_beat": "情绪节拍（制造张力/推进悬念/释放共鸣/埋钩子）"\n'
+    '      }}\n'
+    '    ],\n'
+    '    "optimization_tips": [\n'
+    '      "具体优化建议1",\n'
+    '      "具体优化建议2"\n'
+    '    ]\n'
+    '  }}\n'
+    "}}\n"
+)

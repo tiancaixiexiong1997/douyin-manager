@@ -212,6 +212,14 @@ class ScriptExtraction(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    @property
+    def has_highlight_analysis(self) -> bool:
+        return bool(self.highlight_analysis)
+
+    @property
+    def has_generated_script(self) -> bool:
+        return bool(self.generated_script)
+
 
 class ScriptExtractionDraft(Base):
     """脚本拆解页草稿（按用户持久化）。"""
