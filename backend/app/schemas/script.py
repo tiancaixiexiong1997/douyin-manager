@@ -30,6 +30,11 @@ class ExtractionDraftResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ExtractionUpdateRequest(BaseModel):
+    """更新脚本拆解结果"""
+    generated_script: Optional[dict] = None
+
+
 class ExtractionResponse(BaseModel):
     """视频脚本拆解复刻记录的响应"""
     id: str

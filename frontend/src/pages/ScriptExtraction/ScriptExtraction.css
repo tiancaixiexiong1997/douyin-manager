@@ -814,6 +814,43 @@
   margin-bottom: 8px;
 }
 
+.pane-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.pane-header .pane-title {
+  margin-bottom: 0;
+}
+
+.pane-header-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.script-edit-fields,
+.scene-edit-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.script-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.script-edit-field span {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
 .scene-card {
   overflow: hidden;
 }

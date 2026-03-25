@@ -15,6 +15,7 @@ from app.schemas.script import (
     ExtractionDraftUpsertRequest,
     ExtractionResponse,
     ExtractionListResponse,
+    ExtractionUpdateRequest,
 )
 from app.repository.script_repo import script_repo
 from app.repository.script_draft_repo import script_draft_repo
@@ -171,6 +172,36 @@ async def get_extraction(extraction_id: str, db: AsyncSession = Depends(get_db))
     record = await script_repo.get_by_id(db, extraction_id)
     if not record:
         raise HTTPException(status_code=404, detail="记录不存在")
+    return record
+
+
+@router.patch("/{extraction_id}", response_model=ExtractionResponse, summary="更新脚本拆解结果")
+async def update_extraction(
+    extraction_id: str,
+    request: ExtractionUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_member_or_admin),
+):
+    record = await script_repo.get_by_id(db, extraction_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="记录不存在")
+
+    data = request.model_dump(exclude_none=True)
+    if not data:
+        raise HTTPException(status_code=400, detail="没有可更新的内容")
+
+    record = await script_repo.update(db, extraction_id, data)
+    await operation_log_repo.create(
+        db,
+        action="script.update",
+        entity_type="script_extraction",
+        entity_id=extraction_id,
+        actor=current_user.username,
+        detail="更新脚本拆解结果",
+        extra={"fields": list(data.keys())},
+    )
+    await db.commit()
+    await db.refresh(record)
     return record
 
 

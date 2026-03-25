@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { scriptApi, planningApi } from '../../api/client';
-import type { ExtractionCreateRequest, ExtractionListResponse, ExtractionStatus } from '../../api/client';
+import type { ExtractionCreateRequest, ExtractionListResponse, ExtractionResponse, ExtractionStatus } from '../../api/client';
 import { Sparkles, RefreshCw } from '../../components/Icons';
-import { AlertCircle, Trash2, ExternalLink, ChevronDown, Link2, Users, FileEdit, Clock, PlayCircle, Wand2 } from 'lucide-react';
+import { AlertCircle, Trash2, ExternalLink, ChevronDown, Link2, Users, FileEdit, Clock, PlayCircle, Wand2, Save, X } from 'lucide-react';
 import { notifyError, notifyInfo, notifySuccess } from '../../utils/notify';
 import './ScriptExtraction.css';
 
@@ -89,6 +89,8 @@ export default function ScriptExtraction() {
   const [activeExtId, setActiveExtId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isEditingGeneratedScript, setIsEditingGeneratedScript] = useState(false);
+  const [editedGeneratedScript, setEditedGeneratedScript] = useState<ExtractionResponse['generated_script'] | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const autoRetriedExtractionIdsRef = useRef<Set<string>>(new Set());
   const isDraftHydratedRef = useRef(false);
@@ -185,6 +187,13 @@ export default function ScriptExtraction() {
     }
   });
 
+  useEffect(() => {
+    setIsEditingGeneratedScript(false);
+    setEditedGeneratedScript(
+      extraction?.generated_script ? JSON.parse(JSON.stringify(extraction.generated_script)) : null,
+    );
+  }, [extraction?.id]);
+
   // 3. 历史记录查询
   const { data: historyList } = useQuery({
     queryKey: ['extractions'],
@@ -206,6 +215,45 @@ export default function ScriptExtraction() {
   });
   const completedPlans = plans?.filter(p => p.status === 'completed') || [];
   const completedHistory = historyList?.filter((h) => h.status === 'completed').length ?? 0;
+
+  const saveGeneratedScriptMutation = useMutation({
+    mutationFn: (generatedScript: ExtractionResponse['generated_script']) =>
+      scriptApi.updateExtraction(activeExtId!, { generated_script: generatedScript || undefined }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['extraction', data.id], data);
+      queryClient.invalidateQueries({ queryKey: ['extractions'] });
+      setEditedGeneratedScript(
+        data.generated_script ? JSON.parse(JSON.stringify(data.generated_script)) : null,
+      );
+      setIsEditingGeneratedScript(false);
+      notifySuccess('复刻脚本已保存');
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : '未知错误';
+      notifyError(`保存失败：${message}`);
+    },
+  });
+
+  const updateGeneratedScriptField = <K extends keyof NonNullable<ExtractionResponse['generated_script']>>(
+    key: K,
+    value: NonNullable<ExtractionResponse['generated_script']>[K],
+  ) => {
+    setEditedGeneratedScript((current) => current ? { ...current, [key]: value } : current);
+  };
+
+  const updateStoryboardScene = (
+    index: number,
+    key: keyof NonNullable<ExtractionResponse['generated_script']>['storyboard'][number],
+    value: string | number,
+  ) => {
+    setEditedGeneratedScript((current) => {
+      if (!current?.storyboard) return current;
+      const nextStoryboard = current.storyboard.map((scene, sceneIndex) =>
+        sceneIndex === index ? { ...scene, [key]: value } : scene,
+      );
+      return { ...current, storyboard: nextStoryboard };
+    });
+  };
 
   const retryExtractionWithSamePayload = useCallback((target: {
     id: string;
@@ -608,52 +656,209 @@ export default function ScriptExtraction() {
 
                   {/* 右版块：生成的复刻脚本 */}
                   <div className="generated-script-pane">
-                    <h2 className="pane-title">复刻脚本结果</h2>
+                    <div className="pane-header">
+                      <h2 className="pane-title">复刻脚本结果</h2>
+                      {extraction.generated_script && (
+                        <div className="pane-header-actions">
+                          {isEditingGeneratedScript ? (
+                            <>
+                              <button
+                                className="btn btn-primary btn-sm"
+                                disabled={saveGeneratedScriptMutation.isPending || !editedGeneratedScript}
+                                onClick={() => editedGeneratedScript && saveGeneratedScriptMutation.mutate(editedGeneratedScript)}
+                              >
+                                <Save size={14} /> {saveGeneratedScriptMutation.isPending ? '保存中...' : '保存'}
+                              </button>
+                              <button
+                                className="btn btn-ghost btn-sm"
+                                disabled={saveGeneratedScriptMutation.isPending}
+                                onClick={() => {
+                                  setEditedGeneratedScript(
+                                    extraction.generated_script
+                                      ? JSON.parse(JSON.stringify(extraction.generated_script))
+                                      : null,
+                                  );
+                                  setIsEditingGeneratedScript(false);
+                                }}
+                              >
+                                <X size={14} /> 取消
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => {
+                                setEditedGeneratedScript(
+                                  extraction.generated_script
+                                    ? JSON.parse(JSON.stringify(extraction.generated_script))
+                                    : null,
+                                );
+                                setIsEditingGeneratedScript(true);
+                              }}
+                            >
+                              <FileEdit size={14} /> 编辑脚本
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
 
                     {extraction.generated_script && (
                       <div className="script-content">
                         <div className="script-summary">
                           <h3>新视频切入点</h3>
-                          <div><strong>建议标题：</strong>{extraction.generated_script.title_suggestion}</div>
-                          <div><strong>吸睛开头：</strong>{extraction.generated_script.opening_hook}</div>
-                          <div><strong>结尾引导：</strong>{extraction.generated_script.ending_call}</div>
+                          {isEditingGeneratedScript && editedGeneratedScript ? (
+                            <div className="script-edit-fields">
+                              <label className="script-edit-field">
+                                <span>建议标题</span>
+                                <textarea
+                                  className="form-input form-textarea"
+                                  rows={2}
+                                  value={editedGeneratedScript.title_suggestion || ''}
+                                  onChange={(e) => updateGeneratedScriptField('title_suggestion', e.target.value)}
+                                />
+                              </label>
+                              <label className="script-edit-field">
+                                <span>吸睛开头</span>
+                                <textarea
+                                  className="form-input form-textarea"
+                                  rows={2}
+                                  value={editedGeneratedScript.opening_hook || ''}
+                                  onChange={(e) => updateGeneratedScriptField('opening_hook', e.target.value)}
+                                />
+                              </label>
+                              <label className="script-edit-field">
+                                <span>中段方案</span>
+                                <textarea
+                                  className="form-input form-textarea"
+                                  rows={4}
+                                  value={editedGeneratedScript.middle_body || ''}
+                                  onChange={(e) => updateGeneratedScriptField('middle_body', e.target.value)}
+                                />
+                              </label>
+                              <label className="script-edit-field">
+                                <span>结尾引导</span>
+                                <textarea
+                                  className="form-input form-textarea"
+                                  rows={2}
+                                  value={editedGeneratedScript.ending_call || ''}
+                                  onChange={(e) => updateGeneratedScriptField('ending_call', e.target.value)}
+                                />
+                              </label>
+                            </div>
+                          ) : (
+                            <>
+                              <div><strong>建议标题：</strong>{extraction.generated_script.title_suggestion}</div>
+                              <div><strong>吸睛开头：</strong>{extraction.generated_script.opening_hook}</div>
+                              {extraction.generated_script.middle_body && (
+                                <div><strong>中段方案：</strong>{extraction.generated_script.middle_body}</div>
+                              )}
+                              <div><strong>结尾引导：</strong>{extraction.generated_script.ending_call}</div>
+                            </>
+                          )}
                         </div>
 
                         <div className="script-storyboard">
                           <h3>详细分镜</h3>
-                          {extraction.generated_script.storyboard?.map((scene, idx) => (
+                          {(isEditingGeneratedScript ? editedGeneratedScript?.storyboard : extraction.generated_script.storyboard)?.map((scene, idx) => (
                             <div key={idx} className="scene-card">
                               <div className="scene-index">场景 {scene.scene} {scene.duration && `(${scene.duration})`}</div>
-                              <div className="scene-details">
-                                <div className="detail-row">
-                                  <span className="row-label">画面/机位</span>
-                                  <span className="row-text" style={{ fontFamily: 'monospace', color: 'var(--primary-500)' }}>
-                                    {scene.visual} ({scene.camera})
-                                  </span>
+                              {isEditingGeneratedScript && editedGeneratedScript ? (
+                                <div className="scene-details scene-edit-fields">
+                                  <label className="script-edit-field">
+                                    <span>时长</span>
+                                    <input
+                                      className="form-input"
+                                      value={scene.duration || ''}
+                                      onChange={(e) => updateStoryboardScene(idx, 'duration', e.target.value)}
+                                    />
+                                  </label>
+                                  <label className="script-edit-field">
+                                    <span>画面</span>
+                                    <textarea
+                                      className="form-input form-textarea"
+                                      rows={2}
+                                      value={scene.visual || ''}
+                                      onChange={(e) => updateStoryboardScene(idx, 'visual', e.target.value)}
+                                    />
+                                  </label>
+                                  <label className="script-edit-field">
+                                    <span>机位</span>
+                                    <input
+                                      className="form-input"
+                                      value={scene.camera || ''}
+                                      onChange={(e) => updateStoryboardScene(idx, 'camera', e.target.value)}
+                                    />
+                                  </label>
+                                  <label className="script-edit-field">
+                                    <span>情绪/节奏</span>
+                                    <textarea
+                                      className="form-input form-textarea"
+                                      rows={2}
+                                      value={scene.emotion_beat || ''}
+                                      onChange={(e) => updateStoryboardScene(idx, 'emotion_beat', e.target.value)}
+                                    />
+                                  </label>
+                                  <label className="script-edit-field">
+                                    <span>台词配音</span>
+                                    <textarea
+                                      className="form-input form-textarea"
+                                      rows={3}
+                                      value={scene.script || ''}
+                                      onChange={(e) => updateStoryboardScene(idx, 'script', e.target.value)}
+                                    />
+                                  </label>
                                 </div>
-                                <div className="detail-row">
-                                  <span className="row-label">情绪/节奏</span>
-                                  <span className="row-text text-muted">{scene.emotion_beat}</span>
+                              ) : (
+                                <div className="scene-details">
+                                  <div className="detail-row">
+                                    <span className="row-label">画面/机位</span>
+                                    <span className="row-text" style={{ fontFamily: 'monospace', color: 'var(--primary-500)' }}>
+                                      {scene.visual} ({scene.camera})
+                                    </span>
+                                  </div>
+                                  <div className="detail-row">
+                                    <span className="row-label">情绪/节奏</span>
+                                    <span className="row-text text-muted">{scene.emotion_beat}</span>
+                                  </div>
+                                  <div className="detail-row">
+                                    <span className="row-label">台词配音</span>
+                                    <span className="row-text" style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                                      "{scene.script}"
+                                    </span>
+                                  </div>
                                 </div>
-                                <div className="detail-row">
-                                  <span className="row-label">台词配音</span>
-                                  <span className="row-text" style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-                                    "{scene.script}"
-                                  </span>
-                                </div>
-                              </div>
+                              )}
                             </div>
                           ))}
                         </div>
 
-                        {extraction.generated_script.optimization_tips && (
+                        {(isEditingGeneratedScript ? editedGeneratedScript?.optimization_tips : extraction.generated_script.optimization_tips) && (
                           <div className="script-tips">
                             <h3>优化建议</h3>
-                            <ul>
-                              {extraction.generated_script.optimization_tips.map((tip, idx) => (
-                                <li key={idx}>{tip}</li>
-                              ))}
-                            </ul>
+                            {isEditingGeneratedScript && editedGeneratedScript ? (
+                              <textarea
+                                className="form-input form-textarea"
+                                rows={5}
+                                value={(editedGeneratedScript.optimization_tips || []).join('\n')}
+                                onChange={(e) =>
+                                  updateGeneratedScriptField(
+                                    'optimization_tips',
+                                    e.target.value
+                                      .split('\n')
+                                      .map((item) => item.trim())
+                                      .filter(Boolean),
+                                  )
+                                }
+                                placeholder="每行一条优化建议"
+                              />
+                            ) : (
+                              <ul>
+                                {extraction.generated_script.optimization_tips.map((tip, idx) => (
+                                  <li key={idx}>{tip}</li>
+                                ))}
+                              </ul>
+                            )}
                           </div>
                         )}
                       </div>

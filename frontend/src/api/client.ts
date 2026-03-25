@@ -56,6 +56,10 @@ export interface ExtractionDraftResponse {
   updated_at?: string | null;
 }
 
+export interface ExtractionUpdateRequest {
+  generated_script?: ExtractionResponse['generated_script'];
+}
+
 export type ExtractionStatus = 'pending' | 'analyzing' | 'generating' | 'completed' | 'failed';
 
 export interface ExtractionResponse {
@@ -146,6 +150,11 @@ export const scriptApi = {
 
   getExtraction: async (id: string): Promise<ExtractionResponse> => {
     const res = await api.get(`/script/${id}`);
+    return res as unknown as ExtractionResponse;
+  },
+
+  updateExtraction: async (id: string, data: ExtractionUpdateRequest): Promise<ExtractionResponse> => {
+    const res = await api.patch(`/script/${id}`, data);
     return res as unknown as ExtractionResponse;
   },
 
