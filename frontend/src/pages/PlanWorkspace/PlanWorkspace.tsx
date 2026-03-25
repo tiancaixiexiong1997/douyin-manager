@@ -886,7 +886,6 @@ export default function PlanWorkspace() {
                     )}
                   </div>
 
-                  {hasAccountData && (
                   <div className="project-card-actions">
                     {stage !== 'strategy_generating' && stage !== 'calendar_generating' && (
                       <button
@@ -930,7 +929,6 @@ export default function PlanWorkspace() {
                       查看详情
                     </button>
                   </div>
-                  )}
                 </div>
               </div>
             </div>
