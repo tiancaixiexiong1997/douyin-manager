@@ -1296,6 +1296,54 @@
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
 }
 
+[data-theme='light'] .copy-breakdown-card,
+[data-theme='light'] .analysis-edit-segment-card {
+  background: #ffffff;
+  border-color: rgba(148, 163, 184, 0.24);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+[data-theme='light'] .copy-breakdown-head {
+  background: linear-gradient(90deg, rgba(168, 85, 247, 0.12), rgba(99, 102, 241, 0.08));
+  border-bottom-color: rgba(148, 163, 184, 0.18);
+}
+
+[data-theme='light'] .copy-breakdown-title,
+[data-theme='light'] .analysis-edit-segment-title {
+  color: #7c3aed;
+}
+
+[data-theme='light'] .copy-breakdown-duration,
+[data-theme='light'] .pane-subtitle,
+[data-theme='light'] .analysis-edit-empty {
+  color: #64748b;
+}
+
+[data-theme='light'] .copy-breakdown-script {
+  color: #0f172a;
+}
+
+[data-theme='light'] .remake-empty-state {
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0) 46%),
+    linear-gradient(180deg, #ffffff, #f8fbff);
+  border-color: rgba(148, 163, 184, 0.24);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme='light'] .remake-empty-state-badge {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+[data-theme='light'] .remake-empty-state h3 {
+  color: #0f172a;
+}
+
+[data-theme='light'] .remake-empty-state p {
+  color: #475569;
+}
+
 [data-theme='light'] .status-retry-btn {
   border-color: rgba(59, 130, 246, 0.35);
   background: rgba(59, 130, 246, 0.08);
