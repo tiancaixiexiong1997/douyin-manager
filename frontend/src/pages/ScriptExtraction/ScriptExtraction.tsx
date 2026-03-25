@@ -102,6 +102,7 @@ export default function ScriptExtraction() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isEditingAnalysis, setIsEditingAnalysis] = useState(false);
+  const [editedAnalysisTitle, setEditedAnalysisTitle] = useState('');
   const [editedHighlightAnalysis, setEditedHighlightAnalysis] = useState<ExtractionResponse['highlight_analysis'] | null>(null);
   const [isEditingGeneratedScript, setIsEditingGeneratedScript] = useState(false);
   const [editedGeneratedScript, setEditedGeneratedScript] = useState<ExtractionResponse['generated_script'] | null>(null);
@@ -205,6 +206,7 @@ export default function ScriptExtraction() {
 
   useEffect(() => {
     setIsEditingAnalysis(false);
+    setEditedAnalysisTitle(extraction?.title || '');
     setEditedHighlightAnalysis(
       extraction?.highlight_analysis ? JSON.parse(JSON.stringify(extraction.highlight_analysis)) : null,
     );
@@ -416,7 +418,8 @@ export default function ScriptExtraction() {
   const isProcessing = extraction?.status === 'pending' || extraction?.status === 'analyzing' || extraction?.status === 'generating';
   const hasAnalysis = Boolean(extraction?.highlight_analysis || extraction?.has_highlight_analysis);
   const hasGeneratedScript = Boolean(extraction?.generated_script || extraction?.has_generated_script);
-  const analysisExportBaseName = sanitizeFilename(extraction?.title || extraction?.source_video_url || 'source-analysis');
+  const analysisTitleForExport = (isEditingAnalysis ? editedAnalysisTitle : extraction?.title) || '未命名视频';
+  const analysisExportBaseName = sanitizeFilename(analysisTitleForExport || extraction?.source_video_url || 'source-analysis');
   const analysisForExport = isEditingAnalysis && editedHighlightAnalysis
     ? editedHighlightAnalysis
     : extraction?.highlight_analysis;
@@ -688,6 +691,7 @@ export default function ScriptExtraction() {
                           <button
                             className="btn btn-ghost btn-sm"
                             onClick={() => {
+                              setEditedAnalysisTitle(extraction.title || '');
                               setEditedHighlightAnalysis(
                                 extraction.highlight_analysis
                                   ? JSON.parse(JSON.stringify(extraction.highlight_analysis))
@@ -796,37 +800,7 @@ export default function ScriptExtraction() {
                         <div ref={analysisExportRef} className="analysis-export-long">
                           <div className="analysis-export-header">
                             <div className="analysis-export-pill">源视频拆解长图</div>
-                            <h2>{extraction.title || '未命名视频'}</h2>
-                            {extraction.description && (
-                              <p className="analysis-export-desc">{extraction.description}</p>
-                            )}
-                          </div>
-
-                          <div className="analysis-export-grid">
-                            <div className="analysis-export-card">
-                              <span>核心主题</span>
-                              <p>{analysisForExport.core_theme}</p>
-                            </div>
-                            <div className="analysis-export-card">
-                              <span>爆款结构</span>
-                              <p>{analysisForExport.success_structure}</p>
-                            </div>
-                            <div className="analysis-export-card">
-                              <span>钩子机制</span>
-                              <p>{analysisForExport.hook_mechanism}</p>
-                            </div>
-                            <div className="analysis-export-card">
-                              <span>文案风格</span>
-                              <p>{analysisForExport.copywriting_style}</p>
-                            </div>
-                            <div className="analysis-export-card analysis-export-card-wide">
-                              <span>视觉节奏</span>
-                              <p>{analysisForExport.visual_rhythm}</p>
-                            </div>
-                            <div className="analysis-export-card analysis-export-card-wide">
-                              <span>声音与情绪</span>
-                              <p>{analysisForExport.audio_emotion}</p>
-                            </div>
+                            <h2>{analysisTitleForExport}</h2>
                           </div>
 
                           {analysisForExport.copy_segment_breakdown?.length ? (
@@ -1137,6 +1111,7 @@ export default function ScriptExtraction() {
                   className="btn btn-ghost btn-sm"
                   disabled={isExportingAnalysis}
                   onClick={() => {
+                    setEditedAnalysisTitle(extraction?.title || '');
                     setEditedHighlightAnalysis(
                       extraction?.highlight_analysis ? JSON.parse(JSON.stringify(extraction.highlight_analysis)) : null,
                     );
@@ -1149,6 +1124,15 @@ export default function ScriptExtraction() {
             </div>
 
             <div className="analysis-edit-modal-body">
+              <label className="script-edit-field">
+                <span>导出标题</span>
+                <input
+                  className="form-input"
+                  value={editedAnalysisTitle}
+                  onChange={(e) => setEditedAnalysisTitle(e.target.value)}
+                  placeholder="请输入导出长图标题"
+                />
+              </label>
               {editedHighlightAnalysis.copy_segment_breakdown?.length ? (
                 <div className="analysis-edit-sections">
                   <h4>逐段文案拆解</h4>
