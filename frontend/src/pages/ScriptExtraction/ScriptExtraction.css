@@ -723,10 +723,67 @@
 
 .script-summary,
 .scene-card,
-.script-tips {
+.script-tips,
+.copy-breakdown-card {
   border-radius: 14px;
   border: 1px solid rgba(148, 163, 184, 0.18);
   background: rgba(15, 23, 42, 0.18);
+}
+
+.source-copy-breakdown {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.source-copy-breakdown h3 {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.source-copy-breakdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.copy-breakdown-card {
+  overflow: hidden;
+}
+
+.copy-breakdown-head {
+  min-height: 34px;
+  padding: 8px 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(168, 85, 247, 0.08);
+}
+
+.copy-breakdown-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #c084fc;
+}
+
+.copy-breakdown-duration {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.copy-breakdown-body {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.copy-breakdown-script {
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 .script-summary {

@@ -564,6 +564,46 @@ export default function ScriptExtraction() {
                         </div>
                       </div>
                     )}
+
+                    {extraction.highlight_analysis?.copy_segment_breakdown?.length ? (
+                      <div className="source-copy-breakdown">
+                        <h3>逐段文案拆解</h3>
+                        <div className="source-copy-breakdown-list">
+                          {extraction.highlight_analysis.copy_segment_breakdown.map((segment, idx) => (
+                            <div key={`${segment.segment}-${idx}`} className="copy-breakdown-card">
+                              <div className="copy-breakdown-head">
+                                <div className="copy-breakdown-title">{segment.segment || `第 ${idx + 1} 段`}</div>
+                                {segment.duration && (
+                                  <div className="copy-breakdown-duration">{segment.duration}</div>
+                                )}
+                              </div>
+                              <div className="copy-breakdown-body">
+                                <div className="detail-row">
+                                  <span className="row-label">原段文案</span>
+                                  <span className="row-text copy-breakdown-script">“{segment.original_copy}”</span>
+                                </div>
+                                <div className="detail-row">
+                                  <span className="row-label">作用</span>
+                                  <span className="row-text">{segment.copy_function}</span>
+                                </div>
+                                {segment.emotion_goal && (
+                                  <div className="detail-row">
+                                    <span className="row-label">情绪目标</span>
+                                    <span className="row-text">{segment.emotion_goal}</span>
+                                  </div>
+                                )}
+                                {segment.transition_role && (
+                                  <div className="detail-row">
+                                    <span className="row-label">承接方式</span>
+                                    <span className="row-text">{segment.transition_role}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
 
                   {/* 右版块：生成的复刻脚本 */}

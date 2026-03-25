@@ -74,6 +74,14 @@ export interface ExtractionResponse {
     success_structure: string;
     hook_mechanism: string;
     copywriting_style: string;
+    copy_segment_breakdown?: Array<{
+      segment: string;
+      duration?: string;
+      original_copy: string;
+      copy_function: string;
+      emotion_goal?: string;
+      transition_role?: string;
+    }>;
     visual_rhythm: string;
     audio_emotion: string;
   };
