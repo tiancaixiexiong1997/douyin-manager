@@ -254,24 +254,6 @@ export default function ScriptExtraction() {
     },
   });
 
-  const saveAnalysisMutation = useMutation({
-    mutationFn: (highlightAnalysis: ExtractionResponse['highlight_analysis']) =>
-      scriptApi.updateExtraction(activeExtId!, { highlight_analysis: highlightAnalysis || undefined }),
-    onSuccess: (data) => {
-      queryClient.setQueryData(['extraction', data.id], data);
-      queryClient.invalidateQueries({ queryKey: ['extractions'] });
-      setEditedHighlightAnalysis(
-        data.highlight_analysis ? JSON.parse(JSON.stringify(data.highlight_analysis)) : null,
-      );
-      setIsEditingAnalysis(false);
-      notifySuccess('拆解文案已保存');
-    },
-    onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : '未知错误';
-      notifyError(`保存失败：${message}`);
-    },
-  });
-
   const generateRemakeMutation = useMutation({
     mutationFn: (id: string) => scriptApi.generateRemake(id),
     onSuccess: (data) => {
@@ -304,13 +286,6 @@ export default function ScriptExtraction() {
       );
       return { ...current, storyboard: nextStoryboard };
     });
-  };
-
-  const updateHighlightAnalysisField = <K extends keyof NonNullable<ExtractionResponse['highlight_analysis']>>(
-    key: K,
-    value: NonNullable<ExtractionResponse['highlight_analysis']>[K],
-  ) => {
-    setEditedHighlightAnalysis((current) => current ? { ...current, [key]: value } : current);
   };
 
   const updateCopySegmentField = (
@@ -442,9 +417,12 @@ export default function ScriptExtraction() {
   const hasAnalysis = Boolean(extraction?.highlight_analysis || extraction?.has_highlight_analysis);
   const hasGeneratedScript = Boolean(extraction?.generated_script || extraction?.has_generated_script);
   const analysisExportBaseName = sanitizeFilename(extraction?.title || extraction?.source_video_url || 'source-analysis');
+  const analysisForExport = isEditingAnalysis && editedHighlightAnalysis
+    ? editedHighlightAnalysis
+    : extraction?.highlight_analysis;
 
   const handleExportAnalysisLongImage = async () => {
-    if (!extraction?.highlight_analysis || isEditingAnalysis || isExportingAnalysis) return;
+    if (!analysisForExport || isExportingAnalysis) return;
     if (!analysisExportRef.current) {
       notifyInfo('当前还没有可导出的拆解内容');
       return;
@@ -696,7 +674,7 @@ export default function ScriptExtraction() {
                     <div className="pane-header">
                       <div>
                         <h2 className="pane-title">源视频拆解结果</h2>
-                        <p className="pane-subtitle">支持手动修改拆解文案，并导出客户可看的长图版本。</p>
+                        <p className="pane-subtitle">支持临时修改逐段文案拆解，并导出长图；关闭弹窗后不会改动原文案。</p>
                       </div>
                       {extraction.highlight_analysis && (
                         <div className="pane-header-actions">
@@ -718,7 +696,7 @@ export default function ScriptExtraction() {
                               setIsEditingAnalysis(true);
                             }}
                           >
-                            <Pencil size={14} /> 编辑文案
+                            <Pencil size={14} /> 编辑逐段文案
                           </button>
                         </div>
                       )}
@@ -813,7 +791,7 @@ export default function ScriptExtraction() {
                       </div>
                     ) : null}
 
-                    {extraction.highlight_analysis && (
+                    {analysisForExport && (
                       <div className="analysis-export-canvas-wrap" aria-hidden="true">
                         <div ref={analysisExportRef} className="analysis-export-long">
                           <div className="analysis-export-header">
@@ -827,34 +805,34 @@ export default function ScriptExtraction() {
                           <div className="analysis-export-grid">
                             <div className="analysis-export-card">
                               <span>核心主题</span>
-                              <p>{extraction.highlight_analysis.core_theme}</p>
+                              <p>{analysisForExport.core_theme}</p>
                             </div>
                             <div className="analysis-export-card">
                               <span>爆款结构</span>
-                              <p>{extraction.highlight_analysis.success_structure}</p>
+                              <p>{analysisForExport.success_structure}</p>
                             </div>
                             <div className="analysis-export-card">
                               <span>钩子机制</span>
-                              <p>{extraction.highlight_analysis.hook_mechanism}</p>
+                              <p>{analysisForExport.hook_mechanism}</p>
                             </div>
                             <div className="analysis-export-card">
                               <span>文案风格</span>
-                              <p>{extraction.highlight_analysis.copywriting_style}</p>
+                              <p>{analysisForExport.copywriting_style}</p>
                             </div>
                             <div className="analysis-export-card analysis-export-card-wide">
                               <span>视觉节奏</span>
-                              <p>{extraction.highlight_analysis.visual_rhythm}</p>
+                              <p>{analysisForExport.visual_rhythm}</p>
                             </div>
                             <div className="analysis-export-card analysis-export-card-wide">
                               <span>声音与情绪</span>
-                              <p>{extraction.highlight_analysis.audio_emotion}</p>
+                              <p>{analysisForExport.audio_emotion}</p>
                             </div>
                           </div>
 
-                          {extraction.highlight_analysis.copy_segment_breakdown?.length ? (
+                          {analysisForExport.copy_segment_breakdown?.length ? (
                             <div className="analysis-export-segments">
                               <h3>逐段文案拆解</h3>
-                              {extraction.highlight_analysis.copy_segment_breakdown.map((segment, idx) => (
+                              {analysisForExport.copy_segment_breakdown.map((segment, idx) => (
                                 <div key={`${segment.segment}-${idx}`} className="analysis-export-segment-card">
                                   <div className="analysis-export-segment-head">
                                     <strong>{segment.segment || `第 ${idx + 1} 段`}</strong>
@@ -1144,20 +1122,20 @@ export default function ScriptExtraction() {
           <div className="ext-modal ext-modal-large">
             <div className="analysis-edit-modal-header">
               <div>
-                <h3 className="ext-modal-title">编辑源视频拆解文案</h3>
-                <p className="ext-modal-desc">你可以直接改每个拆解字段和逐段文案，保存后会覆盖当前拆解结果。</p>
+                <h3 className="ext-modal-title">编辑逐段文案拆解</h3>
+                <p className="ext-modal-desc">这里的修改只用于当前次导出长图。关闭弹窗或离开页面后，不会覆盖原拆解文案。</p>
               </div>
               <div className="analysis-edit-modal-actions">
                 <button
                   className="btn btn-primary btn-sm"
-                  disabled={saveAnalysisMutation.isPending || !editedHighlightAnalysis}
-                  onClick={() => editedHighlightAnalysis && saveAnalysisMutation.mutate(editedHighlightAnalysis)}
+                  disabled={isExportingAnalysis || !editedHighlightAnalysis}
+                  onClick={handleExportAnalysisLongImage}
                 >
-                  <Save size={14} /> {saveAnalysisMutation.isPending ? '保存中...' : '保存'}
+                  <Download size={14} /> {isExportingAnalysis ? '导出中...' : '导出长图'}
                 </button>
                 <button
                   className="btn btn-ghost btn-sm"
-                  disabled={saveAnalysisMutation.isPending}
+                  disabled={isExportingAnalysis}
                   onClick={() => {
                     setEditedHighlightAnalysis(
                       extraction?.highlight_analysis ? JSON.parse(JSON.stringify(extraction.highlight_analysis)) : null,
@@ -1171,61 +1149,6 @@ export default function ScriptExtraction() {
             </div>
 
             <div className="analysis-edit-modal-body">
-              <label className="script-edit-field">
-                <span>核心主题</span>
-                <textarea
-                  className="form-input form-textarea"
-                  rows={3}
-                  value={editedHighlightAnalysis.core_theme || ''}
-                  onChange={(e) => updateHighlightAnalysisField('core_theme', e.target.value)}
-                />
-              </label>
-              <label className="script-edit-field">
-                <span>爆款结构</span>
-                <textarea
-                  className="form-input form-textarea"
-                  rows={4}
-                  value={editedHighlightAnalysis.success_structure || ''}
-                  onChange={(e) => updateHighlightAnalysisField('success_structure', e.target.value)}
-                />
-              </label>
-              <label className="script-edit-field">
-                <span>钩子机制</span>
-                <textarea
-                  className="form-input form-textarea"
-                  rows={3}
-                  value={editedHighlightAnalysis.hook_mechanism || ''}
-                  onChange={(e) => updateHighlightAnalysisField('hook_mechanism', e.target.value)}
-                />
-              </label>
-              <label className="script-edit-field">
-                <span>文案风格</span>
-                <textarea
-                  className="form-input form-textarea"
-                  rows={4}
-                  value={editedHighlightAnalysis.copywriting_style || ''}
-                  onChange={(e) => updateHighlightAnalysisField('copywriting_style', e.target.value)}
-                />
-              </label>
-              <label className="script-edit-field">
-                <span>视觉节奏</span>
-                <textarea
-                  className="form-input form-textarea"
-                  rows={4}
-                  value={editedHighlightAnalysis.visual_rhythm || ''}
-                  onChange={(e) => updateHighlightAnalysisField('visual_rhythm', e.target.value)}
-                />
-              </label>
-              <label className="script-edit-field">
-                <span>声音与情绪</span>
-                <textarea
-                  className="form-input form-textarea"
-                  rows={4}
-                  value={editedHighlightAnalysis.audio_emotion || ''}
-                  onChange={(e) => updateHighlightAnalysisField('audio_emotion', e.target.value)}
-                />
-              </label>
-
               {editedHighlightAnalysis.copy_segment_breakdown?.length ? (
                 <div className="analysis-edit-sections">
                   <h4>逐段文案拆解</h4>
@@ -1287,7 +1210,9 @@ export default function ScriptExtraction() {
                     </div>
                   ))}
                 </div>
-              ) : null}
+              ) : (
+                <div className="analysis-edit-empty">当前没有逐段文案拆解可编辑。</div>
+              )}
             </div>
           </div>
         </div>

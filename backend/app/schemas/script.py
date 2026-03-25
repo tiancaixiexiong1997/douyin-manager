@@ -32,7 +32,6 @@ class ExtractionDraftResponse(BaseModel):
 
 class ExtractionUpdateRequest(BaseModel):
     """更新脚本拆解结果"""
-    highlight_analysis: Optional[dict] = None
     generated_script: Optional[dict] = None
 
 

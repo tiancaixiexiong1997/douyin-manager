@@ -57,7 +57,6 @@ export interface ExtractionDraftResponse {
 }
 
 export interface ExtractionUpdateRequest {
-  highlight_analysis?: ExtractionResponse['highlight_analysis'];
   generated_script?: ExtractionResponse['generated_script'];
 }
 
