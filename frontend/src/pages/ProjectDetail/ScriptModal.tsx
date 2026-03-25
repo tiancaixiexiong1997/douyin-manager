@@ -2,9 +2,16 @@ import { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toPng } from 'html-to-image';
-import { planningApi, type ContentItem, type TaskCenterItem, type VideoScript } from '../../api/client';
+import {
+  planningApi,
+  type ContentItem,
+  type TaskCenterItem,
+  type TaskCenterListResponse,
+  type VideoScript,
+} from '../../api/client';
 import { Download, FileText, Loader2, Pencil, Save, Sparkles, X } from '../../components/Icons';
 import { notifyError, notifyInfo, notifySuccess } from '../../utils/notify';
+import { upsertOptimisticTask } from './projectDetailShared';
 
 type ScriptTaskStatus = TaskCenterItem['status'] | null;
 
@@ -44,9 +51,35 @@ export function ScriptModal({
 
   const generateMutation = useMutation({
     mutationFn: () => planningApi.generateScript(item.id),
+    onMutate: async () => {
+      const optimisticTask: TaskCenterItem = {
+        id: `optimistic-script-${item.id}`,
+        task_key: `planning:content-item:${item.id}:script-generate`,
+        task_type: 'planning_script_generate',
+        title: `生成脚本：Day ${item.day_number}`,
+        entity_type: 'content_item',
+        entity_id: item.id,
+        status: 'running',
+        progress_step: 'generating',
+        message: 'AI 正在生成脚本',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      const previousTaskPage = qc.getQueryData<TaskCenterListResponse>(['content-script-tasks', projectId]);
+      qc.setQueryData<TaskCenterListResponse>(['content-script-tasks', projectId], (current) =>
+        upsertOptimisticTask(current, optimisticTask),
+      );
+      return { previousTaskPage };
+    },
     onSuccess: (data) => {
       setScript(data.script);
       qc.invalidateQueries({ queryKey: ['project', projectId] });
+      qc.invalidateQueries({ queryKey: ['content-script-tasks', projectId] });
+    },
+    onError: (_error, _variables, context) => {
+      qc.setQueryData(['content-script-tasks', projectId], context?.previousTaskPage);
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ['content-script-tasks', projectId] });
     },
   });
