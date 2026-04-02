@@ -546,7 +546,7 @@ export default function ScriptExtraction() {
                 )}
               </div>
               <p style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
-                选择项目后，系统会自动读取该账号定位与受众信息，后续生成复刻脚本时会更贴合人设。
+                选择项目后，系统会自动读取该项目的增长策略与目标受众信息，后续生成复刻脚本时会更贴合门店定位。
               </p>
             </div>
 

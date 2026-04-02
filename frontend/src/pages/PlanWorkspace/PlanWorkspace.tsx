@@ -7,6 +7,7 @@ import {
   bloggerApi,
   type CreatePlanningRequest,
   type PlanningIntakeDraft,
+  type StoreProfile,
 } from '../../api/client';
 import { CustomSelect } from '../../components/CustomSelect';
 import { Plus, X, Sparkles, ArrowRight, CheckCircle, Trash2, RefreshCw, Link as LinkIcon, Search, Filter, DouyinIcon } from '../../components/Icons';
@@ -22,13 +23,46 @@ const INTAKE_FIELD_LABELS: Record<typeof REQUIRED_INTAKE_FIELDS[number], string>
   client_name: '客户/品牌名称',
   industry: '行业垂类',
   target_audience: '目标受众',
-  ip_requirements: '账号定位与内容支柱',
+  ip_requirements: '门店打法与内容方向',
 };
+const INTAKE_DETAIL_LABELS: Record<string, string> = {
+  client_name: '客户/品牌名称',
+  industry: '行业垂类',
+  target_audience: '目标受众',
+  unique_advantage: '独特优势',
+  ip_requirements: '门店打法',
+  style_preference: '表达风格',
+  business_goal: '商业目标',
+  city: '所在城市',
+  business_district: '商圈/区域',
+  store_type: '门店类型',
+  avg_ticket: '客单价',
+  core_products_or_services: '主营产品/服务',
+  top_reasons_to_choose: '顾客为什么选你',
+  customer_common_questions: '顾客常问问题',
+  common_hesitations: '顾客犹豫点',
+  primary_consumption_scenes: '消费场景',
+  on_camera_roles: '出镜角色',
+  shootable_scenes: '可拍场景',
+  peak_hours: '高峰时段',
+  store_constraints: '拍摄限制',
+  publishing_rhythm: '发布节奏',
+  time_windows: '发布时间',
+  goal_target: '阶段目标',
+  iteration_rule: '迭代规则',
+};
+
+function splitChineseList(value: string): string[] {
+  return value
+    .split(/[、,，\n]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
 const STATUS_FILTER_OPTIONS = [
   { value: 'all', label: '全部状态' },
   { value: 'draft', label: '草稿/待开始' },
-  { value: 'strategy_generating', label: '定位生成中' },
-  { value: 'strategy_completed', label: '定位已完成' },
+  { value: 'strategy_generating', label: '策略生成中' },
+  { value: 'strategy_completed', label: '策略已完成' },
   { value: 'calendar_generating', label: '日历生成中' },
   { value: 'completed', label: '已完成' },
 ];
@@ -70,8 +104,18 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
   const [facts, setFacts] = useState({
     client_name: '',
     industry: '',
+    city: '',
+    business_district: '',
+    store_type: '',
+    avg_ticket: '',
     business_or_service: '',
+    top_reasons_to_choose: '',
+    customer_common_questions: '',
+    common_hesitations: '',
+    primary_consumption_scenes: '',
     presenter_profile: '',
+    shootable_scenes: '',
+    peak_hours: '',
     resources_and_constraints: '',
     desired_result: '',
   });
@@ -83,6 +127,24 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
     ip_requirements: '',
     style_preference: '',
     business_goal: '',
+    store_profile: {
+      city: '',
+      business_district: '',
+      store_type: '',
+      avg_ticket: '',
+      core_products_or_services: [],
+      top_reasons_to_choose: [],
+      customer_common_questions: [],
+      common_hesitations: [],
+      primary_consumption_scenes: [],
+      on_camera_roles: [],
+      shootable_scenes: [],
+      peak_hours: [],
+      batch_shoot_windows: [],
+      store_constraints: [],
+      special_requirements: '',
+      forbidden_directions: [],
+    },
     reference_blogger_ids: [],
     account_homepage_url: '',
   });
@@ -90,6 +152,12 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
   const [timeWindows, setTimeWindows] = useState('19:00、21:00');
   const [goalTarget, setGoalTarget] = useState('30天发布10条，至少跑出1-2条高潜内容');
   const [iterationRule, setIterationRule] = useState('每周复盘1次，每次只调整1-2个变量（开头/标题/结构）');
+  const [intakeInsight, setIntakeInsight] = useState<{
+    assistantReply: string;
+    inferredFields: string[];
+    confirmationSummary: string;
+    readyForGenerate: boolean;
+  } | null>(null);
   const qc = useQueryClient();
   const { data: bloggers = [] } = useQuery({ queryKey: ['bloggers'], queryFn: () => bloggerApi.list() });
   const selectedReferenceBloggers = useMemo(
@@ -106,6 +174,22 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
         mode: 'fast',
       }),
     onSuccess: (result) => {
+      setFacts((prev) => ({
+        ...prev,
+        city: prev.city || result.draft.city || '',
+        business_district: prev.business_district || result.draft.business_district || '',
+        store_type: prev.store_type || result.draft.store_type || '',
+        avg_ticket: prev.avg_ticket || result.draft.avg_ticket || '',
+        business_or_service: prev.business_or_service || result.draft.core_products_or_services || '',
+        top_reasons_to_choose: prev.top_reasons_to_choose || result.draft.top_reasons_to_choose || '',
+        customer_common_questions: prev.customer_common_questions || result.draft.customer_common_questions || '',
+        common_hesitations: prev.common_hesitations || result.draft.common_hesitations || '',
+        primary_consumption_scenes: prev.primary_consumption_scenes || result.draft.primary_consumption_scenes || '',
+        presenter_profile: prev.presenter_profile || result.draft.on_camera_roles || '',
+        shootable_scenes: prev.shootable_scenes || result.draft.shootable_scenes || '',
+        peak_hours: prev.peak_hours || result.draft.peak_hours || '',
+        resources_and_constraints: prev.resources_and_constraints || result.draft.store_constraints || '',
+      }));
       setForm((prev) => ({
         ...prev,
         client_name: result.draft.client_name || prev.client_name,
@@ -116,6 +200,12 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
         style_preference: result.draft.style_preference || prev.style_preference,
         business_goal: result.draft.business_goal || prev.business_goal,
       }));
+      setIntakeInsight({
+        assistantReply: result.assistant_reply || '',
+        inferredFields: result.inferred_fields || [],
+        confirmationSummary: result.confirmation_summary || '',
+        readyForGenerate: result.ready_for_generate,
+      });
     },
     onError: (err) => notifyError(`生成策划草案失败：${err.message}`),
   });
@@ -151,6 +241,20 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
     (facts.business_or_service.trim() || facts.presenter_profile.trim() || facts.desired_result.trim())
   );
   const nextStepLabel = step === 1 ? '进入参考 IP' : '进入生成确认';
+  const previewStoreBasics = [
+    { label: '门店位置', value: [facts.city.trim(), facts.business_district.trim()].filter(Boolean).join(' · ') },
+    { label: '门店类型', value: facts.store_type.trim() },
+    { label: '客单价', value: facts.avg_ticket.trim() },
+    { label: '主营产品/服务', value: facts.business_or_service.trim() },
+    { label: '消费场景', value: facts.primary_consumption_scenes.trim() },
+    { label: '出镜角色', value: facts.presenter_profile.trim() },
+  ].filter((item) => item.value);
+  const previewStrategy = [
+    { label: '目标受众', value: form.target_audience.trim() },
+    { label: '独特优势', value: form.unique_advantage?.trim() || '' },
+    { label: '门店打法', value: form.ip_requirements.trim() },
+    { label: '商业目标', value: form.business_goal?.trim() || facts.desired_result.trim() },
+  ].filter((item) => item.value);
 
   const buildIntakeDraft = (): PlanningIntakeDraft => ({
     client_name: form.client_name || facts.client_name || '',
@@ -160,6 +264,19 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
     ip_requirements: form.ip_requirements || '',
     style_preference: form.style_preference || '',
     business_goal: form.business_goal || facts.desired_result || '',
+    city: facts.city || '',
+    business_district: facts.business_district || '',
+    store_type: facts.store_type || '',
+    avg_ticket: facts.avg_ticket || '',
+    core_products_or_services: facts.business_or_service || '',
+    top_reasons_to_choose: facts.top_reasons_to_choose || '',
+    customer_common_questions: facts.customer_common_questions || '',
+    common_hesitations: facts.common_hesitations || '',
+    primary_consumption_scenes: facts.primary_consumption_scenes || '',
+    on_camera_roles: facts.presenter_profile || '',
+    shootable_scenes: facts.shootable_scenes || '',
+    peak_hours: facts.peak_hours || '',
+    store_constraints: facts.resources_and_constraints || '',
     publishing_rhythm: {
       month10: '每月10条（推荐，3天1条）',
       month12: '每月12条（2-3天1条）',
@@ -172,13 +289,23 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
 
   const buildFactPrompt = () => ([
     '请基于下面这些已知事实，直接推断一版可执行的账号策划草案。',
-    '重点补齐：目标受众画像、账号定位与内容支柱、独特优势/可信点。',
+    '重点补齐：目标受众画像、门店打法与内容方向、独特优势/可信点。',
     '除非完全没有线索，否则不要回写“信息不足”“待确认”“后补充”这类占位词，优先给出可修改的初稿。',
     '',
     `客户/品牌名称：${facts.client_name.trim()}`,
     `行业垂类：${facts.industry.trim()}`,
+    `所在城市：${facts.city.trim() || '未补充'}`,
+    `商圈/区域：${facts.business_district.trim() || '未补充'}`,
+    `门店类型：${facts.store_type.trim() || '未补充'}`,
+    `客单价：${facts.avg_ticket.trim() || '未补充'}`,
     `主营业务/产品/服务：${facts.business_or_service.trim() || '未补充'}`,
+    `顾客为什么选你：${facts.top_reasons_to_choose.trim() || '未补充'}`,
+    `顾客最常问的问题：${facts.customer_common_questions.trim() || '未补充'}`,
+    `顾客最常犹豫的点：${facts.common_hesitations.trim() || '未补充'}`,
+    `主要消费场景：${facts.primary_consumption_scenes.trim() || '未补充'}`,
     `谁来出镜/账号身份：${facts.presenter_profile.trim() || '未补充'}`,
+    `可拍场景：${facts.shootable_scenes.trim() || '未补充'}`,
+    `高峰时段：${facts.peak_hours.trim() || '未补充'}`,
     `现有资源与限制：${facts.resources_and_constraints.trim() || '未补充'}`,
     `希望达到的结果：${facts.desired_result.trim() || '未补充'}`,
   ].join('\n'));
@@ -194,6 +321,24 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
       ? form.ip_requirements.trim()
       : `${form.ip_requirements.trim()}\n\n${executionBlock}`;
     const combinedBusinessGoal = [form.business_goal?.trim(), goalTarget.trim()].filter(Boolean).join('；');
+    const storeProfile: StoreProfile = {
+      city: facts.city.trim(),
+      business_district: facts.business_district.trim(),
+      store_type: facts.store_type.trim(),
+      avg_ticket: facts.avg_ticket.trim(),
+      core_products_or_services: splitChineseList(facts.business_or_service),
+      top_reasons_to_choose: splitChineseList(facts.top_reasons_to_choose),
+      customer_common_questions: splitChineseList(facts.customer_common_questions),
+      common_hesitations: splitChineseList(facts.common_hesitations),
+      primary_consumption_scenes: splitChineseList(facts.primary_consumption_scenes),
+      on_camera_roles: splitChineseList(facts.presenter_profile),
+      shootable_scenes: splitChineseList(facts.shootable_scenes),
+      peak_hours: splitChineseList(facts.peak_hours),
+      batch_shoot_windows: splitChineseList(timeWindows),
+      store_constraints: splitChineseList(facts.resources_and_constraints),
+      special_requirements: '',
+      forbidden_directions: [],
+    };
     return {
       ...form,
       client_name: form.client_name.trim(),
@@ -203,6 +348,7 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
       ip_requirements: normalizedIpRequirements,
       style_preference: form.style_preference?.trim() || undefined,
       business_goal: combinedBusinessGoal || undefined,
+      store_profile: storeProfile,
       account_homepage_url: form.account_homepage_url?.trim() || undefined,
     };
   };
@@ -272,13 +418,91 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
                     />
                   </div>
                 </div>
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">所在城市</label>
+                    <input
+                      className="form-input"
+                      placeholder="如：柳州"
+                      value={facts.city}
+                      onChange={e => setFacts((prev) => ({ ...prev, city: e.target.value }))}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">商圈 / 区域</label>
+                    <input
+                      className="form-input"
+                      placeholder="如：城中区、万象附近"
+                      value={facts.business_district}
+                      onChange={e => setFacts((prev) => ({ ...prev, business_district: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">门店类型</label>
+                    <input
+                      className="form-input"
+                      placeholder="如：夜宵烧烤店、体态馆、回收门店"
+                      value={facts.store_type}
+                      onChange={e => setFacts((prev) => ({ ...prev, store_type: e.target.value }))}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">客单价</label>
+                    <input
+                      className="form-input"
+                      placeholder="如：人均30"
+                      value={facts.avg_ticket}
+                      onChange={e => setFacts((prev) => ({ ...prev, avg_ticket: e.target.value }))}
+                    />
+                  </div>
+                </div>
                 <div className="form-group">
                   <label className="form-label">主营业务 / 产品 / 服务</label>
                   <textarea
                     className="form-input form-textarea"
-                    placeholder="如：主要做敏感肌护肤咨询，卖自研精华，也提供一对一护肤方案。"
+                    placeholder="用顿号或逗号分隔。如：紫苏炒鸭脚、炒螺、烧烤、夜宵套餐"
                     value={facts.business_or_service}
                     onChange={e => setFacts((prev) => ({ ...prev, business_or_service: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">顾客为什么选你</label>
+                  <textarea
+                    className="form-input form-textarea"
+                    placeholder="用顿号或逗号分隔。如：上桌快、味道稳、老板会推荐、不容易踩雷"
+                    value={facts.top_reasons_to_choose}
+                    onChange={e => setFacts((prev) => ({ ...prev, top_reasons_to_choose: e.target.value }))}
+                  />
+                </div>
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">顾客最常问的问题</label>
+                    <textarea
+                      className="form-input form-textarea"
+                      placeholder="如：几个人怎么点、招牌是什么、几点后要等多久"
+                      value={facts.customer_common_questions}
+                      onChange={e => setFacts((prev) => ({ ...prev, customer_common_questions: e.target.value }))}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">顾客最常犹豫的点</label>
+                    <textarea
+                      className="form-input form-textarea"
+                      placeholder="如：怕贵、怕等太久、怕不正宗"
+                      value={facts.common_hesitations}
+                      onChange={e => setFacts((prev) => ({ ...prev, common_hesitations: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">主要消费场景</label>
+                  <textarea
+                    className="form-input form-textarea"
+                    placeholder="如：下班吃饭、朋友聚会、夜宵加餐、第一次来柳州"
+                    value={facts.primary_consumption_scenes}
+                    onChange={e => setFacts((prev) => ({ ...prev, primary_consumption_scenes: e.target.value }))}
                   />
                 </div>
               </div>
@@ -288,16 +512,36 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
                   <label className="form-label">谁来出镜 / 账号身份</label>
                   <textarea
                     className="form-input form-textarea"
-                    placeholder="如：创始人本人出镜，8年护肤经验，口播没问题，但不擅长剧情演绎。"
+                    placeholder="用顿号或逗号分隔。如：老板本人、店长、后厨师傅"
                     value={facts.presenter_profile}
                     onChange={e => setFacts((prev) => ({ ...prev, presenter_profile: e.target.value }))}
                   />
+                </div>
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">可拍场景</label>
+                    <textarea
+                      className="form-input form-textarea"
+                      placeholder="如：后厨、前厅、门口、打包区"
+                      value={facts.shootable_scenes}
+                      onChange={e => setFacts((prev) => ({ ...prev, shootable_scenes: e.target.value }))}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">高峰时段</label>
+                    <textarea
+                      className="form-input form-textarea"
+                      placeholder="如：18:30-20:00、22:00-00:30"
+                      value={facts.peak_hours}
+                      onChange={e => setFacts((prev) => ({ ...prev, peak_hours: e.target.value }))}
+                    />
+                  </div>
                 </div>
                 <div className="form-group">
                   <label className="form-label">现有资源与限制</label>
                   <textarea
                     className="form-input form-textarea"
-                    placeholder="如：每周能拍2次，1人执行，可拍工作室场景，不能频繁外拍。"
+                    placeholder="用顿号或逗号分隔。如：每周能拍2次、员工不愿密集出镜、后厨忙时不方便拍"
                     value={facts.resources_and_constraints}
                     onChange={e => setFacts((prev) => ({ ...prev, resources_and_constraints: e.target.value }))}
                   />
@@ -344,6 +588,54 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
                   ))}
                 </div>
               )}
+              {intakeInsight?.assistantReply && (
+                <div className="plan-intake-ai-panel">
+                  <div className="plan-intake-ai-title">AI 草案解读</div>
+                  <div className="plan-intake-ai-body">{intakeInsight.assistantReply}</div>
+                  {intakeInsight.confirmationSummary && (
+                    <div className="plan-intake-summary">{intakeInsight.confirmationSummary}</div>
+                  )}
+                  {intakeInsight.inferredFields.length > 0 && (
+                    <div className="plan-intake-inferred">
+                      {intakeInsight.inferredFields.map((field) => (
+                        <span key={field} className="plan-intake-inferred-tag">
+                          AI补齐：{INTAKE_DETAIL_LABELS[field] || field}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {(previewStoreBasics.length > 0 || previewStrategy.length > 0) && (
+                <div className="plan-intake-preview-grid">
+                  {previewStoreBasics.length > 0 && (
+                    <div className="plan-intake-preview-card">
+                      <div className="plan-intake-preview-title">门店基础盘预览</div>
+                      <div className="plan-intake-preview-list">
+                        {previewStoreBasics.map((item) => (
+                          <div key={item.label} className="plan-intake-preview-item">
+                            <span>{item.label}</span>
+                            <strong>{item.value}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {previewStrategy.length > 0 && (
+                    <div className="plan-intake-preview-card">
+                      <div className="plan-intake-preview-title">门店打法预览</div>
+                      <div className="plan-intake-preview-stack">
+                        {previewStrategy.map((item) => (
+                          <div key={item.label} className="plan-intake-preview-block">
+                            <div className="plan-intake-preview-label">{item.label}</div>
+                            <div className="plan-intake-preview-value">{item.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="plan-form-section">
                 <div className="plan-form-section-title">策划草案</div>
                 <div className="form-group">
@@ -356,10 +648,10 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">账号定位与内容支柱 *</label>
+                  <label className="form-label">门店打法与内容方向 *</label>
                   <textarea
                     className="form-input form-textarea"
-                    placeholder="AI 会基于左侧事实，生成账号定位、用户关注理由和主要内容支柱。"
+                    placeholder="AI 会基于左侧事实，生成实体店增长打法、内容方向和主要支柱。"
                     value={form.ip_requirements}
                     onChange={e => setForm(f => ({ ...f, ip_requirements: e.target.value }))}
                   />
@@ -547,6 +839,8 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
                 <div className="plan-confirm-title">生成前确认</div>
                 <div className="plan-confirm-item"><span>账号/品牌：</span><strong>{form.client_name || '未填写'}</strong></div>
                 <div className="plan-confirm-item"><span>行业：</span><strong>{form.industry || '未填写'}</strong></div>
+                <div className="plan-confirm-item"><span>城市：</span><strong>{facts.city || '未填写'}</strong></div>
+                <div className="plan-confirm-item"><span>门店类型：</span><strong>{facts.store_type || '未填写'}</strong></div>
                 <div className="plan-confirm-item"><span>受众：</span><strong>{form.target_audience || '未填写'}</strong></div>
                 <div className="plan-confirm-item"><span>发布节奏：</span><strong>{rhythmText}</strong></div>
                 <div className="plan-confirm-item"><span>发布时间：</span><strong>{timeWindows || '未填写'}</strong></div>
@@ -565,12 +859,12 @@ function CreatePlanModal({ onClose }: { onClose: () => void }) {
                 <div className="plan-result-preview-title">这次会给你什么</div>
                 <div className="plan-result-preview-list">
                   <div className="plan-result-preview-item">先创建项目草稿并保存问诊信息</div>
-                  <div className="plan-result-preview-item">进入详情页后先生成账号定位方案</div>
-                  <div className="plan-result-preview-item">确认定位后再生成 30 天日历</div>
+                  <div className="plan-result-preview-item">进入详情页后先生成实体店增长策划</div>
+                  <div className="plan-result-preview-item">确认策略后再生成 30 天日历</div>
                 </div>
               </div>
               <div className="plan-confirm-note">
-                创建完成后将进入详情页，按“定位 → 30天日历 → 单条脚本”分阶段落地。
+                创建完成后将进入详情页，按“增长策划 → 30天日历 → 单条脚本”分阶段落地。
               </div>
             </aside>
           </div>
@@ -691,7 +985,7 @@ export default function PlanWorkspace() {
         <div>
           <div className="plan-hero-pill"><Sparkles size={13} /> Strategy Workspace</div>
           <h1>账号策划工作台</h1>
-          <p>先生成账号定位方案，再基于定位生成 30 天日历，降低超时和整批返工。</p>
+          <p>先生成实体店增长策划，再基于策略生成 30 天日历，降低超时和整批返工。</p>
         </div>
         <button className="btn btn-primary" onClick={() => setShowModal(true)}>
           <Plus size={16} /> 新建策划
@@ -703,7 +997,7 @@ export default function PlanWorkspace() {
           <span className="plan-workflow-index">1</span>
           <div>
             <div className="plan-workflow-title">定位输入</div>
-            <div className="plan-workflow-desc">明确人群、差异点、内容支柱</div>
+            <div className="plan-workflow-desc">明确门店事实、顾客决策点和内容方向</div>
           </div>
         </div>
         <div className="plan-workflow-item">
@@ -717,7 +1011,7 @@ export default function PlanWorkspace() {
           <span className="plan-workflow-index">3</span>
           <div>
             <div className="plan-workflow-title">定位生成</div>
-            <div className="plan-workflow-desc">先产出定位、人设、内容支柱和表达策略</div>
+            <div className="plan-workflow-desc">先产出门店定位、增长支点、内容模型和表达策略</div>
           </div>
         </div>
         <div className="plan-workflow-item">
@@ -996,7 +1290,7 @@ export default function PlanWorkspace() {
         <div className="modal-overlay" onClick={() => !retryMutation.isPending && setRetryConfirmId(null)}>
           <div className="modal animate-scale-in" style={{ width: 400 }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="modal-title">重新生成定位方案</h2>
+              <h2 className="modal-title">重新生成增长策划</h2>
               <button 
                 className="btn btn-icon btn-ghost" 
                 onClick={() => setRetryConfirmId(null)}
@@ -1006,7 +1300,7 @@ export default function PlanWorkspace() {
               </button>
             </div>
             <div className="p-4" style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              确定要重新生成项目 <strong>【{retryConfirmId.name}】</strong> 的账号定位方案吗？已有定位会被覆盖，后续 30 天日历需要基于新定位重新生成。
+              确定要重新生成项目 <strong>【{retryConfirmId.name}】</strong> 的实体店增长策划吗？已有策略会被覆盖，后续 30 天日历需要基于新策略重新生成。
             </div>
             <div className="modal-footer" style={{ marginTop: 8 }}>
               <button 
@@ -1026,7 +1320,7 @@ export default function PlanWorkspace() {
                 }}
                 disabled={retryMutation.isPending}
               >
-                {retryMutation.isPending ? '生成中...' : '确认生成定位'}
+                {retryMutation.isPending ? '生成中...' : '确认生成策略'}
               </button>
             </div>
           </div>

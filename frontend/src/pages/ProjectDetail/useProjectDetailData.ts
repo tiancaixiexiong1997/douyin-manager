@@ -37,9 +37,10 @@ export function useProjectDetailData(projectId?: string) {
 
   const plan = project?.account_plan;
   const currentStage = project ? inferProjectStage(project) : 'draft';
+  const storeGrowthPlan = plan?.store_growth_plan;
   const positioning = plan?.account_positioning;
   const strategy = plan?.content_strategy;
-  const hasStrategy = Boolean(positioning || strategy);
+  const hasStrategy = Boolean(storeGrowthPlan || positioning || strategy);
   const hasCalendar = Boolean((project?.content_calendar || []).length > 0 || (project?.content_items || []).length > 0);
   const performanceRecap = plan?.performance_recap;
   const nextTopicBatch = plan?.next_topic_batch;
@@ -68,9 +69,9 @@ export function useProjectDetailData(projectId?: string) {
 
   const referenceScopeItems = useMemo(
     () => [
-      `账号定位会参考 ${referenceNames.join('、')} 的人设切入点、受众表达方式和内容支柱拆法，但会优先贴合你当前账号的行业、目标受众和商业目标。`,
+      `增长策划会参考 ${referenceNames.join('、')} 的切入角度、受众表达方式和内容支柱拆法，但会优先贴合你当前门店的行业、目标受众和商业目标。`,
       '30 天内容日历会参考这些 IP 里更稳定的选题方向、内容结构和更新节奏，用来辅助规划每天拍什么，不会直接照搬某一条内容。',
-      '后续生成单条脚本时，也会继续参考这些 IP 的开头节奏、表达习惯和镜头组织方式，但脚本会按你当前项目的定位重新写。',
+      '后续生成单条脚本时，也会继续参考这些 IP 的开头节奏、表达习惯和镜头组织方式，但脚本会按你当前项目的增长策略重新写。',
       '如果后面你更换或减少参考 IP，重新生成策划和日历后，下面这套方案也会跟着变化。',
     ],
     [referenceNames],
@@ -80,6 +81,7 @@ export function useProjectDetailData(projectId?: string) {
     project: project as PlanningProject | undefined,
     isLoading,
     plan,
+    storeGrowthPlan,
     positioning,
     strategy,
     currentStage,

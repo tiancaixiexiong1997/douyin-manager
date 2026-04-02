@@ -9,8 +9,11 @@ from app.services.prompt_templates import (
     BLOGGER_VIRAL_PROFILE_PROMPT_TEMPLATE,
     CALENDAR_GAP_FILL_PROMPT_TEMPLATE,
     CONTENT_CALENDAR_PROMPT_TEMPLATE,
+    NEXT_TOPIC_BATCH_PROMPT_TEMPLATE,
+    PERFORMANCE_RECAP_PROMPT_TEMPLATE,
     SCRIPT_REMAKE_FROM_ANALYSIS_PROMPT_TEMPLATE,
     SCRIPT_REMAKE_PROMPT_TEMPLATE,
+    VIDEO_SCRIPT_PROMPT_TEMPLATE,
 )
 
 
@@ -56,6 +59,63 @@ def test_build_video_compression_ladder_uses_more_aggressive_profiles_for_remake
     assert remake[-1]["fps"] == "6"
 
 
+def test_normalize_account_plan_result_can_overwrite_legacy_fields() -> None:
+    service = AIAnalysisService()
+    result = {
+        "store_growth_plan": {
+            "store_positioning": {
+                "market_position": "柳州本地人下班会去的夜宵店",
+                "primary_scene": "下班夜宵",
+                "target_audience_detail": "附近上班族",
+                "core_store_value": "不踩雷、上桌快",
+                "differentiation": "老板判断很稳",
+                "avoid_positioning": ["苦情创业"],
+            },
+            "decision_triggers": {
+                "stop_scroll_triggers": ["下班后最馋这一口"],
+                "visit_decision_factors": ["上桌快", "不踩雷", "味道稳"],
+                "common_hesitations": ["怕排队"],
+                "trust_builders": ["后厨现炒", "老板现场判断"],
+            },
+            "content_model": {
+                "primary_formats": [{"name": "老板判断型", "fit_reason": "能立住懂行感", "ratio": "40%"}],
+                "content_pillars": [
+                    {"name": "点单建议", "description": "解决顾客不会点", "scene_source": "前厅"},
+                    {"name": "后厨现场", "description": "证明锅气", "scene_source": "后厨"},
+                    {"name": "夜宵场景", "description": "接住情绪", "scene_source": "门头"},
+                ],
+                "traffic_hooks": ["这口你半夜顶不住"],
+                "interaction_triggers": ["你夜宵最先点什么"],
+            },
+            "on_camera_strategy": {
+                "recommended_roles": [{"role": "老板", "responsibility": "做判断", "expression_style": "讲话直接"}],
+                "light_persona": "嘴直但靠谱",
+                "persona_boundaries": ["别演苦情"],
+            },
+            "conversion_path": {
+                "traffic_to_trust": "先给判断，再给后厨证据",
+                "trust_to_visit": "最后自然带到店",
+                "soft_cta_templates": ["你们半夜最扛不住哪口"],
+                "hard_sell_boundaries": ["开头不要直接推套餐"],
+            },
+            "execution_rules": {
+                "posting_frequency": "每天1条",
+                "best_posting_times": ["18:00", "21:00"],
+                "batch_shoot_scenes": ["备菜", "高峰出餐"],
+                "must_capture_elements": ["火", "烟", "翻锅"],
+                "quality_checklist": ["有钩子", "有到店理由"],
+            },
+        },
+        "account_positioning": {"core_identity": "旧定位"},
+        "content_strategy": {"primary_format": "旧形式"},
+    }
+
+    normalized = service.normalize_account_plan_result(result, overwrite_legacy=True)
+
+    assert normalized["account_positioning"]["core_identity"] == "柳州本地人下班会去的夜宵店"
+    assert normalized["content_strategy"]["posting_frequency"] == "每天1条"
+
+
 def test_resolve_ai_overall_timeout_prefers_heavy_calendar_scene(monkeypatch: pytest.MonkeyPatch) -> None:
     service = AIAnalysisService()
     monkeypatch.delenv("AI_TEXT_CALL_OVERALL_TIMEOUT_SECONDS", raising=False)
@@ -71,6 +131,13 @@ def test_content_calendar_prompt_uses_hard_structure_constraints() -> None:
     assert "允许优先生成的题型" in CONTENT_CALENDAR_PROMPT_TEMPLATE
     assert "好题示例：第一次卖旧空调，客户最容易误会的是哪一步" in CONTENT_CALENDAR_PROMPT_TEMPLATE
     assert "坏题示例：她们在这里短暂逃离家庭" in CONTENT_CALENDAR_PROMPT_TEMPLATE
+
+
+def test_recap_and_next_topic_prompts_include_store_growth_fields() -> None:
+    assert "{store_market_position}" in PERFORMANCE_RECAP_PROMPT_TEMPLATE
+    assert "{store_growth_plan_json}" in PERFORMANCE_RECAP_PROMPT_TEMPLATE
+    assert "{store_visit_decision_factors}" in NEXT_TOPIC_BATCH_PROMPT_TEMPLATE
+    assert "{store_content_pillars}" in NEXT_TOPIC_BATCH_PROMPT_TEMPLATE
 
 
 @pytest.mark.asyncio
@@ -395,6 +462,116 @@ async def test_generate_account_plan_includes_timeline_fields_from_viral_profile
 
 
 @pytest.mark.asyncio
+async def test_generate_performance_recap_includes_store_growth_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = AIAnalysisService()
+    captured: dict[str, Any] = {}
+
+    async def fake_resolve_prompt(**_kwargs: Any) -> tuple[str, dict[str, Any]]:
+        return (
+            "定位:{store_market_position}\n场景:{store_primary_scene}\n决策:{store_visit_decision_factors}\n钩子:{store_traffic_hooks}\n支柱:{store_content_pillars}\n计划:{store_growth_plan_json}",
+            {},
+        )
+
+    async def fake_call_ai(_system_prompt: str, user_prompt: str, scene_key: str | None = None) -> dict[str, Any]:
+        assert scene_key == "performance_recap"
+        captured["user_prompt"] = user_prompt
+        return {"overall_summary": "ok", "winning_patterns": [], "optimization_focus": [], "risk_alerts": [], "next_actions": [], "next_topic_angles": []}
+
+    async def fake_record_prompt_run(**_kwargs: Any) -> None:
+        return None
+
+    async def fake_build_system_prompt(*, scene_key: str, base_prompt: str) -> str:
+        assert scene_key == "performance_recap"
+        return base_prompt
+
+    monkeypatch.setattr(service, "_resolve_prompt", fake_resolve_prompt)
+    monkeypatch.setattr(service, "_build_system_prompt", fake_build_system_prompt)
+    monkeypatch.setattr(service, "_call_ai", fake_call_ai)
+    monkeypatch.setattr(service, "_record_prompt_run", fake_record_prompt_run)
+
+    await service.generate_performance_recap(
+        project_context={"client_name": "测试门店"},
+        account_plan={
+            "store_growth_plan": {
+                "store_positioning": {"market_position": "社区刚需店", "primary_scene": "下班顺路来"},
+                "decision_triggers": {"visit_decision_factors": ["方便", "值", "稳"]},
+                "content_model": {
+                    "traffic_hooks": ["第一次来最容易点错"],
+                    "content_pillars": [{"name": "点单建议"}],
+                },
+                "on_camera_strategy": {"recommended_roles": [{"role": "老板"}]},
+                "conversion_path": {"traffic_to_trust": "先给建议再给证据"},
+                "execution_rules": {"posting_frequency": "每天1条"},
+            }
+        },
+        performance_summary={"total_items": 1},
+        performance_rows=[],
+    )
+
+    user_prompt = captured["user_prompt"]
+    assert "社区刚需店" in user_prompt
+    assert "下班顺路来" in user_prompt
+    assert "方便；值；稳" in user_prompt
+    assert "第一次来最容易点错" in user_prompt
+    assert "点单建议" in user_prompt
+
+
+@pytest.mark.asyncio
+async def test_generate_next_topic_batch_includes_store_growth_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = AIAnalysisService()
+    captured: dict[str, Any] = {}
+
+    async def fake_resolve_prompt(**_kwargs: Any) -> tuple[str, dict[str, Any]]:
+        return (
+            "定位:{store_market_position}\n场景:{store_primary_scene}\n决策:{store_visit_decision_factors}\n钩子:{store_traffic_hooks}\n支柱:{store_content_pillars}\n计划:{store_growth_plan_json}",
+            {},
+        )
+
+    async def fake_call_ai(_system_prompt: str, user_prompt: str, scene_key: str | None = None) -> dict[str, Any]:
+        assert scene_key == "next_topic_batch"
+        captured["user_prompt"] = user_prompt
+        return {"overall_strategy": "ok", "items": []}
+
+    async def fake_record_prompt_run(**_kwargs: Any) -> None:
+        return None
+
+    async def fake_build_system_prompt(*, scene_key: str, base_prompt: str) -> str:
+        assert scene_key == "next_topic_batch"
+        return base_prompt
+
+    monkeypatch.setattr(service, "_resolve_prompt", fake_resolve_prompt)
+    monkeypatch.setattr(service, "_build_system_prompt", fake_build_system_prompt)
+    monkeypatch.setattr(service, "_call_ai", fake_call_ai)
+    monkeypatch.setattr(service, "_record_prompt_run", fake_record_prompt_run)
+
+    await service.generate_next_topic_batch(
+        project_context={"client_name": "测试门店"},
+        account_plan={
+            "store_growth_plan": {
+                "store_positioning": {"market_position": "社区刚需店", "primary_scene": "下班顺路来"},
+                "decision_triggers": {"visit_decision_factors": ["方便", "值", "稳"]},
+                "content_model": {
+                    "traffic_hooks": ["第一次来最容易点错"],
+                    "content_pillars": [{"name": "点单建议"}],
+                },
+                "on_camera_strategy": {"recommended_roles": [{"role": "老板"}]},
+                "conversion_path": {"traffic_to_trust": "先给建议再给证据"},
+                "execution_rules": {"posting_frequency": "每天1条"},
+            }
+        },
+        performance_recap={"overall_summary": "ok"},
+        existing_content_items=[],
+    )
+
+    user_prompt = captured["user_prompt"]
+    assert "社区刚需店" in user_prompt
+    assert "下班顺路来" in user_prompt
+    assert "方便；值；稳" in user_prompt
+    assert "第一次来最容易点错" in user_prompt
+    assert "点单建议" in user_prompt
+
+
+@pytest.mark.asyncio
 async def test_generate_blogger_report_without_representative_analysis_degrades_film_and_marks_copywriting(monkeypatch: pytest.MonkeyPatch) -> None:
     service = AIAnalysisService()
     captured: dict[str, Any] = {}
@@ -518,8 +695,71 @@ def test_scene_result_validator_accepts_nonempty_account_plan() -> None:
 
     assert service._is_scene_result_acceptable(
         "account_plan",
-        {"account_positioning": {"core_identity": "同城探店账号"}, "content_strategy": {}},
+        {
+            "store_growth_plan": {
+                "store_positioning": {
+                    "market_position": "柳州夜宵决策参考店",
+                    "primary_scene": "下班后夜宵",
+                    "target_audience_detail": "本地上班族",
+                    "core_store_value": "点单不踩雷",
+                    "differentiation": "老板会直接给判断",
+                    "avoid_positioning": ["纯氛围感"],
+                },
+                "decision_triggers": {
+                    "stop_scroll_triggers": ["第一口点什么", "几分钟上桌", "值不值来"],
+                    "visit_decision_factors": ["上桌速度", "点单判断", "同城距离"],
+                    "common_hesitations": ["怕踩雷", "怕等太久", "怕不值"],
+                    "trust_builders": ["真实后厨", "老板出镜", "顾客加单"],
+                },
+                "content_model": {
+                    "primary_formats": [{"name": "老板判断型", "fit_reason": "适合同城决策", "ratio": "40%"}],
+                    "content_pillars": [
+                        {"name": "点单建议", "description": "帮用户判断怎么点", "scene_source": "前厅"},
+                        {"name": "后厨现场", "description": "证明出品稳定", "scene_source": "后厨"},
+                        {"name": "夜宵场景", "description": "绑定消费时机", "scene_source": "门头"},
+                    ],
+                    "traffic_hooks": ["别乱点", "先看这口", "这个点来的人先问这个"],
+                    "interaction_triggers": ["你会先点什么", "你最怕踩哪个雷", "你几点会来吃"],
+                },
+                "on_camera_strategy": {
+                    "recommended_roles": [{"role": "老板", "responsibility": "做判断", "expression_style": "嘴直"}],
+                    "light_persona": "讲话很直的老板",
+                    "persona_boundaries": ["不演苦情创业"],
+                },
+                "conversion_path": {
+                    "traffic_to_trust": "先讲判断，再给出店里真实画面",
+                    "trust_to_visit": "再自然带出适合谁来",
+                    "soft_cta_templates": ["你一般先点什么"],
+                    "hard_sell_boundaries": ["开头别报店名"],
+                },
+                "execution_rules": {
+                    "posting_frequency": "日更1条",
+                    "best_posting_times": ["18:00", "22:00"],
+                    "batch_shoot_scenes": ["后厨", "前厅", "门口"],
+                    "must_capture_elements": ["出锅", "点单", "上桌"],
+                    "quality_checklist": ["有停留点", "有决策理由", "有真实场景"],
+                },
+            }
+        },
     ) is True
+
+
+def test_scene_result_validator_rejects_incomplete_store_growth_plan() -> None:
+    service = AIAnalysisService()
+
+    assert service._is_scene_result_acceptable(
+        "account_plan",
+        {
+            "store_growth_plan": {
+                "store_positioning": {"market_position": "同城夜宵店"},
+                "decision_triggers": {"visit_decision_factors": ["便宜"]},
+                "content_model": {"content_pillars": [{"name": "点单建议"}], "traffic_hooks": ["先看这个"]},
+                "on_camera_strategy": {"recommended_roles": []},
+                "conversion_path": {"traffic_to_trust": ""},
+                "execution_rules": {"posting_frequency": ""},
+            }
+        },
+    ) is False
 
 
 def test_scene_result_validator_rejects_empty_calendar_gap_fill() -> None:
@@ -532,11 +772,72 @@ def test_scene_result_validator_rejects_empty_calendar_gap_fill() -> None:
 
 
 def test_account_and_calendar_prompts_require_staged_output_and_anti_self_indulgent_rules() -> None:
-    assert "当前阶段只做账号定位和内容策略" in ACCOUNT_PLAN_PROMPT_TEMPLATE
-    assert "不要输出 30 天日历" in ACCOUNT_PLAN_PROMPT_TEMPLATE
+    assert "先门店，后人设" in ACCOUNT_PLAN_PROMPT_TEMPLATE
+    assert '"store_growth_plan"' in ACCOUNT_PLAN_PROMPT_TEMPLATE
+    assert "不要输出 30 天逐日内容" in ACCOUNT_PLAN_PROMPT_TEMPLATE
     assert "只做一次输出，不要补充备用题" in CONTENT_CALENDAR_PROMPT_TEMPLATE
-    assert "肉香盖过班味" in ACCOUNT_PLAN_PROMPT_TEMPLATE
+    assert "{store_growth_plan_json}" in CONTENT_CALENDAR_PROMPT_TEMPLATE
+    assert "{traffic_hooks}" in VIDEO_SCRIPT_PROMPT_TEMPLATE
+    assert "{recommended_roles}" in VIDEO_SCRIPT_PROMPT_TEMPLATE
     assert "全是笑声" in CONTENT_CALENDAR_PROMPT_TEMPLATE
+
+
+def test_normalize_account_plan_result_maps_store_growth_plan_back_to_legacy() -> None:
+    service = AIAnalysisService()
+
+    result = service._normalize_account_plan_result(
+        {
+            "store_growth_plan": {
+                "store_positioning": {
+                    "market_position": "同城夜宵决策参考店",
+                    "primary_scene": "下班后夜宵",
+                    "target_audience_detail": "25-35岁本地上班族",
+                    "core_store_value": "帮你少踩雷",
+                    "differentiation": "老板直接给判断",
+                    "avoid_positioning": ["纯氛围号"],
+                },
+                "decision_triggers": {
+                    "stop_scroll_triggers": ["别乱点", "先看这个", "这口值不值"],
+                    "visit_decision_factors": ["距离近", "上桌快", "味道稳"],
+                    "common_hesitations": ["怕踩雷", "怕排队", "怕不值"],
+                    "trust_builders": ["后厨实拍", "真实加单", "老板出镜"],
+                },
+                "content_model": {
+                    "primary_formats": [{"name": "老板判断型", "fit_reason": "适合同城决策", "ratio": "40%"}],
+                    "content_pillars": [
+                        {"name": "点单建议", "description": "帮用户判断怎么点", "scene_source": "前厅"},
+                        {"name": "后厨现场", "description": "证明出品稳定", "scene_source": "后厨"},
+                        {"name": "夜宵场景", "description": "绑定消费时机", "scene_source": "门头"},
+                    ],
+                    "traffic_hooks": ["别乱点", "先看这口", "这个点来先问这个"],
+                    "interaction_triggers": ["你会先点什么", "你最怕踩哪个雷", "你几点来吃"],
+                },
+                "on_camera_strategy": {
+                    "recommended_roles": [{"role": "老板", "responsibility": "做判断", "expression_style": "嘴直"}],
+                    "light_persona": "讲话很直的老板",
+                    "persona_boundaries": ["不演苦情创业"],
+                },
+                "conversion_path": {
+                    "traffic_to_trust": "先讲判断，再给真实画面",
+                    "trust_to_visit": "再带出适合谁来",
+                    "soft_cta_templates": ["你一般先点什么", "你更在意上桌快还是味道稳"],
+                    "hard_sell_boundaries": ["别一开头报店名"],
+                },
+                "execution_rules": {
+                    "posting_frequency": "日更1条",
+                    "best_posting_times": ["18:00", "22:00"],
+                    "batch_shoot_scenes": ["后厨", "前厅", "门头"],
+                    "must_capture_elements": ["出锅", "点单", "上桌"],
+                    "quality_checklist": ["有停留点", "有决策理由", "有真实场景"],
+                },
+            }
+        }
+    )
+
+    assert result["account_positioning"]["core_identity"] == "同城夜宵决策参考店"
+    assert result["account_positioning"]["content_pillars"][0]["name"] == "点单建议"
+    assert result["content_strategy"]["primary_format"] == "老板判断型"
+    assert "别乱点" in result["content_strategy"]["hook_template"]
 
 
 def test_calendar_gap_fill_prompt_template_can_be_formatted() -> None:

@@ -24,6 +24,33 @@ def test_has_meaningful_plan_result_accepts_calendar_only_result() -> None:
     ) is True
 
 
+def test_has_meaningful_plan_result_accepts_store_growth_plan() -> None:
+    assert planning_endpoint._has_meaningful_plan_result(
+        {},
+        {},
+        [],
+        {
+            "store_positioning": {"market_position": "同城决策参考店"},
+            "decision_triggers": {
+                "visit_decision_factors": ["距离近", "上桌快", "味道稳"],
+            },
+            "content_model": {
+                "content_pillars": [
+                    {"name": "点单建议"},
+                    {"name": "后厨现场"},
+                    {"name": "消费场景"},
+                ],
+                "traffic_hooks": ["别乱点", "先看这口", "这个点先问这个"],
+            },
+            "on_camera_strategy": {
+                "recommended_roles": [{"role": "老板"}],
+            },
+            "conversion_path": {"traffic_to_trust": "先给判断再给现场"},
+            "execution_rules": {"posting_frequency": "日更1条"},
+        },
+    ) is True
+
+
 def test_collect_calendar_quality_flags_detects_low_quality_self_indulgent_topic() -> None:
     flags = planning_endpoint._collect_calendar_quality_flags(
         {

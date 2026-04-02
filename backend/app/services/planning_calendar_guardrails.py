@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.ai_analysis_service import ai_analysis_service
 from app.services.planning_calendar_utils import (
+    extract_store_growth_context,
     derive_batch_group,
     normalize_calendar_generation_meta,
     normalize_content_calendar,
@@ -151,10 +152,16 @@ def _build_calendar_gap_brief(
     lines: list[str] = []
     lines.append(f"当前已保留 {len(existing_calendar)} 条，待补 Day {', '.join(str(day) for day in missing_days)}。")
 
+    growth_context = extract_store_growth_context(account_plan)
     pillar_entries = []
-    positioning = account_plan.get("account_positioning") if isinstance(account_plan, dict) else {}
-    if isinstance(positioning, dict):
-        pillar_entries = positioning.get("content_pillars") if isinstance(positioning.get("content_pillars"), list) else []
+    store_growth_plan = account_plan.get("store_growth_plan") if isinstance(account_plan, dict) else {}
+    has_store_growth_pillars = isinstance(store_growth_plan, dict) and bool(growth_context.get("content_pillars"))
+    if has_store_growth_pillars:
+        pillar_entries = [{"name": name, "ratio": ""} for name in growth_context["content_pillars"]]
+    else:
+        positioning = account_plan.get("account_positioning") if isinstance(account_plan, dict) else {}
+        if isinstance(positioning, dict):
+            pillar_entries = positioning.get("content_pillars") if isinstance(positioning.get("content_pillars"), list) else []
 
     if pillar_entries:
         total_ratio = sum(_extract_ratio_value(item.get("ratio")) for item in pillar_entries if isinstance(item, dict))
@@ -280,6 +287,7 @@ def _finalize_calendar_days(items: list[dict]) -> list[dict]:
 
 
 def _derive_local_topic_subject(client_data: dict, account_plan: dict) -> str:
+    growth_context = extract_store_growth_context(account_plan)
     text = " ".join(
         filter(
             None,
@@ -287,7 +295,9 @@ def _derive_local_topic_subject(client_data: dict, account_plan: dict) -> str:
                 safe_text(client_data.get("client_name")),
                 safe_text(client_data.get("industry")),
                 safe_text(client_data.get("ip_requirements")),
-                safe_text((account_plan.get("account_positioning") or {}).get("core_identity") if isinstance(account_plan, dict) else ""),
+                safe_text(growth_context.get("market_position")),
+                safe_text(growth_context.get("primary_scene")),
+                " ".join(growth_context.get("visit_decision_factors") or []),
             ],
         )
     )
@@ -308,7 +318,8 @@ def _derive_local_topic_subject(client_data: dict, account_plan: dict) -> str:
 
 
 def _derive_local_audience_label(client_data: dict, account_plan: dict) -> str:
-    target = safe_text((account_plan.get("account_positioning") or {}).get("target_audience_detail") if isinstance(account_plan, dict) else "")
+    growth_context = extract_store_growth_context(account_plan)
+    target = safe_text(growth_context.get("target_audience_detail"))
     if not target:
         target = safe_text(client_data.get("target_audience"))
     if "上班" in target or "职场" in target or "打工" in target:
@@ -331,15 +342,9 @@ def _build_local_calendar_fallback_pool(
 ) -> list[dict]:
     subject = _derive_local_topic_subject(client_data, account_plan)
     audience = _derive_local_audience_label(client_data, account_plan)
-    positioning = account_plan.get("account_positioning", {}) if isinstance(account_plan, dict) else {}
-    strategy = account_plan.get("content_strategy", {}) if isinstance(account_plan, dict) else {}
-    content_type = normalize_content_type(strategy.get("primary_format"))
-    pillars = positioning.get("content_pillars", []) if isinstance(positioning.get("content_pillars"), list) else []
-    pillar_names = [
-        safe_text(item.get("name"))
-        for item in pillars
-        if isinstance(item, dict) and safe_text(item.get("name"))
-    ] or ["真实问题", "避坑决策", "同城需求"]
+    growth_context = extract_store_growth_context(account_plan)
+    content_type = normalize_content_type((growth_context.get("primary_formats") or ["口播+画中画"])[0])
+    pillar_names = growth_context.get("content_pillars") or ["真实问题", "避坑决策", "同城需求"]
 
     title_templates = [
         "{audience}处理{subject}时，最先问的不是价格，而是能不能今天上门",

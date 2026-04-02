@@ -31,11 +31,11 @@ export function PositioningPanel({
         className={`detail-section-head ${isExpanded ? 'is-open' : ''}`}
         onClick={onToggleExpand}
       >
-        <h2 className="section-title detail-section-title">账号定位方案</h2>
+        <h2 className="section-title detail-section-title">兼容旧版策略</h2>
         <div className="flex items-center gap-2 detail-section-actions" onClick={(event) => event.stopPropagation()}>
           {currentStage !== 'strategy_generating' && currentStage !== 'calendar_generating' && (
             <button className="btn btn-ghost btn-sm" onClick={onRegenerate} disabled={isRegeneratePending}>
-              <RefreshCw size={13} /> {isRegeneratePending ? '生成中...' : '重新生成定位'}
+              <RefreshCw size={13} /> {isRegeneratePending ? '生成中...' : '重新生成策略'}
             </button>
           )}
           <button className="btn btn-ghost btn-sm" onClick={onEdit}>
@@ -49,7 +49,7 @@ export function PositioningPanel({
         <div className="detail-positioning-body animate-fade-in">
           {positioning.core_identity && (
             <div className="identity-block">
-              <div className="identity-label">核心定位 slogan</div>
+              <div className="identity-label">旧版核心定位</div>
               <div className="identity-value gradient-text">{positioning.core_identity}</div>
             </div>
           )}
@@ -92,7 +92,7 @@ export function PositioningPanel({
 
           {positioning.personality_tags && (
             <div className="positioning-block">
-              <div className="identity-label positioning-label">人设标签</div>
+              <div className="identity-label positioning-label">旧版识别标签</div>
               <div className="positioning-tags">
                 {positioning.personality_tags.map((tag) => (
                   <span key={tag} className="badge badge-purple">{tag}</span>

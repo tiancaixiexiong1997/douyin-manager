@@ -133,6 +133,8 @@ class PlanningProject(Base):
     ip_requirements: Mapped[str] = mapped_column(Text, nullable=False)
     style_preference: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     business_goal: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 实体店补充画像（兼容式新增，先用 JSON 承载）
+    store_profile: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # 参考博主（博主ID列表）
     reference_blogger_ids: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     # 策划账号主页信息（可选，后期可补填）

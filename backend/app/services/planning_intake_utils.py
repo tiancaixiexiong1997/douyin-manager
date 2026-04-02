@@ -10,6 +10,19 @@ INTAKE_DRAFT_KEYS = (
     "ip_requirements",
     "style_preference",
     "business_goal",
+    "city",
+    "business_district",
+    "store_type",
+    "avg_ticket",
+    "core_products_or_services",
+    "top_reasons_to_choose",
+    "customer_common_questions",
+    "common_hesitations",
+    "primary_consumption_scenes",
+    "on_camera_roles",
+    "shootable_scenes",
+    "peak_hours",
+    "store_constraints",
     "publishing_rhythm",
     "time_windows",
     "goal_target",
@@ -20,7 +33,7 @@ INTAKE_FIELD_LABELS = {
     "client_name": "客户/品牌名称",
     "industry": "行业垂类",
     "target_audience": "目标受众画像",
-    "ip_requirements": "账号定位与内容支柱",
+    "ip_requirements": "门店打法与内容方向",
 }
 INDUSTRY_KEYWORDS = {
     "美妆个护": ("美妆", "护肤", "化妆", "彩妆", "护发"),
@@ -133,8 +146,8 @@ def detect_industry(user_message: str) -> str:
 
 def build_default_ip_requirements(industry: str) -> str:
     return (
-        f"定位：{industry}实用派账号，强调真实经验与可执行建议。\n"
-        "内容支柱：1) 场景痛点拆解 2) 实操解决方案 3) 对比评测与复盘。"
+        f"门店增长打法：先用真实问题/决策钩子抓停留，再用真实场景和具体证据建立信任，最后自然带出到店或咨询理由。\n"
+        f"内容方向：围绕{industry}的真实消费/服务场景，优先做决策建议、避坑提醒、现场证明、顾客高频问题。"
     )
 
 
@@ -160,6 +173,9 @@ def auto_fill_intake_draft(draft: dict[str, str], user_message: str) -> list[str
     if not draft.get("ip_requirements"):
         draft["ip_requirements"] = build_default_ip_requirements(industry)
         inferred_fields.append("ip_requirements")
+    if not draft.get("store_type") and "店" in user_message:
+        draft["store_type"] = "实体门店"
+        inferred_fields.append("store_type")
     if not draft.get("publishing_rhythm"):
         draft["publishing_rhythm"] = "每月10条（推荐，3天1条）"
         inferred_fields.append("publishing_rhythm")
@@ -181,6 +197,16 @@ def build_execution_preview(draft: dict[str, str]) -> str:
     target_audience = draft.get("target_audience") or INDUSTRY_AUDIENCE_DEFAULT.get(industry, INDUSTRY_AUDIENCE_DEFAULT["泛生活"])
     ip_requirements = draft.get("ip_requirements") or build_default_ip_requirements(industry)
     business_goal = draft.get("business_goal") or "先完成30天稳定更新，跑出1-2条高潜内容并沉淀可复用模板。"
+    city = draft.get("city") or "同城"
+    business_district = draft.get("business_district") or "核心商圈"
+    store_type = draft.get("store_type") or industry
+    avg_ticket = draft.get("avg_ticket") or "待确认"
+    core_products = draft.get("core_products_or_services") or "主营产品/服务待补充"
+    top_reasons = draft.get("top_reasons_to_choose") or "真实优势待补充"
+    hesitations = draft.get("common_hesitations") or "用户犹豫点待补充"
+    scenes = draft.get("primary_consumption_scenes") or "消费场景待补充"
+    on_camera_roles = draft.get("on_camera_roles") or "出镜角色待补充"
+    shootable_scenes = draft.get("shootable_scenes") or "可拍场景待补充"
     rhythm = draft.get("publishing_rhythm") or "每月10条（推荐，3天1条）"
     time_windows = draft.get("time_windows") or "19:00、21:00"
     goal_target = draft.get("goal_target") or "30天发布10条，至少跑出1-2条高潜内容"
@@ -224,20 +250,30 @@ def build_execution_preview(draft: dict[str, str]) -> str:
 
     return (
         f"## 可执行策划初稿（{client_name}）\n\n"
-        "### 1) 目标受众\n"
+        "### 1) 门店基础盘\n"
+        f"- 所在地：{city} {business_district}\n"
+        f"- 门店类型：{store_type}\n"
+        f"- 客单价：{avg_ticket}\n"
+        f"- 主营产品/服务：{core_products}\n"
+        f"- 用户为什么会来：{top_reasons}\n"
+        f"- 用户最常犹豫：{hesitations}\n"
+        f"- 主要消费场景：{scenes}\n"
+        f"- 谁来出镜：{on_camera_roles}\n"
+        f"- 可拍场景：{shootable_scenes}\n\n"
+        "### 2) 目标受众\n"
         f"- {target_audience}\n\n"
-        "### 2) 独特优势/亮点\n"
+        "### 3) 独特优势/亮点\n"
         f"{advantages_text}\n\n"
-        "### 3) 账号定位与内容支柱\n"
-        f"- 定位：{ip_requirements}\n"
+        "### 4) 门店打法与内容方向\n"
+        f"- 策略：{ip_requirements}\n"
         f"{pillars_text}\n\n"
-        "### 4) 30天执行节奏\n"
+        "### 5) 30天执行节奏\n"
         f"- 发布节奏：{rhythm}\n"
         f"- 发布时间窗口：{time_windows}\n"
         f"- 阶段目标：{goal_target}\n"
         f"- 迭代规则：{iteration_rule}\n"
         f"- 商业目标：{business_goal}\n\n"
-        "### 5) 首批10条可拍选题\n"
+        "### 6) 首批10条可拍选题\n"
         f"{topics_text}\n\n"
         "如果你愿意，我可以下一步直接把这份初稿转成“30天日历+每条脚本骨架”。"
     )

@@ -7,6 +7,25 @@ from typing import Optional, Literal
 from datetime import datetime, date
 
 
+class StoreProfilePayload(BaseModel):
+    city: str = ""
+    business_district: str = ""
+    store_type: str = ""
+    avg_ticket: str = ""
+    core_products_or_services: list[str] = Field(default_factory=list)
+    top_reasons_to_choose: list[str] = Field(default_factory=list)
+    customer_common_questions: list[str] = Field(default_factory=list)
+    common_hesitations: list[str] = Field(default_factory=list)
+    primary_consumption_scenes: list[str] = Field(default_factory=list)
+    on_camera_roles: list[str] = Field(default_factory=list)
+    shootable_scenes: list[str] = Field(default_factory=list)
+    peak_hours: list[str] = Field(default_factory=list)
+    batch_shoot_windows: list[str] = Field(default_factory=list)
+    store_constraints: list[str] = Field(default_factory=list)
+    special_requirements: str = ""
+    forbidden_directions: list[str] = Field(default_factory=list)
+
+
 class PlanningCreateRequest(BaseModel):
     """创建策划项目请求"""
     client_name: str
@@ -16,6 +35,7 @@ class PlanningCreateRequest(BaseModel):
     ip_requirements: str
     style_preference: Optional[str] = None
     business_goal: Optional[str] = None
+    store_profile: Optional[StoreProfilePayload] = None
     reference_blogger_ids: list[str] = Field(default_factory=list)  # 博主 UUID 列表
     account_homepage_url: Optional[str] = None  # 策划账号主页地址（可选）
 
@@ -29,6 +49,19 @@ class PlanningIntakeDraft(BaseModel):
     ip_requirements: str = ""
     style_preference: str = ""
     business_goal: str = ""
+    city: str = ""
+    business_district: str = ""
+    store_type: str = ""
+    avg_ticket: str = ""
+    core_products_or_services: str = ""
+    top_reasons_to_choose: str = ""
+    customer_common_questions: str = ""
+    common_hesitations: str = ""
+    primary_consumption_scenes: str = ""
+    on_camera_roles: str = ""
+    shootable_scenes: str = ""
+    peak_hours: str = ""
+    store_constraints: str = ""
     publishing_rhythm: str = ""
     time_windows: str = ""
     goal_target: str = ""
@@ -75,6 +108,7 @@ class PlanningUpdateRequest(BaseModel):
     ip_requirements: Optional[str] = None
     style_preference: Optional[str] = None
     business_goal: Optional[str] = None
+    store_profile: Optional[StoreProfilePayload] = None
     account_plan: Optional[dict] = None  # 支持直接更新账号定位方案
 
 
@@ -106,6 +140,7 @@ class PlanningResponse(BaseModel):
     ip_requirements: str
     style_preference: Optional[str]
     business_goal: Optional[str]
+    store_profile: Optional[StoreProfilePayload] = None
     reference_blogger_ids: Optional[list]
     account_homepage_url: Optional[str]
     account_nickname: Optional[str]
@@ -130,6 +165,7 @@ class PlanningListResponse(BaseModel):
     industry: str
     target_audience: str
     status: str
+    store_profile: Optional[StoreProfilePayload] = None
     account_plan: Optional[dict] = None
     account_homepage_url: Optional[str] = None
     account_nickname: Optional[str] = None

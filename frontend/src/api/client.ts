@@ -450,6 +450,7 @@ export interface PlanningProject {
   ip_requirements: string;
   style_preference?: string;
   business_goal?: string;
+  store_profile?: StoreProfile;
   reference_blogger_ids?: string[];
   account_homepage_url?: string;
   account_nickname?: string;
@@ -465,7 +466,27 @@ export interface PlanningProject {
   updated_at: string;
 }
 
+export interface StoreProfile {
+  city?: string;
+  business_district?: string;
+  store_type?: string;
+  avg_ticket?: string;
+  core_products_or_services?: string[];
+  top_reasons_to_choose?: string[];
+  customer_common_questions?: string[];
+  common_hesitations?: string[];
+  primary_consumption_scenes?: string[];
+  on_camera_roles?: string[];
+  shootable_scenes?: string[];
+  peak_hours?: string[];
+  batch_shoot_windows?: string[];
+  store_constraints?: string[];
+  special_requirements?: string;
+  forbidden_directions?: string[];
+}
+
 export interface AccountPlan {
+  store_growth_plan?: StoreGrowthPlan;
   account_positioning?: {
     core_identity: string;
     target_audience_detail: string;
@@ -503,6 +524,47 @@ export interface AccountPlan {
   quality_notes?: string;
   performance_recap?: PerformanceRecap;
   next_topic_batch?: NextTopicBatch;
+}
+
+export interface StoreGrowthPlan {
+  store_positioning?: {
+    market_position: string;
+    primary_scene: string;
+    target_audience_detail: string;
+    core_store_value: string;
+    differentiation: string;
+    avoid_positioning: string[];
+  };
+  decision_triggers?: {
+    stop_scroll_triggers: string[];
+    visit_decision_factors: string[];
+    common_hesitations: string[];
+    trust_builders: string[];
+  };
+  content_model?: {
+    primary_formats: Array<{ name: string; fit_reason: string; ratio: string }>;
+    content_pillars: Array<{ name: string; description: string; scene_source: string }>;
+    traffic_hooks: string[];
+    interaction_triggers: string[];
+  };
+  on_camera_strategy?: {
+    recommended_roles: Array<{ role: string; responsibility: string; expression_style: string }>;
+    light_persona: string;
+    persona_boundaries: string[];
+  };
+  conversion_path?: {
+    traffic_to_trust: string;
+    trust_to_visit: string;
+    soft_cta_templates: string[];
+    hard_sell_boundaries: string[];
+  };
+  execution_rules?: {
+    posting_frequency: string;
+    best_posting_times: string[];
+    batch_shoot_scenes: string[];
+    must_capture_elements: string[];
+    quality_checklist: string[];
+  };
 }
 
 export interface PerformanceRecap {
@@ -682,6 +744,7 @@ export interface CreatePlanningRequest {
   ip_requirements: string;
   style_preference?: string;
   business_goal?: string;
+  store_profile?: StoreProfile;
   reference_blogger_ids: string[];
   account_homepage_url?: string;
 }
@@ -694,6 +757,19 @@ export interface PlanningIntakeDraft {
   ip_requirements: string;
   style_preference: string;
   business_goal: string;
+  city: string;
+  business_district: string;
+  store_type: string;
+  avg_ticket: string;
+  core_products_or_services: string;
+  top_reasons_to_choose: string;
+  customer_common_questions: string;
+  common_hesitations: string;
+  primary_consumption_scenes: string;
+  on_camera_roles: string;
+  shootable_scenes: string;
+  peak_hours: string;
+  store_constraints: string;
   publishing_rhythm: string;
   time_windows: string;
   goal_target: string;
@@ -732,6 +808,7 @@ export interface UpdatePlanningRequest {
   ip_requirements?: string;
   style_preference?: string;
   business_goal?: string;
+  store_profile?: StoreProfile;
   account_plan?: AccountPlan;
 }
 

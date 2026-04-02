@@ -401,6 +401,71 @@
   color: var(--text-secondary);
 }
 
+.growth-section-block {
+  margin-bottom: 20px;
+}
+
+.growth-sub-block {
+  margin-top: 14px;
+}
+
+.growth-list-grid,
+.growth-role-grid,
+.growth-format-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.growth-list-card {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.growth-list-title,
+.growth-role-name,
+.growth-scene-source {
+  color: var(--text-primary);
+}
+
+.growth-list-title,
+.growth-role-name {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.growth-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.growth-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.growth-scene-source {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.growth-inline-block {
+  margin-top: 14px;
+}
+
 .detail-calendar-wrap {
   margin-top: 4px;
   border-radius: 20px;
@@ -1445,7 +1510,10 @@
   }
 
   .pillars-grid,
-  .strategy-grid {
+  .strategy-grid,
+  .growth-list-grid,
+  .growth-role-grid,
+  .growth-format-grid {
     grid-template-columns: 1fr;
   }
 

@@ -38,12 +38,13 @@ export type ProjectStage =
 export function inferProjectStage(project: {
   status: string;
   account_plan?: {
+    store_growth_plan?: unknown;
     account_positioning?: unknown;
     content_strategy?: unknown;
     calendar_generation_meta?: unknown;
   } | null;
 }): ProjectStage {
-  const hasStrategy = Boolean(project.account_plan?.account_positioning || project.account_plan?.content_strategy);
+  const hasStrategy = Boolean(project.account_plan?.store_growth_plan || project.account_plan?.account_positioning || project.account_plan?.content_strategy);
   const hasCalendar = Boolean(project.account_plan?.calendar_generation_meta);
   if (project.status === 'strategy_generating') return 'strategy_generating';
   if (project.status === 'strategy_completed') return 'strategy_completed';

@@ -216,28 +216,143 @@ def normalize_calendar_generation_meta(value) -> dict:
     }
 
 
+def get_store_growth_plan(account_plan: dict | None) -> dict:
+    if not isinstance(account_plan, dict):
+        return {}
+    store_growth_plan = account_plan.get("store_growth_plan")
+    return store_growth_plan if isinstance(store_growth_plan, dict) else {}
+
+
+def extract_store_growth_context(account_plan: dict | None) -> dict[str, Any]:
+    store_growth_plan = get_store_growth_plan(account_plan)
+    positioning = store_growth_plan.get("store_positioning") if isinstance(store_growth_plan.get("store_positioning"), dict) else {}
+    decision_triggers = store_growth_plan.get("decision_triggers") if isinstance(store_growth_plan.get("decision_triggers"), dict) else {}
+    content_model = store_growth_plan.get("content_model") if isinstance(store_growth_plan.get("content_model"), dict) else {}
+    on_camera_strategy = store_growth_plan.get("on_camera_strategy") if isinstance(store_growth_plan.get("on_camera_strategy"), dict) else {}
+    conversion_path = store_growth_plan.get("conversion_path") if isinstance(store_growth_plan.get("conversion_path"), dict) else {}
+    execution_rules = store_growth_plan.get("execution_rules") if isinstance(store_growth_plan.get("execution_rules"), dict) else {}
+
+    legacy_positioning = account_plan.get("account_positioning") if isinstance(account_plan, dict) and isinstance(account_plan.get("account_positioning"), dict) else {}
+    legacy_strategy = account_plan.get("content_strategy") if isinstance(account_plan, dict) and isinstance(account_plan.get("content_strategy"), dict) else {}
+
+    content_pillars = [
+        safe_text(item.get("name"))
+        for item in (content_model.get("content_pillars") or [])
+        if isinstance(item, dict) and safe_text(item.get("name"))
+    ]
+    if not content_pillars:
+        content_pillars = [
+            safe_text(item.get("name"))
+            for item in (legacy_positioning.get("content_pillars") or [])
+            if isinstance(item, dict) and safe_text(item.get("name"))
+        ]
+
+    primary_formats = [
+        safe_text(item.get("name"))
+        for item in (content_model.get("primary_formats") or [])
+        if isinstance(item, dict) and safe_text(item.get("name"))
+    ]
+    if not primary_formats and safe_text(legacy_strategy.get("primary_format")):
+        primary_formats = [safe_text(legacy_strategy.get("primary_format"))]
+
+    return {
+        "market_position": safe_text(positioning.get("market_position")) or safe_text(legacy_positioning.get("core_identity")),
+        "primary_scene": safe_text(positioning.get("primary_scene")) or safe_text(legacy_strategy.get("content_tone")),
+        "target_audience_detail": safe_text(positioning.get("target_audience_detail")) or safe_text(legacy_positioning.get("target_audience_detail")),
+        "core_store_value": safe_text(positioning.get("core_store_value")) or safe_text(legacy_positioning.get("bio_suggestion")),
+        "differentiation": safe_text(positioning.get("differentiation")) or safe_text(legacy_positioning.get("differentiation")),
+        "content_pillars": content_pillars,
+        "primary_formats": primary_formats,
+        "traffic_hooks": normalize_text_list(content_model.get("traffic_hooks"), limit=10) or normalize_text_list(
+            safe_text(legacy_strategy.get("hook_template")).split("；"),
+            limit=10,
+        ),
+        "interaction_triggers": normalize_text_list(content_model.get("interaction_triggers"), limit=10),
+        "visit_decision_factors": normalize_text_list(decision_triggers.get("visit_decision_factors"), limit=10),
+        "trust_builders": normalize_text_list(decision_triggers.get("trust_builders"), limit=10),
+        "common_hesitations": normalize_text_list(decision_triggers.get("common_hesitations"), limit=10),
+        "light_persona": safe_text(on_camera_strategy.get("light_persona")),
+        "traffic_to_trust": safe_text(conversion_path.get("traffic_to_trust")) or safe_text(legacy_positioning.get("follow_reason")),
+        "posting_frequency": safe_text(execution_rules.get("posting_frequency")) or safe_text(legacy_strategy.get("posting_frequency")),
+    }
+
+
 def has_meaningful_plan_result(
     account_positioning: dict | None,
     content_strategy: dict | None,
     content_calendar: list | None,
+    store_growth_plan: dict | None = None,
 ) -> bool:
     positioning = account_positioning if isinstance(account_positioning, dict) else {}
     strategy = content_strategy if isinstance(content_strategy, dict) else {}
     calendar = content_calendar if isinstance(content_calendar, list) else []
+    store_plan = store_growth_plan if isinstance(store_growth_plan, dict) else {}
     has_positioning = any(bool(safe_text(value)) for value in positioning.values())
     has_strategy = any(bool(safe_text(value)) for value in strategy.values())
-    return has_positioning or has_strategy or bool(calendar)
+    has_store_plan = has_meaningful_store_growth_plan(store_plan)
+    return has_positioning or has_strategy or has_store_plan or bool(calendar)
 
 
 def has_meaningful_strategy_result(
     account_positioning: dict | None,
     content_strategy: dict | None,
+    store_growth_plan: dict | None = None,
 ) -> bool:
     positioning = account_positioning if isinstance(account_positioning, dict) else {}
     strategy = content_strategy if isinstance(content_strategy, dict) else {}
+    store_plan = store_growth_plan if isinstance(store_growth_plan, dict) else {}
     has_positioning = any(bool(safe_text(value)) for value in positioning.values())
     has_strategy = any(bool(safe_text(value)) for value in strategy.values())
-    return has_positioning or has_strategy
+    has_store_plan = has_meaningful_store_growth_plan(store_plan)
+    return has_positioning or has_strategy or has_store_plan
+
+
+def has_meaningful_store_growth_plan(store_growth_plan: dict | None) -> bool:
+    plan = store_growth_plan if isinstance(store_growth_plan, dict) else {}
+    store_positioning = plan.get("store_positioning")
+    decision_triggers = plan.get("decision_triggers")
+    content_model = plan.get("content_model")
+    on_camera_strategy = plan.get("on_camera_strategy")
+    conversion_path = plan.get("conversion_path")
+    execution_rules = plan.get("execution_rules")
+
+    if not isinstance(store_positioning, dict):
+        return False
+    if not isinstance(decision_triggers, dict):
+        return False
+    if not isinstance(content_model, dict):
+        return False
+    if not isinstance(on_camera_strategy, dict):
+        return False
+    if not isinstance(conversion_path, dict):
+        return False
+    if not isinstance(execution_rules, dict):
+        return False
+
+    visit_factors = normalize_text_list(decision_triggers.get("visit_decision_factors"), limit=10)
+    traffic_hooks = normalize_text_list(content_model.get("traffic_hooks"), limit=10)
+    recommended_roles = [
+        item
+        for item in (on_camera_strategy.get("recommended_roles") or [])
+        if isinstance(item, dict) and safe_text(item.get("role"))
+    ]
+    content_pillars = [
+        item
+        for item in (content_model.get("content_pillars") or [])
+        if isinstance(item, dict) and safe_text(item.get("name"))
+    ]
+
+    return all(
+        [
+            bool(safe_text(store_positioning.get("market_position"))),
+            len(visit_factors) >= 3,
+            len(content_pillars) >= 3,
+            len(traffic_hooks) >= 3,
+            len(recommended_roles) >= 1,
+            bool(safe_text(conversion_path.get("traffic_to_trust"))),
+            bool(safe_text(execution_rules.get("posting_frequency"))),
+        ]
+    )
 
 
 def build_strategy_task_context(project) -> dict:
@@ -246,6 +361,7 @@ def build_strategy_task_context(project) -> dict:
     has_existing_strategy = has_meaningful_strategy_result(
         account_plan.get("account_positioning"),
         account_plan.get("content_strategy"),
+        account_plan.get("store_growth_plan"),
     )
     return {
         "planning_state": "strategy_regenerating",
