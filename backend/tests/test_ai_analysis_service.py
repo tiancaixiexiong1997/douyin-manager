@@ -9,6 +9,8 @@ from app.services.prompt_templates import (
     BLOGGER_VIRAL_PROFILE_PROMPT_TEMPLATE,
     CALENDAR_GAP_FILL_PROMPT_TEMPLATE,
     CONTENT_CALENDAR_PROMPT_TEMPLATE,
+    SCRIPT_REMAKE_FROM_ANALYSIS_PROMPT_TEMPLATE,
+    SCRIPT_REMAKE_PROMPT_TEMPLATE,
 )
 
 
@@ -262,6 +264,35 @@ def test_build_system_prompt_adds_writing_rules_for_copy_scenes(monkeypatch) -> 
     assert "BASE_PROMPT" in prompt
     assert "FACT_RULES" in prompt
     assert "WRITING_RULES" in prompt
+
+
+def test_build_hook_reference_block_prioritizes_opening_segment() -> None:
+    service = AIAnalysisService()
+
+    block = service._build_hook_reference_block(
+        {
+            "copy_segment_breakdown": [
+                {
+                    "segment": "开场钩子",
+                    "duration": "0-4秒",
+                    "original_copy": "上班呢 你拍什么拍？我没拍。",
+                    "copy_function": "钩子",
+                    "emotion_goal": "先制造压迫感，再让人好奇后面发生什么",
+                    "transition_role": "把观众带到后面的店铺广告段",
+                }
+            ]
+        }
+    )
+
+    assert "上班呢 你拍什么拍？我没拍。" in block
+    assert "先抓停留、再承接广告/卖点" in block
+    assert "storyboard 的 scene 1 台词要与 opening_hook 一致或直接延展" in block
+
+
+def test_script_remake_prompts_require_preserving_hook_before_ad_copy() -> None:
+    assert "先用高流量钩子抓停留，再自然带出本店/产品/服务" in SCRIPT_REMAKE_PROMPT_TEMPLATE
+    assert "优先复刻原视频已经验证有效的开场钩子机制" in SCRIPT_REMAKE_FROM_ANALYSIS_PROMPT_TEMPLATE
+    assert "{hook_reference_block}" in SCRIPT_REMAKE_FROM_ANALYSIS_PROMPT_TEMPLATE
 
 
 @pytest.mark.asyncio

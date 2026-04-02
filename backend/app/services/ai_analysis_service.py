@@ -176,6 +176,76 @@ class AIAnalysisService:
             {"label": "r4", "scale": "256:-2", "fps": "8", "crf": "37", "audio_bitrate": "24k"},
         ]
 
+    def _build_hook_reference_block(self, highlight_analysis: dict | None) -> str:
+        """从拆解结果里提取开场钩子，单独提升优先级，避免生成时丢掉流量句式。"""
+        if not isinstance(highlight_analysis, dict):
+            return (
+                "未提供可识别的开场钩子段。仍要遵守：优先保留原视频前3秒的信息顺序和冲突强度，"
+                "不要把开头改成自我介绍或产品介绍。"
+            )
+
+        breakdown = highlight_analysis.get("copy_segment_breakdown")
+        hook_segment: dict[str, Any] | None = None
+
+        if isinstance(breakdown, list):
+            for item in breakdown:
+                if not isinstance(item, dict):
+                    continue
+                segment = str(item.get("segment") or "")
+                duration = str(item.get("duration") or "")
+                copy_function = str(item.get("copy_function") or "")
+                original_copy = str(item.get("original_copy") or "").strip()
+                is_opening = any(keyword in segment for keyword in ("开场", "钩子", "开头"))
+                is_front_duration = duration.startswith("0-") or duration.startswith("前3") or duration.startswith("前 3")
+                is_hook_function = any(keyword in copy_function for keyword in ("钩子", "开场", "悬念"))
+                if original_copy and (is_opening or is_front_duration or is_hook_function):
+                    hook_segment = item
+                    break
+
+            if hook_segment is None:
+                for item in breakdown:
+                    if isinstance(item, dict) and str(item.get("original_copy") or "").strip():
+                        hook_segment = item
+                        break
+
+        if hook_segment is None:
+            hook_text = str(highlight_analysis.get("hook_mechanism") or "").strip()
+            if not hook_text:
+                return (
+                    "未提供可识别的开场钩子段。仍要遵守：优先保留原视频前3秒的信息顺序和冲突强度，"
+                    "不要把开头改成自我介绍或产品介绍。"
+                )
+            return (
+                f"原视频开场钩子机制：{hook_text}\n"
+                "生成要求：opening_hook 和 storyboard.scene1 必须优先继承这种抓停留方式；"
+                "如果原视频是先爆一句、再带出本店/产品/服务，就保持同样顺序。"
+            )
+
+        segment_name = str(hook_segment.get("segment") or "开场段").strip()
+        duration = str(hook_segment.get("duration") or "前3秒").strip()
+        original_copy = str(hook_segment.get("original_copy") or "").strip()
+        copy_function = str(hook_segment.get("copy_function") or "钩子").strip()
+        emotion_goal = str(hook_segment.get("emotion_goal") or "").strip()
+        transition_role = str(hook_segment.get("transition_role") or "").strip()
+
+        lines = [
+            f"原视频优先参考的开场段：{segment_name}（{duration}）",
+            f"原开场文案：{original_copy}",
+            f"这段作用：{copy_function}",
+        ]
+        if emotion_goal:
+            lines.append(f"目标情绪：{emotion_goal}")
+        if transition_role:
+            lines.append(f"后续承接：{transition_role}")
+        lines.extend(
+            [
+                "生成要求1：opening_hook 优先保留这句的句式、对抗关系、口语压迫感和信息顺序，不要改写成解释型、介绍型、平铺直叙型开场。",
+                "生成要求2：如果这句里出现品牌、人名、具体菜名或行业词，可只替换这些词，但保留“先抓停留、再承接广告/卖点”的结构。",
+                "生成要求3：storyboard 的 scene 1 台词要与 opening_hook 一致或直接延展，不能另写一套开场白。",
+            ]
+        )
+        return "\n".join(lines)
+
     def _encode_video_for_multimodal(
         self,
         source_path: str,
@@ -855,13 +925,17 @@ class AIAnalysisService:
                 f"你现在是「{core_identity}」这个账号的首席内容编导。\n"
                 f"你的目标受众是：{target_audience}。\n"
                 "你要基于已有拆解结果，生成完全服务于该账号定位的新脚本。\n"
-                "默认普通人单人可执行，优先口播主镜头+画中画补拍，或跟拍Vlog。"
+                "默认普通人单人可执行，优先口播主镜头+画中画补拍，或跟拍Vlog。\n"
+                "对原视频前3秒已经验证有效的开场钩子，不要随意弱化成平铺直叙；"
+                "优先保留原句式、原对抗感、原口语节奏，只替换不能直接复用的品牌、商品或人设信息。"
             )
         else:
             base_system_prompt = (
                 "你是一位顶级短视频内容编导。\n"
                 "你要基于已有拆解结果复刻结构，不要重新分析视频，也不要照抄原句。\n"
-                "默认输出普通人单人可执行方案：口播+画中画，或跟拍Vlog。"
+                "默认输出普通人单人可执行方案：口播+画中画，或跟拍Vlog。\n"
+                "对原视频前3秒已经验证有效的开场钩子，不要随意弱化成平铺直叙；"
+                "优先保留原句式、原对抗感、原口语节奏，只替换不能直接复用的品牌或商品信息。"
             )
 
         system_prompt = await self._build_system_prompt(
@@ -889,6 +963,7 @@ class AIAnalysisService:
             title=title,
             description=description,
             highlight_analysis_json=json.dumps(highlight_analysis, ensure_ascii=False, indent=2)[:9000],
+            hook_reference_block=self._build_hook_reference_block(highlight_analysis),
             user_prompt=final_user_prompt,
         )
         result = await self._call_ai(system_prompt, prompt_text, scene_key="script_remake_text")
@@ -960,7 +1035,9 @@ class AIAnalysisService:
                     "4. 每一句台词都必须符合本账号的语言风格和目标受众的认知习惯\n"
                     "5. 宁可脚本简短有力，也不为凑时长输出低密度内容\n"
                     "6. 默认普通人单人可执行：优先口播主镜头+画中画补拍，或跟拍Vlog边做边说\n"
-                    "7. 禁止设计依赖演技、多人对戏或复杂调度的情景剧拍法"
+                    "7. 禁止设计依赖演技、多人对戏或复杂调度的情景剧拍法\n"
+                    "8. 对原视频前3秒已经验证有效的开场钩子，不要随意弱化成平铺直叙；"
+                    "优先保留原句式、原对抗感、原口语节奏，只替换不能直接复用的品牌、商品或人设信息"
                 )
             else:
                 base_system_prompt = (
@@ -970,6 +1047,8 @@ class AIAnalysisService:
                     "然后把这套爆款基因完整移植到全新主题上，生成可以直接开拍的脚本。\n"
                     "你坚持的标准：台词必须是真实的人能说出口的句子，"
                     "开头必须直接制造冲突或悬念，结尾必须留下让人想评论的钩子。\n"
+                    "对原视频前3秒已经验证有效的开场钩子，不要随意弱化成平铺直叙；"
+                    "优先保留原句式、原对抗感、原口语节奏，只替换不能直接复用的品牌或商品信息。\n"
                     "默认输出普通人单人拍法：口播+画中画，或跟拍Vlog；禁止情景剧式重表演脚本。"
                 )
 
