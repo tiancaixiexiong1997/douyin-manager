@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { planningApi, type AccountPlan } from '../../api/client';
 import { Save, X } from '../../components/Icons';
+import { hasMeaningfulStoreGrowthPlan } from './projectDetailShared';
 
 function splitChineseList(value: string): string[] {
   return value
@@ -37,7 +38,7 @@ export function EditPlanModal({ projectId, plan, onClose, onSaved }: {
   const pos = plan.account_positioning;
   const strat = plan.content_strategy;
   const growth = plan.store_growth_plan;
-  const hasStoreGrowthPlan = Boolean(growth);
+  const hasStoreGrowthPlan = hasMeaningfulStoreGrowthPlan(growth);
 
   const [legacyForm, setLegacyForm] = useState({
     core_identity: pos?.core_identity || '',

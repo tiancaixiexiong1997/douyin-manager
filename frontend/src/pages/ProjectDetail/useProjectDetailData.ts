@@ -8,6 +8,7 @@ import {
 } from '../../api/client';
 import {
   inferProjectStage,
+  hasMeaningfulStoreGrowthPlan,
   type CalendarDisplayItem,
 } from './projectDetailShared';
 
@@ -37,7 +38,7 @@ export function useProjectDetailData(projectId?: string) {
 
   const plan = project?.account_plan;
   const currentStage = project ? inferProjectStage(project) : 'draft';
-  const storeGrowthPlan = plan?.store_growth_plan;
+  const storeGrowthPlan = hasMeaningfulStoreGrowthPlan(plan?.store_growth_plan) ? plan?.store_growth_plan : undefined;
   const positioning = plan?.account_positioning;
   const strategy = plan?.content_strategy;
   const hasStrategy = Boolean(storeGrowthPlan || positioning || strategy);
