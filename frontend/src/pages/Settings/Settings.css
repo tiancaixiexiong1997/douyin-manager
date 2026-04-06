@@ -362,30 +362,6 @@
   border: 1px solid var(--border-subtle);
 }
 
-.prompt-variable-group + .prompt-variable-group {
-  margin-top: 12px;
-}
-
-.prompt-variable-group-title {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.prompt-variable-group-desc {
-  margin-top: 4px;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--text-muted);
-}
-
-.prompt-variable-chips {
-  margin-top: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
 .help-text {
   display: block;
   margin-top: 8px;

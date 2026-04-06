@@ -9,7 +9,6 @@ import { PerformancePanel } from './PerformancePanel';
 import { PositioningPanel } from './PositioningPanel';
 import { ProjectOverviewSection } from './ProjectOverviewSection';
 import { ScriptModal } from './ScriptModal';
-import { StoreGrowthPanel } from './StoreGrowthPanel';
 import { useProjectDetailActions } from './useProjectDetailActions';
 import { usePlanningTaskState } from './usePlanningTaskState';
 import { useProjectDetailData } from './useProjectDetailData';
@@ -26,7 +25,6 @@ export default function ProjectDetail() {
   const {
     project,
     isLoading,
-    storeGrowthPlan,
     positioning,
     strategy,
     currentStage,
@@ -105,18 +103,7 @@ export default function ProjectDetail() {
         onEditProject={() => setShowEditProject(true)}
       />
 
-      {storeGrowthPlan ? (
-        <StoreGrowthPanel
-          storeGrowthPlan={storeGrowthPlan}
-          currentStage={currentStage}
-          isExpanded={showFullPlan}
-          isRegenerating={isStrategyRegenerating}
-          isRegeneratePending={generateStrategyMutation.isPending}
-          onToggleExpand={() => setShowFullPlan((current) => !current)}
-          onRegenerate={() => generateStrategyMutation.mutate()}
-          onEdit={() => setShowEditPlan(true)}
-        />
-      ) : positioning && (
+      {positioning && (
         <PositioningPanel
           positioning={positioning}
           strategy={strategy}

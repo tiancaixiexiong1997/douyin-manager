@@ -116,7 +116,7 @@ export default function Settings() {
     { id: 'crawler', label: '爬虫与认证', icon: Key, group: '通用' },
     { id: 'prompt_global', label: '全局写作规则', icon: Bot, group: '系统提示词' },
     { id: 'prompt_blogger', label: '博主 IP 分析', icon: User, group: '系统提示词' },
-    { id: 'prompt_plan', label: '实体店增长策划', icon: LayoutTemplate, group: '系统提示词' },
+    { id: 'prompt_plan', label: '账号定位方案', icon: LayoutTemplate, group: '系统提示词' },
     { id: 'prompt_calendar', label: '30天内容日历', icon: LayoutTemplate, group: '系统提示词' },
     { id: 'prompt_script', label: '单条视频脚本', icon: FileText, group: '系统提示词' },
     { id: 'prompt_remake', label: '视频拆解复刻', icon: PenTool, group: '系统提示词' },
@@ -134,18 +134,6 @@ export default function Settings() {
       >
         <RotateCcw size={14} /> 恢复默认提示词
       </button>
-    </div>
-  );
-
-  const renderVariableGroup = (title: string, variables: string[], description?: string) => (
-    <div className="prompt-variable-group">
-      <div className="prompt-variable-group-title">{title}</div>
-      {description && <div className="prompt-variable-group-desc">{description}</div>}
-      <div className="prompt-variable-chips">
-        {variables.map((variable) => (
-          <code key={variable}>{`{${variable}}`}</code>
-        ))}
-      </div>
     </div>
   );
 
@@ -411,8 +399,8 @@ export default function Settings() {
               {activeTab === 'prompt_plan' && (
                 <div className="animate-fade-in prompt-full-height">
                   <div className="form-group">
-                    <label className="prompt-label"><LayoutTemplate size={16} className="text-primary-500"/> 实体店增长策划提示词 <span className="label-badge">Prompt</span></label>
-                    {renderPromptActions('ACCOUNT_PLAN_PROMPT', '实体店增长策划提示词')}
+                    <label className="prompt-label"><LayoutTemplate size={16} className="text-primary-500"/> 账号定位方案提示词 <span className="label-badge">Prompt</span></label>
+                    {renderPromptActions('ACCOUNT_PLAN_PROMPT', '账号定位方案提示词')}
                     <textarea 
                       name="ACCOUNT_PLAN_PROMPT"
                       value={formData.ACCOUNT_PLAN_PROMPT ?? ''}
@@ -421,21 +409,7 @@ export default function Settings() {
                     />
                     <div className="prompt-variables">
                       <strong>可用变量：</strong>
-                      {renderVariableGroup(
-                        '门店基础事实',
-                        ['client_name', 'industry', 'city', 'business_district', 'store_type', 'avg_ticket', 'core_products_or_services'],
-                        '这些字段来自项目基础信息和 store_profile，适合约束实体店事实边界。'
-                      )}
-                      {renderVariableGroup(
-                        '顾客决策与拍摄条件',
-                        ['target_audience', 'top_reasons_to_choose', 'customer_common_questions', 'common_hesitations', 'primary_consumption_scenes', 'on_camera_roles', 'shootable_scenes', 'peak_hours', 'batch_shoot_windows', 'store_constraints'],
-                        '适合引导 AI 从到店理由、内容素材来源和执行可行性出发。'
-                      )}
-                      {renderVariableGroup(
-                        '兼容旧字段与补充要求',
-                        ['unique_advantage', 'ip_requirements', 'style_preference', 'business_goal', 'special_requirements', 'forbidden_directions', 'blogger_count', 'bloggers_text'],
-                        '保留给老项目和人工补充要求；实体店项目建议优先围绕上面两组字段组织 prompt。'
-                      )}
+                      <code>{'{client_name}'}</code> <code>{'{industry}'}</code> <code>{'{target_audience}'}</code> <code>{'{unique_advantage}'}</code> <code>{'{ip_requirements}'}</code> <code>{'{style_preference}'}</code> <code>{'{business_goal}'}</code> <code>{'{blogger_count}'}</code> <code>{'{bloggers_text}'}</code>
                     </div>
                   </div>
                 </div>
@@ -454,16 +428,7 @@ export default function Settings() {
                     />
                     <div className="prompt-variables">
                       <strong>可用变量：</strong>
-                      {renderVariableGroup(
-                        '旧定位兼容字段',
-                        ['client_name', 'core_identity', 'target_audience_detail', 'personality_tags', 'differentiation', 'content_tone', 'content_pillars'],
-                        '老项目仍会回填这些字段，但新项目建议优先用实体店增长策划变量。'
-                      )}
-                      {renderVariableGroup(
-                        '实体店增长策划',
-                        ['store_growth_plan_json', 'performance_recap_summary', 'winning_patterns', 'optimization_focus', 'next_topic_angles'],
-                        '日历 prompt 现在可以直接读取完整 store_growth_plan，并结合复盘结果生成题目。'
-                      )}
+                      <code>{'{client_name}'}</code> <code>{'{core_identity}'}</code> <code>{'{target_audience_detail}'}</code> <code>{'{personality_tags}'}</code> <code>{'{differentiation}'}</code> <code>{'{content_tone}'}</code> <code>{'{content_pillars}'}</code> <code>{'{performance_recap_summary}'}</code> <code>{'{winning_patterns}'}</code> <code>{'{optimization_focus}'}</code> <code>{'{next_topic_angles}'}</code>
                     </div>
                   </div>
                 </div>
@@ -482,21 +447,7 @@ export default function Settings() {
                     />
                     <div className="prompt-variables">
                       <strong>可用变量：</strong>
-                      {renderVariableGroup(
-                        '内容条目',
-                        ['title_direction', 'content_type', 'key_message'],
-                        '单条脚本直接围绕这一条题目的方向、类型和关键信息展开。'
-                      )}
-                      {renderVariableGroup(
-                        '旧定位兼容字段',
-                        ['core_identity', 'content_tone', 'target_audience_detail', 'user_value', 'follow_reason', 'stop_scroll_reason', 'interaction_trigger'],
-                        '保留给旧项目使用。'
-                      )}
-                      {renderVariableGroup(
-                        '实体店增长策划',
-                        ['traffic_hooks', 'recommended_roles', 'traffic_to_trust', 'store_growth_plan_json'],
-                        '脚本生成已优先吃实体店增长上下文，适合约束开头钩子、出镜角色和转化承接。'
-                      )}
+                      <code>{'{title_direction}'}</code> <code>{'{content_type}'}</code> <code>{'{key_message}'}</code> <code>{'{core_identity}'}</code> <code>{'{content_tone}'}</code> <code>{'{target_audience_detail}'}</code>
                     </div>
                   </div>
                 </div>

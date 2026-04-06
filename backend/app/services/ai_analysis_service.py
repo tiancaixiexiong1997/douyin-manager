@@ -14,7 +14,6 @@ from typing import Any, Optional
 import httpx
 
 from app.config import settings
-from app.services.planning_calendar_utils import extract_store_growth_context, get_store_growth_plan
 from app.services.prompt_templates import (
     ACCOUNT_PLAN_PROMPT_TEMPLATE,
     BLOGGER_REPORT_PROMPT_TEMPLATE,
@@ -177,76 +176,6 @@ class AIAnalysisService:
             {"label": "r4", "scale": "256:-2", "fps": "8", "crf": "37", "audio_bitrate": "24k"},
         ]
 
-    def _build_hook_reference_block(self, highlight_analysis: dict | None) -> str:
-        """从拆解结果里提取开场钩子，单独提升优先级，避免生成时丢掉流量句式。"""
-        if not isinstance(highlight_analysis, dict):
-            return (
-                "未提供可识别的开场钩子段。仍要遵守：优先保留原视频前3秒的信息顺序和冲突强度，"
-                "不要把开头改成自我介绍或产品介绍。"
-            )
-
-        breakdown = highlight_analysis.get("copy_segment_breakdown")
-        hook_segment: dict[str, Any] | None = None
-
-        if isinstance(breakdown, list):
-            for item in breakdown:
-                if not isinstance(item, dict):
-                    continue
-                segment = str(item.get("segment") or "")
-                duration = str(item.get("duration") or "")
-                copy_function = str(item.get("copy_function") or "")
-                original_copy = str(item.get("original_copy") or "").strip()
-                is_opening = any(keyword in segment for keyword in ("开场", "钩子", "开头"))
-                is_front_duration = duration.startswith("0-") or duration.startswith("前3") or duration.startswith("前 3")
-                is_hook_function = any(keyword in copy_function for keyword in ("钩子", "开场", "悬念"))
-                if original_copy and (is_opening or is_front_duration or is_hook_function):
-                    hook_segment = item
-                    break
-
-            if hook_segment is None:
-                for item in breakdown:
-                    if isinstance(item, dict) and str(item.get("original_copy") or "").strip():
-                        hook_segment = item
-                        break
-
-        if hook_segment is None:
-            hook_text = str(highlight_analysis.get("hook_mechanism") or "").strip()
-            if not hook_text:
-                return (
-                    "未提供可识别的开场钩子段。仍要遵守：优先保留原视频前3秒的信息顺序和冲突强度，"
-                    "不要把开头改成自我介绍或产品介绍。"
-                )
-            return (
-                f"原视频开场钩子机制：{hook_text}\n"
-                "生成要求：opening_hook 和 storyboard.scene1 必须优先继承这种抓停留方式；"
-                "如果原视频是先爆一句、再带出本店/产品/服务，就保持同样顺序。"
-            )
-
-        segment_name = str(hook_segment.get("segment") or "开场段").strip()
-        duration = str(hook_segment.get("duration") or "前3秒").strip()
-        original_copy = str(hook_segment.get("original_copy") or "").strip()
-        copy_function = str(hook_segment.get("copy_function") or "钩子").strip()
-        emotion_goal = str(hook_segment.get("emotion_goal") or "").strip()
-        transition_role = str(hook_segment.get("transition_role") or "").strip()
-
-        lines = [
-            f"原视频优先参考的开场段：{segment_name}（{duration}）",
-            f"原开场文案：{original_copy}",
-            f"这段作用：{copy_function}",
-        ]
-        if emotion_goal:
-            lines.append(f"目标情绪：{emotion_goal}")
-        if transition_role:
-            lines.append(f"后续承接：{transition_role}")
-        lines.extend(
-            [
-                "生成要求1：opening_hook 优先保留这句的句式、对抗关系、口语压迫感和信息顺序，不要改写成解释型、介绍型、平铺直叙型开场。",
-                "生成要求2：如果这句里出现品牌、人名、具体菜名或行业词，可只替换这些词，但保留“先抓停留、再承接广告/卖点”的结构。",
-                "生成要求3：storyboard 的 scene 1 台词要与 opening_hook 一致或直接延展，不能另写一套开场白。",
-            ]
-        )
-        return "\n".join(lines)
-
     def _encode_video_for_multimodal(
         self,
         source_path: str,
@@ -353,179 +282,6 @@ class AIAnalysisService:
             return any(self._has_meaningful_value(item) for item in value.values())
         return True
 
-    def _has_minimum_store_growth_plan(self, store_growth_plan: Any) -> bool:
-        if not isinstance(store_growth_plan, dict):
-            return False
-
-        store_positioning = store_growth_plan.get("store_positioning")
-        decision_triggers = store_growth_plan.get("decision_triggers")
-        content_model = store_growth_plan.get("content_model")
-        on_camera_strategy = store_growth_plan.get("on_camera_strategy")
-        conversion_path = store_growth_plan.get("conversion_path")
-        execution_rules = store_growth_plan.get("execution_rules")
-
-        if not isinstance(store_positioning, dict):
-            return False
-        if not isinstance(decision_triggers, dict):
-            return False
-        if not isinstance(content_model, dict):
-            return False
-        if not isinstance(on_camera_strategy, dict):
-            return False
-        if not isinstance(conversion_path, dict):
-            return False
-        if not isinstance(execution_rules, dict):
-            return False
-
-        content_pillars = [
-            item
-            for item in (content_model.get("content_pillars") or [])
-            if isinstance(item, dict) and self._has_meaningful_value(item.get("name"))
-        ]
-        traffic_hooks = [
-            item
-            for item in (content_model.get("traffic_hooks") or [])
-            if self._has_meaningful_value(item)
-        ]
-        visit_factors = [
-            item
-            for item in (decision_triggers.get("visit_decision_factors") or [])
-            if self._has_meaningful_value(item)
-        ]
-        recommended_roles = [
-            item
-            for item in (on_camera_strategy.get("recommended_roles") or [])
-            if isinstance(item, dict) and self._has_meaningful_value(item.get("role"))
-        ]
-
-        return all(
-            [
-                self._has_meaningful_value(store_positioning.get("market_position")),
-                len(visit_factors) >= 3,
-                len(content_pillars) >= 3,
-                len(traffic_hooks) >= 3,
-                len(recommended_roles) >= 1,
-                self._has_meaningful_value(conversion_path.get("traffic_to_trust")),
-                self._has_meaningful_value(execution_rules.get("posting_frequency")),
-            ]
-        )
-
-    def _map_store_growth_plan_to_legacy(self, store_growth_plan: Any) -> tuple[dict[str, Any], dict[str, Any]]:
-        if not isinstance(store_growth_plan, dict):
-            return {}, {}
-
-        store_positioning = store_growth_plan.get("store_positioning")
-        decision_triggers = store_growth_plan.get("decision_triggers")
-        content_model = store_growth_plan.get("content_model")
-        on_camera_strategy = store_growth_plan.get("on_camera_strategy")
-        conversion_path = store_growth_plan.get("conversion_path")
-        execution_rules = store_growth_plan.get("execution_rules")
-
-        store_positioning = store_positioning if isinstance(store_positioning, dict) else {}
-        decision_triggers = decision_triggers if isinstance(decision_triggers, dict) else {}
-        content_model = content_model if isinstance(content_model, dict) else {}
-        on_camera_strategy = on_camera_strategy if isinstance(on_camera_strategy, dict) else {}
-        conversion_path = conversion_path if isinstance(conversion_path, dict) else {}
-        execution_rules = execution_rules if isinstance(execution_rules, dict) else {}
-
-        content_pillars: list[dict[str, str]] = []
-        for item in content_model.get("content_pillars") or []:
-            if not isinstance(item, dict):
-                continue
-            name = str(item.get("name") or "").strip()
-            description = str(item.get("description") or "").strip()
-            if not name and not description:
-                continue
-            content_pillars.append(
-                {
-                    "name": name,
-                    "description": description,
-                    "ratio": str(item.get("ratio") or "").strip(),
-                }
-            )
-
-        personality_tags: list[str] = []
-        light_persona = str(on_camera_strategy.get("light_persona") or "").strip()
-        if light_persona:
-            personality_tags.append(light_persona)
-        for item in on_camera_strategy.get("recommended_roles") or []:
-            if not isinstance(item, dict):
-                continue
-            role = str(item.get("role") or "").strip()
-            if role and role not in personality_tags:
-                personality_tags.append(role)
-
-        primary_formats: list[str] = []
-        for item in content_model.get("primary_formats") or []:
-            if not isinstance(item, dict):
-                continue
-            name = str(item.get("name") or "").strip()
-            if name and name not in primary_formats:
-                primary_formats.append(name)
-
-        account_positioning = {
-            "core_identity": str(store_positioning.get("market_position") or "").strip(),
-            "target_audience_detail": str(store_positioning.get("target_audience_detail") or "").strip(),
-            "content_pillars": content_pillars,
-            "personality_tags": personality_tags[:3],
-            "bio_suggestion": str(store_positioning.get("core_store_value") or "").strip(),
-            "differentiation": str(store_positioning.get("differentiation") or "").strip(),
-            "user_value": "；".join(
-                str(item).strip()
-                for item in (decision_triggers.get("trust_builders") or [])
-                if str(item).strip()
-            ),
-            "follow_reason": str(conversion_path.get("traffic_to_trust") or "").strip(),
-        }
-        content_strategy = {
-            "primary_format": " / ".join(primary_formats[:3]),
-            "posting_frequency": str(execution_rules.get("posting_frequency") or "").strip(),
-            "best_posting_times": [
-                str(item).strip()
-                for item in (execution_rules.get("best_posting_times") or [])
-                if str(item).strip()
-            ],
-            "content_tone": str(light_persona or store_positioning.get("primary_scene") or "").strip(),
-            "stop_scroll_reason": "；".join(
-                str(item).strip()
-                for item in (decision_triggers.get("stop_scroll_triggers") or [])
-                if str(item).strip()
-            ),
-            "interaction_trigger": "；".join(
-                str(item).strip()
-                for item in (content_model.get("interaction_triggers") or [])
-                if str(item).strip()
-            ),
-            "hook_template": "；".join(
-                str(item).strip()
-                for item in (content_model.get("traffic_hooks") or [])
-                if str(item).strip()
-            ),
-            "cta_template": "；".join(
-                str(item).strip()
-                for item in (conversion_path.get("soft_cta_templates") or [])
-                if str(item).strip()
-            ),
-        }
-        return account_positioning, content_strategy
-
-    def normalize_account_plan_result(self, result: Any, *, overwrite_legacy: bool = False) -> Any:
-        if not isinstance(result, dict):
-            return result
-        store_growth_plan = result.get("store_growth_plan")
-        if not isinstance(store_growth_plan, dict):
-            return result
-
-        legacy_positioning, legacy_strategy = self._map_store_growth_plan_to_legacy(store_growth_plan)
-        if overwrite_legacy or not self._has_meaningful_value(result.get("account_positioning")):
-            result["account_positioning"] = legacy_positioning
-        if overwrite_legacy or not self._has_meaningful_value(result.get("content_strategy")):
-            result["content_strategy"] = legacy_strategy
-        return result
-
-    def _normalize_account_plan_result(self, result: Any) -> Any:
-        return self.normalize_account_plan_result(result)
-
     def _is_scene_result_acceptable(self, scene_key: Optional[str], result: dict[str, Any]) -> bool:
         if not scene_key:
             return True
@@ -533,9 +289,6 @@ class AIAnalysisService:
             return False
 
         if scene_key == "account_plan":
-            store_growth_plan = result.get("store_growth_plan")
-            if isinstance(store_growth_plan, dict):
-                return self._has_minimum_store_growth_plan(store_growth_plan)
             return any(
                 self._has_meaningful_value(result.get(key))
                 for key in ("account_positioning", "content_strategy")
@@ -1102,17 +855,13 @@ class AIAnalysisService:
                 f"你现在是「{core_identity}」这个账号的首席内容编导。\n"
                 f"你的目标受众是：{target_audience}。\n"
                 "你要基于已有拆解结果，生成完全服务于该账号定位的新脚本。\n"
-                "默认普通人单人可执行，优先口播主镜头+画中画补拍，或跟拍Vlog。\n"
-                "对原视频前3秒已经验证有效的开场钩子，不要随意弱化成平铺直叙；"
-                "优先保留原句式、原对抗感、原口语节奏，只替换不能直接复用的品牌、商品或人设信息。"
+                "默认普通人单人可执行，优先口播主镜头+画中画补拍，或跟拍Vlog。"
             )
         else:
             base_system_prompt = (
                 "你是一位顶级短视频内容编导。\n"
                 "你要基于已有拆解结果复刻结构，不要重新分析视频，也不要照抄原句。\n"
-                "默认输出普通人单人可执行方案：口播+画中画，或跟拍Vlog。\n"
-                "对原视频前3秒已经验证有效的开场钩子，不要随意弱化成平铺直叙；"
-                "优先保留原句式、原对抗感、原口语节奏，只替换不能直接复用的品牌或商品信息。"
+                "默认输出普通人单人可执行方案：口播+画中画，或跟拍Vlog。"
             )
 
         system_prompt = await self._build_system_prompt(
@@ -1140,7 +889,6 @@ class AIAnalysisService:
             title=title,
             description=description,
             highlight_analysis_json=json.dumps(highlight_analysis, ensure_ascii=False, indent=2)[:9000],
-            hook_reference_block=self._build_hook_reference_block(highlight_analysis),
             user_prompt=final_user_prompt,
         )
         result = await self._call_ai(system_prompt, prompt_text, scene_key="script_remake_text")
@@ -1212,9 +960,7 @@ class AIAnalysisService:
                     "4. 每一句台词都必须符合本账号的语言风格和目标受众的认知习惯\n"
                     "5. 宁可脚本简短有力，也不为凑时长输出低密度内容\n"
                     "6. 默认普通人单人可执行：优先口播主镜头+画中画补拍，或跟拍Vlog边做边说\n"
-                    "7. 禁止设计依赖演技、多人对戏或复杂调度的情景剧拍法\n"
-                    "8. 对原视频前3秒已经验证有效的开场钩子，不要随意弱化成平铺直叙；"
-                    "优先保留原句式、原对抗感、原口语节奏，只替换不能直接复用的品牌、商品或人设信息"
+                    "7. 禁止设计依赖演技、多人对戏或复杂调度的情景剧拍法"
                 )
             else:
                 base_system_prompt = (
@@ -1224,8 +970,6 @@ class AIAnalysisService:
                     "然后把这套爆款基因完整移植到全新主题上，生成可以直接开拍的脚本。\n"
                     "你坚持的标准：台词必须是真实的人能说出口的句子，"
                     "开头必须直接制造冲突或悬念，结尾必须留下让人想评论的钩子。\n"
-                    "对原视频前3秒已经验证有效的开场钩子，不要随意弱化成平铺直叙；"
-                    "优先保留原句式、原对抗感、原口语节奏，只替换不能直接复用的品牌或商品信息。\n"
                     "默认输出普通人单人拍法：口播+画中画，或跟拍Vlog；禁止情景剧式重表演脚本。"
                 )
 
@@ -1784,33 +1528,16 @@ class AIAnalysisService:
         user_prompt = prompt_template.format(
             client_name=client_info.get('client_name', ''),
             industry=client_info.get('industry', ''),
-            city=client_info.get('city', ''),
-            business_district=client_info.get('business_district', ''),
-            store_type=client_info.get('store_type', ''),
-            avg_ticket=client_info.get('avg_ticket', ''),
-            core_products_or_services=json.dumps(client_info.get('core_products_or_services', []), ensure_ascii=False),
             target_audience=client_info.get('target_audience', ''),
             unique_advantage=client_info.get('unique_advantage', '未指定'),
-            top_reasons_to_choose=json.dumps(client_info.get('top_reasons_to_choose', []), ensure_ascii=False),
-            customer_common_questions=json.dumps(client_info.get('customer_common_questions', []), ensure_ascii=False),
-            common_hesitations=json.dumps(client_info.get('common_hesitations', []), ensure_ascii=False),
-            primary_consumption_scenes=json.dumps(client_info.get('primary_consumption_scenes', []), ensure_ascii=False),
-            on_camera_roles=json.dumps(client_info.get('on_camera_roles', []), ensure_ascii=False),
-            shootable_scenes=json.dumps(client_info.get('shootable_scenes', []), ensure_ascii=False),
-            peak_hours=json.dumps(client_info.get('peak_hours', []), ensure_ascii=False),
-            batch_shoot_windows=json.dumps(client_info.get('batch_shoot_windows', []), ensure_ascii=False),
-            store_constraints=json.dumps(client_info.get('store_constraints', []), ensure_ascii=False),
             ip_requirements=client_info.get('ip_requirements', ''),
             style_preference=client_info.get('style_preference', '未指定'),
             business_goal=client_info.get('business_goal', '未指定'),
-            special_requirements=client_info.get('special_requirements', client_info.get('ip_requirements', '未指定')),
-            forbidden_directions=json.dumps(client_info.get('forbidden_directions', []), ensure_ascii=False),
             blogger_count=len(reference_bloggers),
             bloggers_text=bloggers_text
         )
 
         result = await self._call_ai(system_prompt, user_prompt, scene_key="account_plan")
-        result = self._normalize_account_plan_result(result)
         await self._record_prompt_run(
             scene_key="account_plan",
             result=result,
@@ -1832,7 +1559,6 @@ class AIAnalysisService:
         
         pos = account_plan.get("account_positioning", {})
         strat = account_plan.get("content_strategy", {})
-        store_growth_plan = account_plan.get("store_growth_plan", {}) if isinstance(account_plan.get("store_growth_plan"), dict) else {}
         recap = account_plan.get("performance_recap", {}) if isinstance(account_plan.get("performance_recap"), dict) else {}
 
         recap_summary = str(recap.get("overall_summary", "") or "").strip() or "暂无已生成复盘建议，请先基于当前定位正常生成。"
@@ -1870,7 +1596,6 @@ class AIAnalysisService:
             stop_scroll_reason=strat.get("stop_scroll_reason", ""),
             interaction_trigger=strat.get("interaction_trigger", ""),
             content_pillars=json.dumps(pos.get("content_pillars", []), ensure_ascii=False),
-            store_growth_plan_json=json.dumps(store_growth_plan, ensure_ascii=False, indent=2)[:6000] if store_growth_plan else "暂无实体店增长策划补充，请优先根据已有定位字段与项目事实生成日历。",
             performance_recap_summary=recap_summary,
             winning_patterns=winning_patterns,
             optimization_focus=optimization_focus,
@@ -1956,17 +1681,9 @@ class AIAnalysisService:
             default_prompt=self.DEFAULT_PERFORMANCE_RECAP_PROMPT,
             db=db,
         )
-        growth_context = extract_store_growth_context(account_plan)
-        store_growth_plan = get_store_growth_plan(account_plan)
         user_prompt = prompt_template.format(
             project_context=json.dumps(project_context, ensure_ascii=False, indent=2)[:3000],
             account_plan_json=json.dumps(account_plan, ensure_ascii=False, indent=2)[:6000],
-            store_market_position=str(growth_context.get("market_position") or "").strip() or "暂无明确实体店定位",
-            store_primary_scene=str(growth_context.get("primary_scene") or "").strip() or "暂无明确消费场景",
-            store_visit_decision_factors="；".join(growth_context.get("visit_decision_factors") or []) or "暂无明确到店决策因素，请结合回流数据归纳。",
-            store_traffic_hooks="；".join(growth_context.get("traffic_hooks") or []) or "暂无明确流量钩子，请从表现好的前3秒里反推。",
-            store_content_pillars="；".join(growth_context.get("content_pillars") or []) or "暂无明确内容支柱，请结合高表现内容归纳。",
-            store_growth_plan_json=json.dumps(store_growth_plan, ensure_ascii=False, indent=2)[:5000] if store_growth_plan else "暂无实体店增长策划。",
             performance_summary_json=json.dumps(performance_summary, ensure_ascii=False, indent=2)[:6000],
             performance_rows_json=json.dumps(performance_rows, ensure_ascii=False, indent=2)[:10000],
         )
@@ -2006,17 +1723,9 @@ class AIAnalysisService:
             default_prompt=self.DEFAULT_NEXT_TOPIC_BATCH_PROMPT,
             db=db,
         )
-        growth_context = extract_store_growth_context(account_plan)
-        store_growth_plan = get_store_growth_plan(account_plan)
         user_prompt = prompt_template.format(
             project_context=json.dumps(project_context, ensure_ascii=False, indent=2)[:3000],
             account_plan_json=json.dumps(account_plan, ensure_ascii=False, indent=2)[:6000],
-            store_market_position=str(growth_context.get("market_position") or "").strip() or "暂无明确实体店定位",
-            store_primary_scene=str(growth_context.get("primary_scene") or "").strip() or "暂无明确消费场景",
-            store_visit_decision_factors="；".join(growth_context.get("visit_decision_factors") or []) or "暂无明确到店决策因素，请结合复盘推断。",
-            store_traffic_hooks="；".join(growth_context.get("traffic_hooks") or []) or "暂无明确流量钩子，请结合历史高表现内容提炼。",
-            store_content_pillars="；".join(growth_context.get("content_pillars") or []) or "暂无明确内容支柱，请优先围绕实体店真实场景。",
-            store_growth_plan_json=json.dumps(store_growth_plan, ensure_ascii=False, indent=2)[:5000] if store_growth_plan else "暂无实体店增长策划。",
             performance_recap_json=json.dumps(performance_recap, ensure_ascii=False, indent=2)[:5000],
             existing_content_items_json=json.dumps(existing_content_items, ensure_ascii=False, indent=2)[:8000],
         )
@@ -2101,10 +1810,6 @@ class AIAnalysisService:
             default_prompt=self.DEFAULT_VIDEO_SCRIPT_PROMPT,
             db=db,
         )
-        store_growth_plan = account_plan.get("store_growth_plan", {}) if isinstance(account_plan.get("store_growth_plan"), dict) else {}
-        content_model = store_growth_plan.get("content_model", {}) if isinstance(store_growth_plan.get("content_model"), dict) else {}
-        on_camera_strategy = store_growth_plan.get("on_camera_strategy", {}) if isinstance(store_growth_plan.get("on_camera_strategy"), dict) else {}
-        conversion_path = store_growth_plan.get("conversion_path", {}) if isinstance(store_growth_plan.get("conversion_path"), dict) else {}
         user_prompt = prompt_template.format(
             title_direction=content_item.get('title_direction', ''),
             content_type=content_item.get('content_type', ''),
@@ -2115,15 +1820,7 @@ class AIAnalysisService:
             user_value=account_plan.get('account_positioning', {}).get('user_value', ''),
             follow_reason=account_plan.get('account_positioning', {}).get('follow_reason', ''),
             stop_scroll_reason=account_plan.get('content_strategy', {}).get('stop_scroll_reason', ''),
-            interaction_trigger=account_plan.get('content_strategy', {}).get('interaction_trigger', ''),
-            traffic_hooks="；".join(str(item).strip() for item in (content_model.get("traffic_hooks") or []) if str(item).strip()) or "暂无明确钩子模板，请基于内容方向直接制造事实型停留点。",
-            recommended_roles="；".join(
-                str(item.get("role") or "").strip()
-                for item in (on_camera_strategy.get("recommended_roles") or [])
-                if isinstance(item, dict) and str(item.get("role") or "").strip()
-            ) or "默认 IP 单人出镜",
-            traffic_to_trust=str(conversion_path.get("traffic_to_trust") or "").strip() or "先给事实或判断，再用真实场景或证据承接。",
-            store_growth_plan_json=json.dumps(store_growth_plan, ensure_ascii=False, indent=2)[:6000] if store_growth_plan else "暂无实体店增长策划补充，请根据已有定位字段生成脚本。",
+            interaction_trigger=account_plan.get('content_strategy', {}).get('interaction_trigger', '')
         )
 
         result = await self._call_ai(system_prompt, user_prompt, scene_key="video_script")

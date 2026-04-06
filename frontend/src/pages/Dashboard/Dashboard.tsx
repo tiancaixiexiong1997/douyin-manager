@@ -145,9 +145,9 @@ export default function Dashboard() {
       desc: inferProjectStage(p) === 'completed'
         ? '30 天日历已完成，可进入详情复查'
         : inferProjectStage(p) === 'strategy_completed'
-          ? '增长策略已完成，等待生成 30 天日历'
+          ? '定位已完成，等待生成 30 天日历'
           : inferProjectStage(p) === 'strategy_generating'
-            ? 'AI 正在生成实体店增长策划'
+            ? 'AI 正在生成账号定位方案'
             : inferProjectStage(p) === 'calendar_generating'
               ? 'AI 正在生成 30 天日历'
               : '项目处于草稿阶段',
@@ -280,8 +280,8 @@ export default function Dashboard() {
                       stage === 'strategy_generating' || stage === 'calendar_generating' ? 'badge-yellow' : 'badge-purple'
                     }`}>
                       {stage === 'completed' ? '已完成' :
-                       stage === 'strategy_completed' ? '策略已完成' :
-                       stage === 'strategy_generating' ? '策略生成中' :
+                       stage === 'strategy_completed' ? '定位已完成' :
+                       stage === 'strategy_generating' ? '定位生成中' :
                        stage === 'calendar_generating' ? '日历生成中' : '草稿'}
                     </span>
                     <ArrowRight size={14} />

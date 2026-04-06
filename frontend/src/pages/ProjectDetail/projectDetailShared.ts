@@ -35,51 +35,15 @@ export type ProjectStage =
   | 'calendar_generating'
   | 'completed';
 
-export function hasMeaningfulStoreGrowthPlan(storeGrowthPlan?: unknown): boolean {
-  if (!storeGrowthPlan || typeof storeGrowthPlan !== 'object') return false;
-  const plan = storeGrowthPlan as Record<string, unknown>;
-  const storePositioning = (plan.store_positioning || {}) as Record<string, unknown>;
-  const decisionTriggers = (plan.decision_triggers || {}) as Record<string, unknown>;
-  const contentModel = (plan.content_model || {}) as Record<string, unknown>;
-  const onCameraStrategy = (plan.on_camera_strategy || {}) as Record<string, unknown>;
-  const conversionPath = (plan.conversion_path || {}) as Record<string, unknown>;
-  const executionRules = (plan.execution_rules || {}) as Record<string, unknown>;
-
-  const visitDecisionFactors = Array.isArray(decisionTriggers.visit_decision_factors)
-    ? decisionTriggers.visit_decision_factors.filter(Boolean)
-    : [];
-  const contentPillars = Array.isArray(contentModel.content_pillars)
-    ? contentModel.content_pillars.filter((item) => item && typeof item === 'object' && (item as Record<string, unknown>).name)
-    : [];
-  const trafficHooks = Array.isArray(contentModel.traffic_hooks)
-    ? contentModel.traffic_hooks.filter(Boolean)
-    : [];
-  const recommendedRoles = Array.isArray(onCameraStrategy.recommended_roles)
-    ? onCameraStrategy.recommended_roles.filter((item) => item && typeof item === 'object' && (item as Record<string, unknown>).role)
-    : [];
-
-  return Boolean(
-    storePositioning.market_position &&
-    visitDecisionFactors.length >= 1 &&
-    contentPillars.length >= 1 &&
-    trafficHooks.length >= 1 &&
-    recommendedRoles.length >= 1 &&
-    conversionPath.traffic_to_trust &&
-    executionRules.posting_frequency
-  );
-}
-
 export function inferProjectStage(project: {
   status: string;
   account_plan?: {
-    store_growth_plan?: unknown;
     account_positioning?: unknown;
     content_strategy?: unknown;
     calendar_generation_meta?: unknown;
   } | null;
 }): ProjectStage {
-  const hasStoreStrategy = hasMeaningfulStoreGrowthPlan(project.account_plan?.store_growth_plan);
-  const hasStrategy = Boolean(hasStoreStrategy || project.account_plan?.account_positioning || project.account_plan?.content_strategy);
+  const hasStrategy = Boolean(project.account_plan?.account_positioning || project.account_plan?.content_strategy);
   const hasCalendar = Boolean(project.account_plan?.calendar_generation_meta);
   if (project.status === 'strategy_generating') return 'strategy_generating';
   if (project.status === 'strategy_completed') return 'strategy_completed';

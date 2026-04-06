@@ -116,9 +116,8 @@ async def generate_plan_background(
 
             account_positioning = result.get("account_positioning", {})
             content_strategy = result.get("content_strategy", {})
-            store_growth_plan = result.get("store_growth_plan", {})
 
-            if not has_meaningful_strategy_result(account_positioning, content_strategy, store_growth_plan):
+            if not has_meaningful_strategy_result(account_positioning, content_strategy):
                 logger.error("项目 %s AI 返回空定位结果，拒绝覆盖原有内容", project_id)
                 raise ValueError("AI 返回的定位结果为空，未覆盖原有内容")
 
@@ -126,8 +125,6 @@ async def generate_plan_background(
                 "account_positioning": account_positioning,
                 "content_strategy": content_strategy,
             }
-            if isinstance(store_growth_plan, dict) and store_growth_plan:
-                account_plan["store_growth_plan"] = store_growth_plan
 
             await task_center_repo.update_status(
                 db,

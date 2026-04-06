@@ -29,8 +29,8 @@ function getStageBadgeClass(currentStage: ProjectStage): string {
 
 function getStageLabel(currentStage: ProjectStage): string {
   if (currentStage === 'completed') return '已完成';
-  if (currentStage === 'strategy_completed') return '策略已完成';
-  if (currentStage === 'strategy_generating') return '策略生成中...';
+  if (currentStage === 'strategy_completed') return '定位已完成';
+  if (currentStage === 'strategy_generating') return '定位生成中...';
   if (currentStage === 'calendar_generating') return '日历生成中...';
   return '草稿';
 }
@@ -61,7 +61,7 @@ export function ProjectOverviewSection({
 
       <div className="detail-hero">
         <div className="detail-hero-main">
-          <div className="detail-hero-pill">实体店增长策划详情</div>
+          <div className="detail-hero-pill">账号策划详情</div>
           <h1 className="page-title">{project.client_name}</h1>
           <div className="detail-hero-meta">
             <span className="badge badge-purple">{project.industry}</span>
@@ -83,7 +83,7 @@ export function ProjectOverviewSection({
         <div className="flex items-center gap-2">
           {currentStage === 'draft' && (
             <button className="btn btn-primary btn-sm" onClick={onGenerateStrategy} disabled={isGenerateStrategyPending}>
-              <Sparkles size={13} /> {isGenerateStrategyPending ? '生成中...' : '生成增长策划'}
+              <Sparkles size={13} /> {isGenerateStrategyPending ? '生成中...' : '生成账号定位方案'}
             </button>
           )}
           {(currentStage === 'strategy_completed' || (hasStrategy && !hasCalendar && currentStage !== 'calendar_generating')) && (
@@ -104,7 +104,7 @@ export function ProjectOverviewSection({
       {currentStage === 'strategy_generating' && (
         <div className="generating-tip">
           <Loader2 size={16} className="spin-icon" />
-          AI 正在生成实体店增长策划，请稍等...（页面会自动刷新）
+          AI 正在生成账号定位方案，请稍等...（页面会自动刷新）
         </div>
       )}
       {currentStage === 'calendar_generating' && (
@@ -117,10 +117,10 @@ export function ProjectOverviewSection({
       {!hasStrategy && currentStage === 'draft' && (
         <div className="card detail-section">
           <div className="empty-state" style={{ padding: '24px 16px' }}>
-            <div className="empty-title">先生成实体店增长策划</div>
-            <div className="empty-desc">先确认门店定位、顾客决策点、内容支柱和表达策略，再进入 30 天日历生成，能明显降低超时和整批返工。</div>
+            <div className="empty-title">先生成账号定位方案</div>
+            <div className="empty-desc">先确认核心定位、人设标签、内容支柱和表达策略，再进入 30 天日历生成，能明显降低超时和整批返工。</div>
             <button className="btn btn-primary" onClick={onGenerateStrategy} disabled={isGenerateStrategyPending}>
-              <Sparkles size={14} /> {isGenerateStrategyPending ? '生成中...' : '开始生成增长策划'}
+              <Sparkles size={14} /> {isGenerateStrategyPending ? '生成中...' : '开始生成账号定位方案'}
             </button>
           </div>
         </div>

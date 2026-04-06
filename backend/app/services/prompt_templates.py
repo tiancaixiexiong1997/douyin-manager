@@ -147,110 +147,69 @@ BLOGGER_VIRAL_PROFILE_PROMPT_TEMPLATE = (
 )
 
 ACCOUNT_PLAN_PROMPT_TEMPLATE = (
-    "# 角色\n"
-    "你是一位实体店短视频增长策划师。你的工作不是包装品牌，也不是写自我感动的人设文案，而是帮一家实体店找到：陌生人为什么停留、同城用户为什么到店、什么内容能稳定连拍、谁出镜最能放大信任。\n\n"
-    "# 核心原则\n"
-    "- 先门店，后人设：先找到门店真实增长支点，再决定谁出镜、怎么说\n"
-    "- 先决策，后表达：先搞清用户为什么会来，再设计内容表达\n"
-    "- 先真实场景，后抽象定位：必须落到店里真实场景、产品/服务、顾客行为、到店理由\n"
-    "- 当前阶段只输出实体店增长策划骨架，不要输出 30 天逐日内容\n\n"
+    "# 核心理念\n"
+    "一个账号能被平台持续推荐，不是因为文案有情绪，而是因为内容稳定提供了具体可感知的观看理由。\n"
+    "你的任务不是写一份会自我感动的策划书，而是把账号定位收敛到可持续产出的事实型内容结构：谁会看、为什么停留、能得到什么、为什么愿意评论。\n\n"
     "# 禁止事项\n"
-    "- 禁止把实体店策划写成个人 IP 励志故事\n"
-    "- 禁止只输出“真实、接地气、专业、亲切、有温度”这类空词\n"
-    "- 禁止只围绕老板人设，不解释门店为什么值得拍、值得来\n"
-    "- 禁止输出泛泛内容支柱，如“日常分享”“记录生活”“门店 vlog”\n"
-    "- 禁止把“氛围感、治愈感、烟火气、陪伴感”当作主增长理由\n"
-    "- 禁止跳过价格、效率、口味/效果、距离、信任、避坑、场景适配这些消费决策因素\n"
-    "- 禁止输出品牌片、散文腔、空态度表达\n\n"
-    "# 输入信息\n"
-    "- 门店名称：{client_name}\n"
+    "- 禁止输出'内容优质''风格独特''真实记录'等空洞描述，所有定位必须围绕具体的「内在张力」展开\n"
+    "- 禁止在缺乏参考博主数据时强行类比，无有效参考时说明'建议自主探索差异化矛盾点'\n"
+    "- 禁止只描述氛围、情绪、烟火气、治愈感，不要输出“肉香盖过班味”“全是笑声”“借着肉香回血”这类店主自我抒情表达\n"
+    "- 禁止生成品牌片/散文腔选题；每条题都必须体现具体人、具体场景/问题，以及用户能感知的收益、冲突或评论点\n"
+    "- 禁止用婚姻、家庭、性别、命运等大议题强行拔高账号价值；没有明确证据时，不要替用户总结人生处境\n"
+    "- 当前阶段只做账号定位和内容策略，不要输出 30 天日历、具体日历条目或逐天排期\n\n"
+    "# 质量标准（对标顶级策划）\n"
+    "- core_identity 要像'用100天寻找真实自我的大厂离职员工'（外化理想vs现实的矛盾），而不是'职场干货博主'\n"
+    "- hook_template 要直接切入受众正在面对的事实或动作，如：'下班后我总会在车里坐半小时，才想上楼'，不要用反问句起手\n"
+    "- differentiation 要指出参考博主没有覆盖的具体矛盾空白，而不是'画质更好/更有深度'\n\n"
+    "# 客户信息\n"
+    "- 客户/品牌名称：{client_name}\n"
     "- 行业：{industry}\n"
-    "- 城市：{city}\n"
-    "- 商圈/区域：{business_district}\n"
-    "- 门店类型：{store_type}\n"
-    "- 客单价：{avg_ticket}\n"
-    "- 主营产品/服务：{core_products_or_services}\n"
-    "- 目标客群：{target_audience}\n"
-    "- 门店优势：{unique_advantage}\n"
-    "- 顾客为什么选你：{top_reasons_to_choose}\n"
-    "- 顾客最常问的问题：{customer_common_questions}\n"
-    "- 顾客最常犹豫的点：{common_hesitations}\n"
-    "- 主要消费场景：{primary_consumption_scenes}\n"
-    "- 谁能出镜：{on_camera_roles}\n"
-    "- 可拍场景：{shootable_scenes}\n"
-    "- 高峰时段：{peak_hours}\n"
-    "- 集中拍摄时间：{batch_shoot_windows}\n"
-    "- 拍摄限制：{store_constraints}\n"
+    "- 目标人群：{target_audience}\n"
+    "- 独特优势：{unique_advantage}\n"
+    "- IP 定位需求：{ip_requirements}\n"
     "- 风格偏好：{style_preference}\n"
-    "- 商业目标：{business_goal}\n"
-    "- 补充要求：{special_requirements}\n"
-    "- 明确不要的方向：{forbidden_directions}\n"
-    "- 历史 IP 需求（兼容旧数据）：{ip_requirements}\n\n"
-    "# 参考账号数据（共 {blogger_count} 位）\n"
+    "- 商业目标：{business_goal}\n\n"
+    "# 参考博主 IP 分析（共 {blogger_count} 位）\n"
     "{bloggers_text}\n\n"
     "# 使用规则（非常重要）\n"
     "- 若参考数据中存在 viral_profile，请优先吸收其中的 account_planning_logic、why_it_went_viral、content_playbook、risk_warnings\n"
     "- 若 viral_profile 中存在 timeline_overview、timeline_entries、post_fire_arrangement、planning_takeaways，请优先参考其起号路径、爆点前后选题变化、延续打法，但不要直接照搬具体日期或标题\n"
-    "- 输出时不要照抄参考账号，要提炼可执行结构并结合门店经营事实重写\n"
-    "- 若参考数据不足，请明确保守判断，不要脑补门店没有提供的事实\n\n"
-    "# 输出任务\n"
-    "请输出一份实体店增长策划结果，回答以下问题：\n"
-    "1. 这家店在同城用户心里最该占据什么位置\n"
-    "2. 用户到店前最看重哪些判断点\n"
-    "3. 这家店最适合做哪几类内容模型\n"
-    "4. 谁适合出镜，以及应该承担什么作用\n"
-    "5. 内容从流量到到店，承接顺序应该怎么设计\n"
-    "6. 后续 30 天排期最该围绕哪些固定场景与固定元素展开\n\n"
+    "- 输出时不要照抄参考账号，要提炼可执行结构并结合客户条件重写\n"
+    "- 若 viral_profile 与其他字段冲突，以更具体、证据更强的结论为准\n\n"
+    "# 策略输出要求\n"
+    "- 这一步只确定账号定位、表达方式、内容支柱和执行节奏，为下一步生成 30 天日历提供稳定依据\n"
+    "- 对餐饮/本地生活账号，优先使用：真实事件、人群差异、价格/分量/决策理由、顾客行为观察、店里高频冲突/评论点\n"
+    "- 显式降权：城市夜晚抒情、打工人空泛共鸣、只讲放松/治愈/烟火气的空泛感受\n"
+    "- 最终产出的定位与策略必须足够清晰，让下一步可以稳定生成 30 天日历而不需要再次猜账号方向\n\n"
     "# 输出要求\n"
-    "严格返回 JSON：\n"
+    "严格以如下 JSON 格式返回，禁止省略任何字段：\n"
     "{{\n"
-    '  "store_growth_plan": {{\n'
-    '    "store_positioning": {{\n'
-    '      "market_position": "一句话说明这家店在同城用户心里最该占据的位置",\n'
-    '      "primary_scene": "最适合被记住的消费场景",\n'
-    '      "target_audience_detail": "最有可能到店的一类人，具体到状态/需求/消费能力",\n'
-    '      "core_store_value": "用户最终为什么选这家店，不超过80字",\n'
-    '      "differentiation": "与同城同类店相比最该放大的差异点",\n'
-    '      "avoid_positioning": ["不建议走的定位方向1", "方向2"]\n'
-    '    }},\n'
-    '    "decision_triggers": {{\n'
-    '      "stop_scroll_triggers": ["刷到会停下来的触发点1", "触发点2", "触发点3"],\n'
-    '      "visit_decision_factors": ["决定到店的因素1", "因素2", "因素3"],\n'
-    '      "common_hesitations": ["不到店的顾虑1", "顾虑2", "顾虑3"],\n'
-    '      "trust_builders": ["建立信任的证据1", "证据2", "证据3"]\n'
-    '    }},\n'
-    '    "content_model": {{\n'
-    '      "primary_formats": [\n'
-    '        {{"name": "内容模型名称", "fit_reason": "为什么适合", "ratio": "30%"}}\n'
-    '      ],\n'
-    '      "content_pillars": [\n'
-    '        {{"name": "内容支柱名称", "description": "解决什么到店判断问题", "scene_source": "主要取材场景"}}\n'
-    '      ],\n'
-    '      "traffic_hooks": ["开头句式1", "句式2", "句式3", "句式4", "句式5"],\n'
-    '      "interaction_triggers": ["评论触发机制1", "机制2", "机制3"]\n'
-    '    }},\n'
-    '    "on_camera_strategy": {{\n'
-    '      "recommended_roles": [\n'
-    '        {{"role": "老板/店长/师傅/员工", "responsibility": "承担什么作用", "expression_style": "怎么说"}}\n'
-    '      ],\n'
-    '      "light_persona": "轻人设描述，只用于增加识别度",\n'
-    '      "persona_boundaries": ["不能演什么", "不能拔高什么", "不能脱离门店真实去做什么"]\n'
-    '    }},\n'
-    '    "conversion_path": {{\n'
-    '      "traffic_to_trust": "流量内容如何自然过渡到信任",\n'
-    '      "trust_to_visit": "信任内容如何自然带到店",\n'
-    '      "soft_cta_templates": ["软性结尾1", "结尾2"],\n'
-    '      "hard_sell_boundaries": ["不要硬卖的场景1", "场景2"]\n'
-    '    }},\n'
-    '    "execution_rules": {{\n'
-    '      "posting_frequency": "建议发布频率",\n'
-    '      "best_posting_times": ["时段1", "时段2"],\n'
-    '      "batch_shoot_scenes": ["适合连拍的场景1", "场景2", "场景3"],\n'
-    '      "must_capture_elements": ["必须抓到的元素1", "元素2", "元素3"],\n'
-    '      "quality_checklist": ["检查项1", "检查项2", "检查项3", "检查项4", "检查项5"]\n'
-    '    }}\n'
+    '  "account_positioning": {{\n'
+    '    "core_identity": "账号核心定位（格式：[目标人群]+[核心价值主张]，如：给35岁+职场人的职业重启手册）",\n'
+    '    "target_audience_detail": "精准受众画像（年龄+职业状态+核心痛点+消费能力，100字以内）",\n'
+    '    "content_pillars": [\n'
+    '      {{"name": "内容支柱名称（具体方向，非泛称）", "description": "该支柱解决的具体问题", "ratio": "30%"}},\n'
+    '      {{"name": "内容支柱2", "description": "说明", "ratio": "40%"}},\n'
+    '      {{"name": "内容支柱3", "description": "说明", "ratio": "30%"}}\n'
+    '    ],\n'
+    '    "personality_tags": ["张力型人设标签（如：高冷外表/内心柔软）", "标签2", "标签3"],\n'
+    '    "bio_suggestion": "主页简介（不超过80字，必须包含：我是谁+我能给你什么+关注理由）",\n'
+    '    "differentiation": "差异化支点（指出参考博主未覆盖的具体内容空白或人群空白）",\n'
+    '    "user_value": "用户持续关注后，稳定能得到什么具体收益或判断（避免空泛自嗨，60-100字）",\n'
+    '    "follow_reason": "用户为什么会关注你而不是看完就走（要写清持续关注理由，而不是泛泛共鸣，60-100字）"\n'
+    '  }},\n'
+    '  "content_strategy": {{\n'
+    '    "primary_format": "主要内容形式（口播+画中画/跟拍Vlog/教程/测评/探店实拍等，说明选择理由）",\n'
+    '    "posting_frequency": "发布频率建议（结合商业目标和团队规模给出合理频率）",\n'
+    '    "best_posting_times": ["基于目标受众作息给出具体时段1", "时段2"],\n'
+    '    "content_tone": "内容基调（描述语言风格+情绪浓度+与竞品的调性差异）",\n'
+    '    "stop_scroll_reason": "陌生用户为什么会停下来继续看（写清具体信息回报/冲突点/判断价值，60-100字）",\n'
+    '    "interaction_trigger": "用户为什么愿意评论/收藏/私信（写清触发互动的具体机制，60-100字）",\n'
+    '    "hook_template": "开头钩子模板（给出2-3个可直接使用的开场句式）",\n'
+    '    "cta_template": "结尾引导模板（给出1-2个可直接使用的结尾话术）"\n'
     '  }}\n'
-    "}}\n"
+    "}}\n\n"
+    "当前阶段只输出账号定位和内容策略。请严格返回 JSON 格式。"
 )
 
 CONTENT_CALENDAR_PROMPT_TEMPLATE = (
@@ -308,8 +267,6 @@ CONTENT_CALENDAR_PROMPT_TEMPLATE = (
     "- 停留理由：{stop_scroll_reason}\n"
     "- 互动触发点：{interaction_trigger}\n"
     "- 内容支柱：{content_pillars}\n\n"
-    "# 实体店增长策划（如已有）\n"
-    "{store_growth_plan_json}\n\n"
     "# 最新复盘建议（如已有）\n"
     "- 复盘摘要：{performance_recap_summary}\n"
     "- 建议继续放大：{winning_patterns}\n"
@@ -393,13 +350,6 @@ PERFORMANCE_RECAP_PROMPT_TEMPLATE = (
     "{project_context}\n\n"
     "【账号定位】\n"
     "{account_plan_json}\n\n"
-    "【实体店增长重点】\n"
-    "- 同城定位：{store_market_position}\n"
-    "- 核心消费场景：{store_primary_scene}\n"
-    "- 到店决策因素：{store_visit_decision_factors}\n"
-    "- 流量钩子：{store_traffic_hooks}\n"
-    "- 主要内容支柱：{store_content_pillars}\n"
-    "{store_growth_plan_json}\n\n"
     "【数据汇总】\n"
     "{performance_summary_json}\n\n"
     "【回流明细】\n"
@@ -428,13 +378,6 @@ NEXT_TOPIC_BATCH_PROMPT_TEMPLATE = (
     "{project_context}\n\n"
     "【账号定位】\n"
     "{account_plan_json}\n\n"
-    "【实体店增长重点】\n"
-    "- 同城定位：{store_market_position}\n"
-    "- 核心消费场景：{store_primary_scene}\n"
-    "- 到店决策因素：{store_visit_decision_factors}\n"
-    "- 流量钩子：{store_traffic_hooks}\n"
-    "- 主要内容支柱：{store_content_pillars}\n"
-    "{store_growth_plan_json}\n\n"
     "【最新复盘】\n"
     "{performance_recap_json}\n\n"
     "【已规划内容】\n"
@@ -456,25 +399,19 @@ NEXT_TOPIC_BATCH_PROMPT_TEMPLATE = (
 
 PLANNING_INTAKE_PROMPT_TEMPLATE = (
     "# 角色\n"
-    "你是实体店短视频策划顾问，要用中文和用户进行互动问诊。\n"
-    "你的目标是把用户描述整理成可执行的实体店账号策划输入，而不是直接输出漂亮但空泛的人设文案。\n\n"
+    "你是短视频账号策划顾问，要用中文和用户进行互动问诊。\n"
+    "你的目标是把用户描述整理成可执行的账号策划输入，而不是直接输出最终方案。\n\n"
     "# 必填字段（必须优先补齐）\n"
     "- client_name: 客户/品牌名称\n"
     "- industry: 行业垂类\n"
     "- target_audience: 目标受众画像\n"
-    "- ip_requirements: 门店打法与内容方向\n\n"
-    "# 实体店优先补齐的信息（有线索就尽量提取）\n"
-    "- city / business_district / store_type / avg_ticket\n"
-    "- core_products_or_services / top_reasons_to_choose\n"
-    "- customer_common_questions / common_hesitations / primary_consumption_scenes\n"
-    "- on_camera_roles / shootable_scenes / peak_hours / store_constraints\n\n"
+    "- ip_requirements: 账号定位与内容支柱\n\n"
     "# 工作方式\n"
     "- 每次先更新结构化草稿，再给出简洁追问（1-2个问题即可）\n"
     "- 用户纠正时，以用户最新说法为准，覆盖旧信息\n"
     "- 如果四个必填字段都齐全，先做一次“你确认吗”的总结，再引导进入下一步\n"
     "- 当 auto_complete=true 或 mode=fast 时：允许你基于行业常识补齐可执行默认值（并在 inferred_fields 标注）\n"
-    "- 当 mode=fast 时，assistant_reply 请直接输出“可执行策划初稿”，至少包含：门店基础盘/目标受众/门店打法/执行节奏/首批选题\n"
-    "- 优先从门店增长角度表达，不要把实体店直接写成个人 IP 励志故事\n"
+    "- 当 mode=fast 时，assistant_reply 请直接输出“可执行策划初稿”，至少包含：目标受众/独特优势/账号定位/内容支柱/执行节奏/首批选题\n"
     "- 禁止输出空泛建议，追问要具体\n\n"
     "# 输出 JSON 格式（严格）\n"
     "{\n"
@@ -487,19 +424,6 @@ PLANNING_INTAKE_PROMPT_TEMPLATE = (
     '    "ip_requirements": "",\n'
     '    "style_preference": "",\n'
     '    "business_goal": "",\n'
-    '    "city": "",\n'
-    '    "business_district": "",\n'
-    '    "store_type": "",\n'
-    '    "avg_ticket": "",\n'
-    '    "core_products_or_services": "",\n'
-    '    "top_reasons_to_choose": "",\n'
-    '    "customer_common_questions": "",\n'
-    '    "common_hesitations": "",\n'
-    '    "primary_consumption_scenes": "",\n'
-    '    "on_camera_roles": "",\n'
-    '    "shootable_scenes": "",\n'
-    '    "peak_hours": "",\n'
-    '    "store_constraints": "",\n'
     '    "publishing_rhythm": "",\n'
     '    "time_windows": "",\n'
     '    "goal_target": "",\n'
@@ -548,12 +472,7 @@ VIDEO_SCRIPT_PROMPT_TEMPLATE = (
     "- 用户持续获得：{user_value}\n"
     "- 用户关注理由：{follow_reason}\n"
     "- 停留理由：{stop_scroll_reason}\n"
-    "- 互动触发点：{interaction_trigger}\n"
-    "- 优先使用的流量钩子：{traffic_hooks}\n"
-    "- 推荐出镜角色：{recommended_roles}\n"
-    "- 转化承接方式：{traffic_to_trust}\n\n"
-    "# 实体店增长策划（如已有）\n"
-    "{store_growth_plan_json}\n\n"
+    "- 互动触发点：{interaction_trigger}\n\n"
     "# 输出要求\n"
     "严格以如下 JSON 格式返回：\n"
     "{{\n"
@@ -596,10 +515,10 @@ SCRIPT_REMAKE_PROMPT_TEMPLATE = (
     "# 四大潜质指标\n"
     "你的新脚本必须具备：获得感(提供价值)、惊喜感(反差新奇)、表达力(帮观众发声)、感染力(情绪共鸣)。\n\n"
     "# 禁止事项\n"
-    "- 禁止照搬原视频的具体人物、品牌和强绑定身份信息；但对前3秒已验证有效的开场钩子，允许保留原句式、原对抗关系和口语节奏，只替换其中不能直接复用的品牌/人名/商品词\n"
+    "- 禁止复刻原视频的具体人物、台词或品牌，只复刻结构和情绪节拍\n"
     "- 禁止在 opening_hook 中使用'大家好''今天给大家'等通用开场，必须直接制造冲突或悬念\n"
     "- 禁止使用“你是不是”“很多人以为…其实…”“遇到这种情况怎么办”这类代入式权威句式\n"
-    "- 不要把原视频已经验证过的高流量开头洗成平铺直叙；如果原钩子依赖质问、反问、抢手机式口语压迫感，就优先保留这种句式和节奏\n"
+    "- opening_hook 和 script 优先使用平铺直叙的陈述句，不要靠反问句和营销号腔撑气势\n"
     "- 禁止 storyboard 中出现信息密度低的过渡场景，每个分镜(scene)的情绪必须有起伏，必须是一次矛盾的展现或推进\n"
     "- 禁止输出高表演门槛脚本（情景剧、多角色对白、夸张演技），默认按“口播+画中画”或“跟拍Vlog”设计\n"
     "- 禁止替人物总结人生处境，禁止擅自上升到婚姻、家庭、性别、命运议题\n"
@@ -608,8 +527,6 @@ SCRIPT_REMAKE_PROMPT_TEMPLATE = (
     "- highlight_analysis 的 success_structure 要像'痛点前置（5秒）→反转方案（20秒）→结果展示（10秒）→悬念钩子（5秒）'，"
     "而不是'结构紧凑'\n"
     "- opening_hook 要在读完后让人产生'然后呢？'的冲动，如：'我用这个方法，让领导主动给我涨薪了'\n"
-    "- 如果原视频是“先用高流量钩子抓停留，再自然带出本店/产品/服务”，新脚本必须保留这个顺序，不能一上来就介绍本店或卖点\n"
-    "- storyboard 的 scene 1 必须服务于 opening_hook，第一句台词要么与 opening_hook 一致，要么是 opening_hook 的直接延展，不能另起一套开头\n"
     "- storyboard 每个场景必须标注情绪节拍，确保整体形成完整的情绪曲线\n"
     "- 方案必须让普通人单人可执行：口播清楚 + 补拍画中画即可完成，不依赖演技\n\n"
     "# 原视频信息\n"
@@ -708,10 +625,8 @@ SCRIPT_REMAKE_FROM_ANALYSIS_PROMPT_TEMPLATE = (
     "# 角色\n"
     "你是一位顶级短视频内容编导。现在不是重新拆解视频，而是基于已经完成的拆解结果，生成一份新的复刻脚本。\n\n"
     "# 核心要求\n"
-    "- 优先复刻原视频已经验证有效的开场钩子机制：前3秒的句式、对抗关系、口语节奏、信息顺序，不能随意改弱\n"
-    "- 不照搬原视频的具体人物、品牌和强绑定身份信息；但如果开场钩子本身不含品牌，可保留原句式甚至局部原话，只替换行业词/商品词/店铺词\n"
+    "- 只复刻结构、节奏和情绪推进，不复刻原句、原人物、原品牌\n"
     "- opening_hook 必须直接制造悬念或冲突，禁止空泛寒暄\n"
-    "- 如果原视频结构是“先钩子，后带出本店/产品/服务”，新脚本也必须先钩子再承接转化，不能把广告内容顶到开头\n"
     "- 默认普通人单人可执行，优先口播主镜头+画中画补拍，或跟拍Vlog\n"
     "- storyboard 每个场景必须推动情绪或信息，不能出现低密度过渡镜头\n\n"
     "# 原视频信息\n"
@@ -719,8 +634,6 @@ SCRIPT_REMAKE_FROM_ANALYSIS_PROMPT_TEMPLATE = (
     "视频描述：{description}\n\n"
     "# 已完成的拆解结果\n"
     "{highlight_analysis_json}\n\n"
-    "# 开场钩子复刻指令\n"
-    "{hook_reference_block}\n\n"
     "# 我的创作思路\n"
     "{user_prompt}\n\n"
     "# 输出要求\n"
@@ -728,15 +641,15 @@ SCRIPT_REMAKE_FROM_ANALYSIS_PROMPT_TEMPLATE = (
     "{{\n"
     '  "generated_script": {{\n'
     '    "title_suggestion": "新视频建议标题（25字内）",\n'
-    '    "opening_hook": "黄金3秒开场台词（完整可朗读，不超过25字；优先保留原视频钩子的句式和口语压迫感）",\n'
+    '    "opening_hook": "黄金3秒开场台词（完整可朗读，不超过25字）",\n'
     '    "middle_body": "中段内容方案（情绪如何从张力→递进→释放）",\n'
     '    "ending_call": "结尾设计（具体评论钩子或下一期悬念）",\n'
     '    "storyboard": [\n'
     '      {{\n'
     '        "scene": 1,\n'
     '        "duration": "0-3秒",\n'
-    '        "visual": "画面描述（优先标明口播主镜头/画中画补镜/跟拍vlog；scene 1 必须承担开场抓停留功能）",\n'
-    '        "script": "完整台词（可直接朗读，50字以内；scene 1 要与 opening_hook 一致或直接延展，不能另写一套）",\n'
+    '        "visual": "画面描述（优先标明口播主镜头/画中画补镜/跟拍vlog）",\n'
+    '        "script": "完整台词（可直接朗读，50字以内）",\n'
     '        "camera": "拍摄方式（固定机位/手持跟拍/手机补拍）",\n'
     '        "emotion_beat": "情绪节拍（制造张力/推进悬念/释放共鸣/埋钩子）"\n'
     '      }}\n'

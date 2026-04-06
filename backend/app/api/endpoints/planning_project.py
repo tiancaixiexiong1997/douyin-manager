@@ -17,7 +17,6 @@ from app.schemas.planning import (
 )
 from app.services.cancellation import cancellation_registry
 from app.services.crawler_service import crawler_service
-from app.services.ai_analysis_service import ai_analysis_service
 from app.services.job_queue import enqueue_task
 from app.services.planning_calendar_utils import (
     attach_normalized_content_calendar,
@@ -29,7 +28,6 @@ router = APIRouter()
 
 
 def _build_project_client_data(project) -> dict:
-    store_profile = project.store_profile if isinstance(getattr(project, "store_profile", None), dict) else {}
     return {
         "client_name": project.client_name,
         "industry": project.industry,
@@ -38,30 +36,8 @@ def _build_project_client_data(project) -> dict:
         "ip_requirements": project.ip_requirements,
         "style_preference": project.style_preference,
         "business_goal": project.business_goal,
-        "city": store_profile.get("city", ""),
-        "business_district": store_profile.get("business_district", ""),
-        "store_type": store_profile.get("store_type", ""),
-        "avg_ticket": store_profile.get("avg_ticket", ""),
-        "core_products_or_services": store_profile.get("core_products_or_services", []),
-        "top_reasons_to_choose": store_profile.get("top_reasons_to_choose", []),
-        "customer_common_questions": store_profile.get("customer_common_questions", []),
-        "common_hesitations": store_profile.get("common_hesitations", []),
-        "primary_consumption_scenes": store_profile.get("primary_consumption_scenes", []),
-        "on_camera_roles": store_profile.get("on_camera_roles", []),
-        "shootable_scenes": store_profile.get("shootable_scenes", []),
-        "peak_hours": store_profile.get("peak_hours", []),
-        "batch_shoot_windows": store_profile.get("batch_shoot_windows", []),
-        "store_constraints": store_profile.get("store_constraints", []),
-        "special_requirements": store_profile.get("special_requirements", ""),
-        "forbidden_directions": store_profile.get("forbidden_directions", []),
         "reference_blogger_ids": project.reference_blogger_ids or [],
     }
-
-
-def _normalize_account_plan_payload(account_plan: dict | None) -> dict | None:
-    if not isinstance(account_plan, dict):
-        return account_plan
-    return ai_analysis_service.normalize_account_plan_result(account_plan, overwrite_legacy=True)
 
 
 async def _enqueue_strategy_generation(
@@ -172,7 +148,6 @@ async def create_planning(
             "ip_requirements": request.ip_requirements,
             "style_preference": request.style_preference,
             "business_goal": request.business_goal,
-            "store_profile": request.store_profile.model_dump() if request.store_profile else None,
             "reference_blogger_ids": request.reference_blogger_ids,
             "status": "draft",
             **account_info,
@@ -302,8 +277,6 @@ async def update_project(
     if not project:
         raise HTTPException(status_code=404, detail="项目不存在")
     data = request.model_dump(exclude_none=True)
-    if "account_plan" in data:
-        data["account_plan"] = _normalize_account_plan_payload(data.get("account_plan"))
     project = await planning_repository.update_project_info(db, project_id, data)
     await operation_log_repo.create(
         db,
